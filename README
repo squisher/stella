@@ -1,0 +1,17 @@
+Stella: A Low-Level Language Embedded into Python to Easily Structure Fast Simulations
+======================================================================================
+
+Structure (WIP)
+---------------
+-virtualenv, then install required modules?
+
+Components
+----------
+
+* https://nose.readthedocs.org/en/latest/
+
+Development Resources
+---------------------
+
+* http://llvm.org/docs/tutorial/
+* http://en.wikipedia.org/wiki/Static_single_assignment_form
