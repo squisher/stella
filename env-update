@@ -1,5 +1,6 @@
 # source me
 local base=$(readlink -f $(dirname $0))
 
-export PYTHONPATH=$base/llvmpy
+#export PYTHONPATH=$base/llvmpy
+export PYTHONPATH=$base/llvmpy/build/lib.linux-x86_64-3.2
 source ve/bin/activate
