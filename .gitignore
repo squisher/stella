@@ -2,3 +2,4 @@ llvmpy/
 ve/
 */__pycache__/
 *.pyc
+stella.egg-info/

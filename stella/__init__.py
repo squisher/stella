@@ -5,8 +5,8 @@ from llvm.core import *
 from llvm.ee import *
 
 import logging
-import nose
 
+import inspect
 
 def example_jit(fn):
     def jit(arg1_value, arg2_value):
@@ -35,11 +35,13 @@ def example_jit(fn):
 
         # The return value is also GenericValue. Let's print it.
         #logging.debug("returned %d", retval.as_int())
+        return retval.as_int()
 
     return jit
 
 
 # TODO
 # actually call llvm!!
-def stella(fn):
-    return example_jit(fn)
+def stella(f):
+    args = inspect.getargspec(f)
+    return example_jit(f)
