@@ -1,6 +1,8 @@
 Stella: A Low-Level Language Embedded into Python to Easily Structure Fast Simulations
 ======================================================================================
 
+$ python stella/setup.py develop
+
 Structure (WIP)
 ---------------
 -virtualenv, then install required modules?
