@@ -4,8 +4,9 @@ from llvm import *
 from llvm.core import *
 from llvm.ee import *
 
+import stella.analysis as analysis
+
 import logging
-import inspect
 
 def example_jit(fn):
     def jit(arg1_value, arg2_value):
@@ -39,7 +40,6 @@ def example_jit(fn):
     return jit
 
 
-# TODO
-# actually call llvm!!
 def stella(f):
+    analysis.main(f)
     return example_jit(f)

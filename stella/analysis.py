@@ -1,4 +1,5 @@
 import dis
+import inspect
 
 class Debuginfo(object):
     line = None
@@ -10,8 +11,8 @@ class Bytecode(object):
 def disassemble(co, lasti=-1):
     """Disassemble a code object."""
     code = co.co_code
-    labels = findlabels(code)
-    linestarts = dict(findlinestarts(co))
+    labels = dis.findlabels(code)
+    linestarts = dict(dis.findlinestarts(co))
     n = len(code)
     i = 0
     extended_arg = 0
@@ -30,68 +31,29 @@ def disassemble(co, lasti=-1):
         if i in labels: print('>>', end=' ')
         else: print('  ', end=' ')
         print(repr(i).rjust(4), end=' ')
-        print(opname[op].ljust(20), end=' ')
+        print(dis.opname[op].ljust(20), end=' ')
         i = i+1
-        if op >= HAVE_ARGUMENT:
+        if op >= dis.HAVE_ARGUMENT:
             oparg = code[i] + code[i+1]*256 + extended_arg
             extended_arg = 0
             i = i+2
-            if op == EXTENDED_ARG:
+            if op == dis.EXTENDED_ARG:
                 extended_arg = oparg*65536
             print(repr(oparg).rjust(5), end=' ')
-            if op in hasconst:
+            if op in dis.hasconst:
                 print('(' + repr(co.co_consts[oparg]) + ')', end=' ')
-            elif op in hasname:
+            elif op in dis.hasname:
                 print('(' + co.co_names[oparg] + ')', end=' ')
-            elif op in hasjrel:
+            elif op in dis.hasjrel:
                 print('(to ' + repr(i + oparg) + ')', end=' ')
-            elif op in haslocal:
+            elif op in dis.haslocal:
                 print('(' + co.co_varnames[oparg] + ')', end=' ')
-            elif op in hascompare:
+            elif op in dis.hascompare:
                 print('(' + cmp_op[oparg] + ')', end=' ')
-            elif op in hasfree:
+            elif op in dis.hasfree:
                 if free is None:
                     free = co.co_cellvars + co.co_freevars
                 print('(' + free[oparg] + ')', end=' ')
-        print()
-
-def _disassemble_bytes(code, lasti=-1, varnames=None, names=None,
-                       constants=None):
-    labels = findlabels(code)
-    n = len(code)
-    i = 0
-    while i < n:
-        op = code[i]
-        if i == lasti: print('-->', end=' ')
-        else: print('   ', end=' ')
-        if i in labels: print('>>', end=' ')
-        else: print('  ', end=' ')
-        print(repr(i).rjust(4), end=' ')
-        print(opname[op].ljust(15), end=' ')
-        i = i+1
-        if op >= HAVE_ARGUMENT:
-            oparg = code[i] + code[i+1]*256
-            i = i+2
-            print(repr(oparg).rjust(5), end=' ')
-            if op in hasconst:
-                if constants:
-                    print('(' + repr(constants[oparg]) + ')', end=' ')
-                else:
-                    print('(%d)'%oparg, end=' ')
-            elif op in hasname:
-                if names is not None:
-                    print('(' + names[oparg] + ')', end=' ')
-                else:
-                    print('(%d)'%oparg, end=' ')
-            elif op in hasjrel:
-                print('(to ' + repr(i + oparg) + ')', end=' ')
-            elif op in haslocal:
-                if varnames:
-                    print('(' + varnames[oparg] + ')', end=' ')
-                else:
-                    print('(%d)' % oparg, end=' ')
-            elif op in hascompare:
-                print('(' + cmp_op[oparg] + ')', end=' ')
         print()
 
 class Function(object):
@@ -106,8 +68,7 @@ class Function(object):
         self.args = [Variable(n) for n in argspec.args]
 
     def analyze(self):
-        for bc in dis.dis(self.f):
-            pass # TODO
+        disassemble(self.f.__code__)
 
 class Variable(object):
     name = None
