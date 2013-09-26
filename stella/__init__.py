@@ -5,7 +5,6 @@ from llvm.core import *
 from llvm.ee import *
 
 import logging
-
 import inspect
 
 def example_jit(fn):
@@ -43,5 +42,4 @@ def example_jit(fn):
 # TODO
 # actually call llvm!!
 def stella(f):
-    args = inspect.getargspec(f)
     return example_jit(f)
