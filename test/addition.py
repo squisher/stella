@@ -9,3 +9,6 @@ def addition(a,b):
 def test_addition():
     for (a,b) in [(0,0), (randint(0, 1000000), randint(0, 1000000))]:
         assert addition(a,b) == stella(addition)(a,b)
+
+if __name__ == '__main__':
+    print(stella(addition)(42,0))
