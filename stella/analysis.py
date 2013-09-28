@@ -3,9 +3,14 @@ import inspect
 
 import logging
 
-class Debuginfo(object):
+class DebugInfo(object):
     line = None
     filename = None
+    def __init__(self, filename, line):
+        self.line = line
+        self.filename = filename
+    def __str__(self):
+        return self.filename + ':' + str(self.line)
 
 class Stack(object):
     backend = None
@@ -21,15 +26,14 @@ class Stack(object):
         logging.debug("[Stack] Popping " + str(item))
         return item
 
-opconst = {}
 class Bytecode(object):
     args = None
     result = None
     name = None
-    line = 0
+    debuginfo = None
 
-    def __init__(self, line, stack):
-        self.line = line
+    def __init__(self, debuginfo, stack):
+        self.debuginfo = debuginfo
         self.stack = stack
 
     def addArg(self, arg):
@@ -40,8 +44,8 @@ class Bytecode(object):
 class LOAD_FAST(Bytecode):
     name = 'LOAD_FAST'
 
-    def __init__(self, line, stack):
-        super().__init__(line, stack)
+    def __init__(self, debuginfo, stack):
+        super().__init__(debuginfo, stack)
 
     def eval(self):
         self.result = self.args[0]
@@ -50,22 +54,22 @@ class LOAD_FAST(Bytecode):
 class BINARY_ADD(Bytecode):
     name = 'BINARY_ADD'
 
-    def __init__(self, line, stack):
-        super().__init__(line, stack)
+    def __init__(self, debuginfo, stack):
+        super().__init__(debuginfo, stack)
 
     def eval(self):
         tp1 = self.stack.pop()
         tp2 = self.stack.pop()
         if tp1.type != tp2.type:
-            raise TypingError(self.line, str(tp1.type) + " != " + str(tp2.type))
+            raise TypingError(self.debuginfo, str(tp1.type) + " != " + str(tp2.type))
         self.result = tp1
         self.stack.push(Local.tmp(tp1))
 
 class RETURN_VALUE(Bytecode):
     name = 'RETURN_VALUE'
 
-    def __init__(self, line, stack):
-        super().__init__(line, stack)
+    def __init__(self, debuginfo, stack):
+        super().__init__(debuginfo, stack)
 
     def eval(self):
         self.addArg(self.stack.pop())
@@ -73,13 +77,15 @@ class RETURN_VALUE(Bytecode):
     def __str__(self):
         return 'RETURN ' + str(self.args[0])
 
+opconst = {}
 opconst[dis.opmap['LOAD_FAST']] = LOAD_FAST
 opconst[dis.opmap['BINARY_ADD']] = BINARY_ADD
 opconst[dis.opmap['RETURN_VALUE']] = RETURN_VALUE
 
+
 class UnsupportedOpcode(Exception):
-    def __init__(self, op, line):
-        super().__init__("Unsupported opcode {0} on line {1}".format(dis.opname[op], line))
+    def __init__(self, op, debuginfo):
+        super().__init__("Unsupported opcode {0} at {1}".format(dis.opname[op], debuginfo))
 
 class TypingError(TypeError):
     def __init__(self, line, msg):
@@ -134,10 +140,12 @@ class Function(object):
             if i in linestarts:
                 line = linestarts[i]
 
+            di = DebugInfo(co.co_filename, line)
+
             if extended_arg == 0 and op in opconst:
-                bc = opconst[op](line, self.stack)
+                bc = opconst[op](di, self.stack)
             else:
-                raise UnsupportedOpcode(op, line)
+                raise UnsupportedOpcode(op, di)
 
             #print(repr(i).rjust(4), end=' ')
             #print(dis.opname[op].ljust(20), end=' ')
