@@ -11,4 +11,4 @@ def test_addition():
         assert addition(a,b) == stella(addition)(a,b)
 
 if __name__ == '__main__':
-    print(stella(addition)(42,0))
+    print(stella(addition)(41, 1))

@@ -8,7 +8,11 @@ class Debuginfo(object):
     filename = None
 
 class Stack(object):
-    backend = []
+    backend = None
+
+    def __init__(self):
+        self.backend = []
+
     def push(self, item):
         logging.debug("[Stack] Pushing " + str(item))
         self.backend.append(item)
@@ -19,16 +23,18 @@ class Stack(object):
 
 opconst = {}
 class Bytecode(object):
-    args = []
+    args = None
     result = None
     name = None
     line = 0
 
     def __init__(self, line, stack):
         self.line = line
-        self.stack = Stack()
+        self.stack = stack
 
     def addArg(self, arg):
+        if self.args == None:
+            self.args = []
         self.args.append(arg)
 
 class LOAD_FAST(Bytecode):
@@ -62,10 +68,10 @@ class RETURN_VALUE(Bytecode):
         super().__init__(line, stack)
 
     def eval(self):
-        self.result = self.stack.pop()
+        self.addArg(self.stack.pop())
 
     def __str__(self):
-        return 'RETURN ' + str(self.result)
+        return 'RETURN ' + str(self.args[0])
 
 opconst[dis.opmap['LOAD_FAST']] = LOAD_FAST
 opconst[dis.opmap['BINARY_ADD']] = BINARY_ADD
@@ -79,12 +85,18 @@ class TypingError(TypeError):
     def __init__(self, line, msg):
         super().__init__(line + ': ' + msg)
 
+def unify_type(tp1, tp2):
+    if tp1 == tp2:  return tp1
+    if tp1 == None: return tp2
+    if tp2 == None: return tp1
+    raise TypingError ("Unifying of types " + str(tp1) + " and " + str(tp2) + " not yet implemented")
+
 class Function(object):
     f = None
     locals = dict()
     args = []
     return_tp = None
-    stack = []
+    stack = Stack()
     bytecodes = []
 
     def __init__(self, f):
@@ -99,7 +111,11 @@ class Function(object):
             self.args[i].type = type(args[i])
         logging.debug("Analysis of " + str(self.f) + "(" + str(self.args) + ")")
         self.disassemble()
+        for bc in self.bytecodes:
+            if isinstance(bc, RETURN_VALUE):
+                self.return_tp = unify_type(self.return_tp, bc.args[0].type)
         logging.debug("last bytecode: " + str(self.bytecodes[-1]))
+        logging.debug("returning type " + str(self.return_tp))
 
     def disassemble(self):
         """Disassemble a code object."""
@@ -162,7 +178,7 @@ class Variable(object):
         self.name = name
 
     def __str__(self):
-        return self.name + ':' + self.type
+        return self.name + self.type
 
 class Local(Variable):
     @staticmethod
@@ -173,9 +189,9 @@ class Local(Variable):
 
     def __str__(self):
         if self.name:
-            return self.name + ":" + str(self.type)
+            return self.name + str(self.type)
         else:
-            return "<L>:" + str(self.type)
+            return "$" + str(self.type)
 
     def __repr__(self):
         return self.__str__()
