@@ -29,7 +29,6 @@ class Stack(object):
 class Bytecode(object):
     args = None
     result = None
-    name = None
     debuginfo = None
 
     def __init__(self, debuginfo, stack):
@@ -42,8 +41,6 @@ class Bytecode(object):
         self.args.append(arg)
 
 class LOAD_FAST(Bytecode):
-    name = 'LOAD_FAST'
-
     def __init__(self, debuginfo, stack):
         super().__init__(debuginfo, stack)
 
@@ -52,22 +49,16 @@ class LOAD_FAST(Bytecode):
         self.stack.push(self.result)
 
 class BINARY_ADD(Bytecode):
-    name = 'BINARY_ADD'
-
     def __init__(self, debuginfo, stack):
         super().__init__(debuginfo, stack)
 
     def eval(self):
-        tp1 = self.stack.pop()
-        tp2 = self.stack.pop()
-        if tp1.type != tp2.type:
-            raise TypingError(self.debuginfo, str(tp1.type) + " != " + str(tp2.type))
-        self.result = tp1
-        self.stack.push(Local.tmp(tp1))
+        arg1 = self.stack.pop()
+        arg2 = self.stack.pop()
+        self.result = Local.tmp(unify_type(arg1.type, arg2.type, self.debuginfo))
+        self.stack.push(self.result)
 
 class RETURN_VALUE(Bytecode):
-    name = 'RETURN_VALUE'
-
     def __init__(self, debuginfo, stack):
         super().__init__(debuginfo, stack)
 
@@ -84,8 +75,11 @@ opconst[dis.opmap['RETURN_VALUE']] = RETURN_VALUE
 
 
 class BaseException(Exception):
-    def __init__(self, msg, debuginfo):
-        super().__init__('{0} at {1}'.format(msg, debuginfo))
+    def __init__(self, msg, debuginfo = None):
+        if debuginfo:
+            super().__init__('{0} at {1}'.format(msg, debuginfo))
+        else:
+            super().__init__(str(debuginfo))
 
 class UnsupportedOpcode(BaseException):
     def __init__(self, op, debuginfo):
@@ -94,11 +88,13 @@ class UnsupportedOpcode(BaseException):
 class TypingError(BaseException):
     pass
 
-def unify_type(tp1, tp2):
+def unify_type(tp1, tp2, debuginfo):
     if tp1 == tp2:  return tp1
     if tp1 == None: return tp2
     if tp2 == None: return tp1
-    raise TypingError ("Unifying of types " + str(tp1) + " and " + str(tp2) + " not yet implemented")
+    if (tp1 == int and tp2 == float) or (tp1 == float and tp2 == int):
+        return float
+    raise TypingError ("Unifying of types " + str(tp1) + " and " + str(tp2) + " not yet implemented", debuginfo)
 
 class Function(object):
     f = None
@@ -122,7 +118,7 @@ class Function(object):
         self.disassemble()
         for bc in self.bytecodes:
             if isinstance(bc, RETURN_VALUE):
-                self.return_tp = unify_type(self.return_tp, bc.args[0].type)
+                self.return_tp = unify_type(self.return_tp, bc.args[0].type, bc.debuginfo)
         logging.debug("last bytecode: " + str(self.bytecodes[-1]))
         logging.debug("returning type " + str(self.return_tp))
 
@@ -195,7 +191,10 @@ class Local(Variable):
     @staticmethod
     def tmp(template):
         l = Local('')
-        l.type = template.type
+        if isinstance(template, Variable):
+            l.type = template.type
+        else:
+            l.type = template
         return l
 
     def __str__(self):
