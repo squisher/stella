@@ -83,13 +83,16 @@ opconst[dis.opmap['BINARY_ADD']] = BINARY_ADD
 opconst[dis.opmap['RETURN_VALUE']] = RETURN_VALUE
 
 
-class UnsupportedOpcode(Exception):
-    def __init__(self, op, debuginfo):
-        super().__init__("Unsupported opcode {0} at {1}".format(dis.opname[op], debuginfo))
+class BaseException(Exception):
+    def __init__(self, msg, debuginfo):
+        super().__init__('{0} at {1}'.format(msg, debuginfo))
 
-class TypingError(TypeError):
-    def __init__(self, line, msg):
-        super().__init__(line + ': ' + msg)
+class UnsupportedOpcode(BaseException):
+    def __init__(self, op, debuginfo):
+        super().__init__(dis.opname[op], debuginfo)
+
+class TypingError(BaseException):
+    pass
 
 def unify_type(tp1, tp2):
     if tp1 == tp2:  return tp1
