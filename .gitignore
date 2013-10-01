@@ -4,3 +4,4 @@ ve/
 *.pyc
 stella.egg-info/
 Session.vim
+.*.swp
