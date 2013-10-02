@@ -19,4 +19,5 @@ def test_subtraction():
 
 if __name__ == '__main__':
     print(stella(addition)(41, 1))
+    print(stella(addition)(43, -1))
     print(stella(subtraction)(44,2))
