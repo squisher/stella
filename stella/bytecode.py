@@ -38,6 +38,25 @@ def unify_type(tp1, tp2, debuginfo):
         return float
     raise TypingError ("Unifying of types " + str(tp1) + " and " + str(tp2) + " not yet implemented", debuginfo)
 
+def use_stack(n):
+    """
+    Decorator, it takes n items off the stack
+    and adds the as arguments to the bytecode.
+    """
+    def extract_n(f):
+        def extract_from_stack(self, *f_args):
+            args = []
+            for i in range(n):
+                args.append(self.stack.pop())
+            args.reverse()
+            if self.args == None:
+                self.args = args
+            else:
+                self.args.extend(args)
+            return f(self, *f_args)
+        return extract_from_stack
+    return extract_n
+
 class Bytecode(object):
     args = None
     result = None
@@ -66,12 +85,9 @@ class BINARY_ADD(Bytecode):
     def __init__(self, debuginfo, stack):
         super().__init__(debuginfo, stack)
 
+    @use_stack(2)
     def eval(self):
-        arg2 = self.stack.pop()
-        arg1 = self.stack.pop()
-        self.addArg(arg1)
-        self.addArg(arg2)
-        self.result = Local.tmp(unify_type(arg1.type, arg2.type, self.debuginfo))
+        self.result = Local.tmp(unify_type(self.args[0].type, self.args[1].type, self.debuginfo))
         self.stack.push(self.result)
 
     def translate(self, builder):
@@ -84,12 +100,9 @@ class BINARY_SUBTRACT(Bytecode):
     def __init__(self, debuginfo, stack):
         super().__init__(debuginfo, stack)
 
+    @use_stack(2)
     def eval(self):
-        arg2 = self.stack.pop()
-        arg1 = self.stack.pop()
-        self.addArg(arg1)
-        self.addArg(arg2)
-        self.result = Local.tmp(unify_type(arg1.type, arg2.type, self.debuginfo))
+        self.result = Local.tmp(unify_type(self.args[0].type, self.args[1].type, self.debuginfo))
         self.stack.push(self.result)
 
     def translate(self, builder):
@@ -102,8 +115,9 @@ class RETURN_VALUE(Bytecode):
     def __init__(self, debuginfo, stack):
         super().__init__(debuginfo, stack)
 
+    @use_stack(1)
     def eval(self):
-        self.addArg(self.stack.pop())
+        pass
 
     def translate(self, builder):
         builder.ret(self.args[0].llvm)
