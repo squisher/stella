@@ -67,9 +67,9 @@ class BINARY_ADD(Bytecode):
         super().__init__(debuginfo, stack)
 
     def eval(self):
+        arg2 = self.stack.pop()
         arg1 = self.stack.pop()
         self.addArg(arg1)
-        arg2 = self.stack.pop()
         self.addArg(arg2)
         self.result = Local.tmp(unify_type(arg1.type, arg2.type, self.debuginfo))
         self.stack.push(self.result)
@@ -77,20 +77,26 @@ class BINARY_ADD(Bytecode):
     def translate(self, builder):
         self.result.llvm = builder.add(self.args[0].llvm, self.args[1].llvm, self.result.name)
 
+    def __str__(self):
+        return 'ADD {0}, {1}'.format(*self.args)
+
 class BINARY_SUBTRACT(Bytecode):
     def __init__(self, debuginfo, stack):
         super().__init__(debuginfo, stack)
 
     def eval(self):
+        arg2 = self.stack.pop()
         arg1 = self.stack.pop()
         self.addArg(arg1)
-        arg2 = self.stack.pop()
         self.addArg(arg2)
         self.result = Local.tmp(unify_type(arg1.type, arg2.type, self.debuginfo))
         self.stack.push(self.result)
 
     def translate(self, builder):
         self.result.llvm = builder.sub(self.args[0].llvm, self.args[1].llvm, self.result.name)
+
+    def __str__(self):
+        return 'SUB {0}, {1}'.format(*self.args)
 
 class RETURN_VALUE(Bytecode):
     def __init__(self, debuginfo, stack):

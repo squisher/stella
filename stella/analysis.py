@@ -44,14 +44,12 @@ class TypingError(BaseException):
     pass
 
 class Function(object):
-    f = None
-    locals = dict()
-    args = []
-    return_tp = None
-    stack = Stack()
-    bytecodes = []
-
     def __init__(self, f):
+        self.locals = dict()
+        self.return_tp = None
+        self.stack = Stack()
+        self.bytecodes = []
+
         self.f = f
         argspec = inspect.getargspec(f)
         self.args = [Local(n) for n in argspec.args]
