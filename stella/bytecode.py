@@ -1,4 +1,5 @@
 import dis
+from stella.llvm import *
 
 class Variable(object):
     name = None
@@ -91,7 +92,17 @@ class BINARY_ADD(Bytecode):
         self.stack.push(self.result)
 
     def translate(self, builder):
-        self.result.llvm = builder.add(self.args[0].llvm, self.args[1].llvm, self.result.name)
+        fadd = any([arg.type == float for arg in self.args])
+        import pdb
+        #pdb.set_trace()
+        if fadd:
+            for arg in self.args:
+                if arg.type == int:
+                    arg.llvm = builder.sitofp(arg.llvm, py_type_to_llvm(float), "(float)"+arg.name)
+
+            self.result.llvm = builder.fadd(self.args[0].llvm, self.args[1].llvm, self.result.name)
+        else:
+            self.result.llvm = builder.add(self.args[0].llvm, self.args[1].llvm, self.result.name)
 
     def __str__(self):
         return 'ADD {0}, {1}'.format(*self.args)

@@ -7,6 +7,7 @@ from llvm.ee import *
 import logging
 
 from stella import analysis
+from stella.llvm import *
 from stella.bytecode import *
 
 def example_jit(arg1_value, arg2_value):
@@ -36,30 +37,6 @@ def example_jit(arg1_value, arg2_value):
     # The return value is also GenericValue. Let's print it.
     #logging.debug("returned %d", retval.as_int())
     return retval.as_int()
-
-tp_int = Type.int()
-tp_float = Type.float()
-def py_type_to_llvm(tp):
-    if tp == int:
-        return tp_int
-    elif tp == float:
-        return tp_float
-    else:
-        raise TypeError("Unknown type " + tp)
-
-def get_generic_value(tp, val):
-    if type(val) == int:
-        return GenericValue.int(tp, val)
-    elif type(val) == float:
-        return GenericValue.real(tp, val)
-
-def llvm_to_py(tp, val):
-    if tp == int:
-        return val.as_int()
-    elif tp == float:
-        return val.as_real(py_type_to_llvm(tp), val)
-    else:
-        raise Exception ("Unknown type {0}".format(tp))
 
 def run(af, *args):
     my_module = Module.new('__stella__')
