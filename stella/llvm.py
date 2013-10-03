@@ -4,7 +4,7 @@ from llvm.ee import *
 
 import logging
 
-tp_int = Type.int()
+tp_int = Type.int(64)
 tp_float = Type.float()
 def py_type_to_llvm(tp):
     if tp == int:
@@ -22,7 +22,7 @@ def get_generic_value(tp, val):
 
 def llvm_to_py(tp, val):
     if tp == int:
-        return val.as_int()
+        return val.as_int_signed()
     elif tp == float:
         return val.as_real(py_type_to_llvm(tp))
     else:
