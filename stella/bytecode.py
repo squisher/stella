@@ -74,7 +74,7 @@ class Bytecode(object):
         self.args.append(arg)
 
     def floatArg(self, builder):
-        if any([arg.type == float for arg in self.args]):
+        if self.result.type == float:
             for arg in self.args:
                 if arg.type == int:
                     arg.llvm = builder.sitofp(arg.llvm, py_type_to_llvm(float), "(float)"+arg.name)
@@ -123,6 +123,28 @@ class BINARY_SUBTRACT(BinaryOp):
 class BINARY_MULTIPLY(BinaryOp):
     b_func = {float: 'fmul', int: 'mul'}
 
+class BINARY_FLOOR_DIVIDE(BinaryOp):
+    # TODO: round down when args are float!
+    b_func = {float: 'fdiv', int: 'sdiv'}
+
+    def translate(self, builder):
+        self.floatArg(builder)
+        f = getattr(builder, self.builderFuncName())
+        if self.result.type == float:
+            tmp = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
+            self.result.llvm = builder.floor(tmp)
+        else:
+            self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
+
+class BINARY_TRUE_DIVIDE(BinaryOp):
+    """The result of `/', true division, is always a float"""
+    b_func = {float: 'fdiv'}
+
+    @use_stack(2)
+    def eval(self):
+        self.result = Local.tmp(float)
+        self.stack.push(self.result)
+
 class RETURN_VALUE(Bytecode):
     def __init__(self, debuginfo, stack):
         super().__init__(debuginfo, stack)
@@ -142,5 +164,7 @@ opconst[dis.opmap['LOAD_FAST']] = LOAD_FAST
 opconst[dis.opmap['BINARY_ADD']] = BINARY_ADD
 opconst[dis.opmap['BINARY_SUBTRACT']] = BINARY_SUBTRACT
 opconst[dis.opmap['BINARY_MULTIPLY']] = BINARY_MULTIPLY
+opconst[dis.opmap['BINARY_TRUE_DIVIDE']] = BINARY_TRUE_DIVIDE
+opconst[dis.opmap['BINARY_FLOOR_DIVIDE']] = BINARY_FLOOR_DIVIDE
 opconst[dis.opmap['RETURN_VALUE']] = RETURN_VALUE
 
