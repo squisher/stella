@@ -73,6 +73,15 @@ class Bytecode(object):
             self.args = []
         self.args.append(arg)
 
+    def floatArg(self, builder):
+        if any([arg.type == float for arg in self.args]):
+            for arg in self.args:
+                if arg.type == int:
+                    arg.llvm = builder.sitofp(arg.llvm, py_type_to_llvm(float), "(float)"+arg.name)
+            return True
+        return False
+
+
 class LOAD_FAST(Bytecode):
     discard = True
     def __init__(self, debuginfo, stack):
@@ -82,7 +91,7 @@ class LOAD_FAST(Bytecode):
         self.result = self.args[0]
         self.stack.push(self.result)
 
-class BINARY_ADD(Bytecode):
+class BinaryOp(Bytecode):
     def __init__(self, debuginfo, stack):
         super().__init__(debuginfo, stack)
 
@@ -91,36 +100,28 @@ class BINARY_ADD(Bytecode):
         self.result = Local.tmp(unify_type(self.args[0].type, self.args[1].type, self.debuginfo))
         self.stack.push(self.result)
 
-    def translate(self, builder):
-        fadd = any([arg.type == float for arg in self.args])
-        import pdb
-        #pdb.set_trace()
-        if fadd:
-            for arg in self.args:
-                if arg.type == int:
-                    arg.llvm = builder.sitofp(arg.llvm, py_type_to_llvm(float), "(float)"+arg.name)
-
-            self.result.llvm = builder.fadd(self.args[0].llvm, self.args[1].llvm, self.result.name)
-        else:
-            self.result.llvm = builder.add(self.args[0].llvm, self.args[1].llvm, self.result.name)
-
-    def __str__(self):
-        return 'ADD {0}, {1}'.format(*self.args)
-
-class BINARY_SUBTRACT(Bytecode):
-    def __init__(self, debuginfo, stack):
-        super().__init__(debuginfo, stack)
-
-    @use_stack(2)
-    def eval(self):
-        self.result = Local.tmp(unify_type(self.args[0].type, self.args[1].type, self.debuginfo))
-        self.stack.push(self.result)
+    def builderFuncName(self):
+        try:
+            return self.b_func[self.result.type]
+        except KeyError:
+            raise TypingError("{0} does not yet implement type {1}".format(self.__class__.__name__, self.result.type))
 
     def translate(self, builder):
-        self.result.llvm = builder.sub(self.args[0].llvm, self.args[1].llvm, self.result.name)
+        self.floatArg(builder)
+        f = getattr(builder, self.builderFuncName())
+        self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
 
     def __str__(self):
-        return 'SUB {0}, {1}'.format(*self.args)
+        return '{0} {1}, {2}'.format(self.__class__.__name__, *self.args)
+
+class BINARY_ADD(BinaryOp):
+    b_func = {float: 'fadd', int: 'add'}
+
+class BINARY_SUBTRACT(BinaryOp):
+    b_func = {float: 'fsub', int: 'sub'}
+
+class BINARY_MULTIPLY(BinaryOp):
+    b_func = {float: 'fmul', int: 'mul'}
 
 class RETURN_VALUE(Bytecode):
     def __init__(self, debuginfo, stack):
@@ -140,5 +141,6 @@ opconst = {}
 opconst[dis.opmap['LOAD_FAST']] = LOAD_FAST
 opconst[dis.opmap['BINARY_ADD']] = BINARY_ADD
 opconst[dis.opmap['BINARY_SUBTRACT']] = BINARY_SUBTRACT
+opconst[dis.opmap['BINARY_MULTIPLY']] = BINARY_MULTIPLY
 opconst[dis.opmap['RETURN_VALUE']] = RETURN_VALUE
 
