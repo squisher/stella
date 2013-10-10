@@ -1,5 +1,6 @@
 import dis
 from stella.llvm import *
+from abc import ABCMeta, abstractmethod, abstractproperty
 
 class Variable(object):
     name = None
@@ -58,7 +59,7 @@ def use_stack(n):
         return extract_from_stack
     return extract_n
 
-class Bytecode(object):
+class Bytecode(metaclass=ABCMeta):
     args = None
     result = None
     debuginfo = None
@@ -81,6 +82,10 @@ class Bytecode(object):
             return True
         return False
 
+    @abstractmethod
+    def eval(self):
+        pass
+
 
 class LOAD_FAST(Bytecode):
     discard = True
@@ -91,7 +96,7 @@ class LOAD_FAST(Bytecode):
         self.result = self.args[0]
         self.stack.push(self.result)
 
-class BinaryOp(Bytecode):
+class BinaryOp(Bytecode, metaclass=ABCMeta):
     def __init__(self, debuginfo, stack):
         super().__init__(debuginfo, stack)
 
@@ -113,6 +118,10 @@ class BinaryOp(Bytecode):
 
     def __str__(self):
         return '{0} {1}, {2}'.format(self.__class__.__name__, *self.args)
+
+    @abstractproperty
+    def b_func(self):
+        return {}
 
 class BINARY_ADD(BinaryOp):
     b_func = {float: 'fadd', int: 'add'}
@@ -160,11 +169,11 @@ class RETURN_VALUE(Bytecode):
         return 'RETURN ' + str(self.args[0])
 
 opconst = {}
-opconst[dis.opmap['LOAD_FAST']] = LOAD_FAST
-opconst[dis.opmap['BINARY_ADD']] = BINARY_ADD
-opconst[dis.opmap['BINARY_SUBTRACT']] = BINARY_SUBTRACT
-opconst[dis.opmap['BINARY_MULTIPLY']] = BINARY_MULTIPLY
-opconst[dis.opmap['BINARY_TRUE_DIVIDE']] = BINARY_TRUE_DIVIDE
-opconst[dis.opmap['BINARY_FLOOR_DIVIDE']] = BINARY_FLOOR_DIVIDE
-opconst[dis.opmap['RETURN_VALUE']] = RETURN_VALUE
-
+# Get all contrete subclasses of Bytecode and register them
+for name in dir(sys.modules[__name__]):
+    obj = sys.modules[__name__].__dict__[name]
+    try:
+        if issubclass(obj, Bytecode) and len(obj.__abstractmethods__) == 0:
+            opconst[dis.opmap[name]] = obj
+    except TypeError:
+        pass
