@@ -1,6 +1,7 @@
 import dis
 from stella.llvm import *
 from abc import ABCMeta, abstractmethod, abstractproperty
+from llvm.core import INTR_FLOOR
 
 class Variable(object):
     name = None
@@ -96,7 +97,7 @@ class LOAD_FAST(Bytecode):
         self.result = self.args[0]
         self.stack.push(self.result)
 
-class BinaryOp(Bytecode, metaclass=ABCMeta):
+class BinaryOp(Bytecode):
     def __init__(self, debuginfo, stack):
         super().__init__(debuginfo, stack)
 
@@ -111,7 +112,7 @@ class BinaryOp(Bytecode, metaclass=ABCMeta):
         except KeyError:
             raise TypingError("{0} does not yet implement type {1}".format(self.__class__.__name__, self.result.type))
 
-    def translate(self, builder):
+    def translate(self, module, builder):
         self.floatArg(builder)
         f = getattr(builder, self.builderFuncName())
         self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
@@ -132,25 +133,43 @@ class BINARY_SUBTRACT(BinaryOp):
 class BINARY_MULTIPLY(BinaryOp):
     b_func = {float: 'fmul', int: 'mul'}
 
-class BINARY_FLOOR_DIVIDE(BinaryOp):
-    # TODO: round down when args are float!
-    b_func = {float: 'fdiv', int: 'sdiv'}
+#class BINARY_FLOOR_DIVIDE(BinaryOp):
+#    """Floor divide for float, C integer divide for ints. Fast, but unlike the Python semantics for integers"""
+#    b_func = {float: 'fdiv', int: 'sdiv'}
+#
+#    def translate(self, module, builder):
+#        self.floatArg(builder)
+#        f = getattr(builder, self.builderFuncName())
+#        if self.result.type == float:
+#            tmp = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
+#            llvm_floor = Function.intrinsic(module, INTR_FLOOR, [py_type_to_llvm(self.result.type)])
+#            self.result.llvm = builder.call(llvm_floor, [tmp])
+#        else:
+#            self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
 
-    def translate(self, builder):
-        self.floatArg(builder)
-        f = getattr(builder, self.builderFuncName())
-        if self.result.type == float:
-            tmp = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
-            self.result.llvm = builder.floor(tmp)
-        else:
-            self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
+class BINARY_FLOOR_DIVIDE(BinaryOp):
+    """Python compliant `//' operator: Slow since it has to perform type conversions and floating point division for integers"""
+    b_func = {float: 'fdiv', int: 'fdiv'} # NOT USED, but required to make it a concrete class
+
+    def translate(self, module, builder):
+        # convert all arguments to float, since fp division is required to apply floor
+        for arg in self.args:
+            if arg.type == int:
+                arg.llvm = builder.sitofp(arg.llvm, py_type_to_llvm(float), "(float)"+arg.name)
+
+        tmp = builder.fdiv(self.args[0].llvm, self.args[1].llvm, self.result.name)
+        llvm_floor = Function.intrinsic(module, INTR_FLOOR, [py_type_to_llvm(float)])
+        self.result.llvm = builder.call(llvm_floor, [tmp])
+
+        if self.result.type == int:
+            self.result.llvm = builder.fptosi(self.result.llvm, py_type_to_llvm(int), "(int)"+self.result.name)
 
 class BINARY_TRUE_DIVIDE(BinaryOp):
-    """The result of `/', true division, is always a float"""
     b_func = {float: 'fdiv'}
 
     @use_stack(2)
     def eval(self):
+        # The result of `/', true division, is always a float
         self.result = Local.tmp(float)
         self.stack.push(self.result)
 
@@ -162,7 +181,7 @@ class RETURN_VALUE(Bytecode):
     def eval(self):
         pass
 
-    def translate(self, builder):
+    def translate(self, module, builder):
         builder.ret(self.args[0].llvm)
 
     def __str__(self):
