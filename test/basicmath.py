@@ -13,24 +13,26 @@ def chained(a,b): return (a-b)/b*a;
 
 arglist1 = [(-1,0), (84, -42), (1.0, 1), (0,1), (randint(0, 1000000), randint(0, 1000000)), (-1*randint(0, 1000000), randint(0, 1000000))]
 def make_test(f, arglist):
-    def perform_test(f, arglist):
-        for (a,b) in arglist:
+    for i in range(len(arglist)):
+        def perform_test(f, args):
+            a, b = args
             x = f(a,b)
             y = stella(f)(a,b)
             assert x == y and type(x) == type(y)
-    sys.modules[__name__].__dict__["test_" + f.__name__] = lambda: perform_test(f, arglist)
+        sys.modules[__name__].__dict__["test_" + f.__name__+"_"+str(i)] = lambda: perform_test(f, arglist[i])
 for f in [addition, subtraction, multiplication]:
     make_test(f, arglist1)
 
 delta = 0.0000001
-arglist2 = [(0,1), (5,2), (5.0,2), (4.0,4), (-5,2), (5.0,-2), (randint(0, 1000000), randint(1, 1000000))]
+arglist2 = [(0,1), (5,2), (5.0,2), (4.0,4), (-5,2), (5.0,-2), (randint(0, 1000000), randint(1, 1000000)), (341433, 673069)]
 def make_test(f, arglist):
-    def perform_test(f, arglist):
-        for (a,b) in arglist:
+    for i in range(len(arglist)):
+        def perform_test(f, args):
+            a, b = args
             x = f(a,b)
             y = stella(f)(a,b)
             assert x-y < delta and type(x) == type(y)
-    sys.modules[__name__].__dict__["test_" + f.__name__] = lambda: perform_test(f, arglist)
+        sys.modules[__name__].__dict__["test_" + f.__name__+"_"+str(i)] = lambda: perform_test(f, arglist[i])
 for f in [division, floor_division]:
     make_test(f, arglist2)
 
