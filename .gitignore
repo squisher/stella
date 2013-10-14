@@ -5,3 +5,5 @@ ve/
 stella.egg-info/
 Session.vim
 .*.swp
+ctest
+ctest.o
