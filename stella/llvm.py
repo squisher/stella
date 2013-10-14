@@ -5,12 +5,14 @@ from llvm.ee import *
 import logging
 
 tp_int = Type.int(64)
-tp_float = Type.float()
+#tp_float = Type.float() # Python always works with double precision
+tp_double = Type.double()
+
 def py_type_to_llvm(tp):
     if tp == int:
         return tp_int
     elif tp == float:
-        return tp_float
+        return tp_double
     else:
         raise TypeError("Unknown type " + tp)
 
