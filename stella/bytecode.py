@@ -13,6 +13,19 @@ class Variable(object):
     def __str__(self):
         return self.name + self.type
 
+class Const(object):
+    type = None
+    value = None
+
+    def __init__(self, value):
+        self.value = value
+        self.type = type(value)
+        self.llvm = llvm_constant(value)
+        self.name = str(value)
+
+    def __str__(self):
+        return str(self.value)
+
 class Local(Variable):
     @staticmethod
     def tmp(template):
@@ -70,6 +83,9 @@ class Bytecode(metaclass=ABCMeta):
         self.debuginfo = debuginfo
         self.stack = stack
 
+    def addConst(self, arg):
+        self.addArg(Const(arg))
+
     def addArg(self, arg):
         if self.args == None:
             self.args = []
@@ -106,10 +122,23 @@ class STORE_FAST(Bytecode):
         var = Local(self.args[0])
         var.type = self.args[1].type
         func.locals[var.name] = var
+        self.args[0] = var
         self.result = var
 
     def translate(self, module, builder):
         self.result.llvm = self.args[1].llvm
+
+    def __str__(self):
+        return "STORE_FAST {0}, {1}".format(self.args[0].name, self.args[1])
+
+class LOAD_CONST(Bytecode):
+    discard = True
+    def __init__(self, debuginfo, stack):
+        super().__init__(debuginfo, stack)
+
+    def eval(self, func):
+        self.result = self.args[0]
+        self.stack.push(self.result)
 
 class BinaryOp(Bytecode):
     def __init__(self, debuginfo, stack):
@@ -146,6 +175,22 @@ class BINARY_SUBTRACT(BinaryOp):
 
 class BINARY_MULTIPLY(BinaryOp):
     b_func = {float: 'fmul', int: 'mul'}
+
+class INPLACE_ADD(BinaryOp):
+    b_func = {float: 'fadd', int: 'add'}
+
+    @use_stack(2)
+    def eval(self, func):
+        # TODO re-assigning args[0]'s type means its type conversion, currently
+        # happening in translate, may need to be pushed upwards
+        self.args[0].type = unify_type(self.args[0].type, self.args[1].type, self.debuginfo)
+        self.result = self.args[0]
+        self.stack.push(self.result)
+
+    def translate(self, module, builder):
+        self.floatArg(builder)
+        f = getattr(builder, self.builderFuncName())
+        self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
 
 #class BINARY_FLOOR_DIVIDE(BinaryOp):
 #    """Floor divide for float, C integer divide for ints. Fast, but unlike the Python semantics for integers"""

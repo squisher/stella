@@ -4,6 +4,8 @@ from llvm.ee import *
 
 import logging
 
+# TODO Exceptions must end up including debug info!
+
 tp_int = Type.int(64)
 #tp_float = Type.float() # Python always works with double precision
 tp_double = Type.double()
@@ -30,4 +32,11 @@ def llvm_to_py(tp, val):
     else:
         raise Exception ("Unknown type {0}".format(tp))
 
-
+def llvm_constant(val):
+    tp = type(val)
+    if tp == int:
+        return Constant.int(tp_int, val)
+    elif tp == float:
+        return Constant.real(tp_double, val)
+    else:
+        raise Exception("Unknown constant type {0}".format(tp))

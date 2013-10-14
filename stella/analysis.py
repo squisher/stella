@@ -67,7 +67,7 @@ class Function(object):
         for bc in self.bytecodes:
             if isinstance(bc, RETURN_VALUE):
                 self.return_tp = unify_type(self.return_tp, bc.args[0].type, bc.debuginfo)
-        logging.debug("last bytecode: " + str(self.bytecodes[-1]))
+        #logging.debug("last bytecode: " + str(self.bytecodes[-1]))
         logging.debug("returning type " + str(self.return_tp))
 
     def disassemble(self):
