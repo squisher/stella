@@ -44,7 +44,7 @@ def unify_type(tp1, tp2, debuginfo):
 def use_stack(n):
     """
     Decorator, it takes n items off the stack
-    and adds the as arguments to the bytecode.
+    and adds the as bytecode arguments.
     """
     def extract_n(f):
         def extract_from_stack(self, *f_args):
@@ -84,7 +84,7 @@ class Bytecode(metaclass=ABCMeta):
         return False
 
     @abstractmethod
-    def eval(self):
+    def eval(self, func):
         pass
 
 
@@ -93,16 +93,30 @@ class LOAD_FAST(Bytecode):
     def __init__(self, debuginfo, stack):
         super().__init__(debuginfo, stack)
 
-    def eval(self):
-        self.result = self.args[0]
+    def eval(self, func):
+        self.result = func.locals[self.args[0]]
         self.stack.push(self.result)
+
+class STORE_FAST(Bytecode):
+    def __init__(self, debuginfo, stack):
+        super().__init__(debuginfo, stack)
+
+    @use_stack(1)
+    def eval(self, func):
+        var = Local(self.args[0])
+        var.type = self.args[1].type
+        func.locals[var.name] = var
+        self.result = var
+
+    def translate(self, module, builder):
+        self.result.llvm = self.args[1].llvm
 
 class BinaryOp(Bytecode):
     def __init__(self, debuginfo, stack):
         super().__init__(debuginfo, stack)
 
     @use_stack(2)
-    def eval(self):
+    def eval(self, func):
         self.result = Local.tmp(unify_type(self.args[0].type, self.args[1].type, self.debuginfo))
         self.stack.push(self.result)
 
@@ -168,7 +182,7 @@ class BINARY_TRUE_DIVIDE(BinaryOp):
     b_func = {float: 'fdiv'}
 
     @use_stack(2)
-    def eval(self):
+    def eval(self, func):
         # The result of `/', true division, is always a float
         self.result = Local.tmp(float)
         self.stack.push(self.result)
@@ -178,7 +192,7 @@ class RETURN_VALUE(Bytecode):
         super().__init__(debuginfo, stack)
 
     @use_stack(1)
-    def eval(self):
+    def eval(self, func):
         pass
 
     def translate(self, module, builder):

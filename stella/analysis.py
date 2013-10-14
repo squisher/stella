@@ -113,7 +113,7 @@ class Function(object):
                     print('(to ' + repr(i + oparg) + ')', end=' ')
                 elif op in dis.haslocal:
                     #print('(' + co.co_varnames[oparg] + ')', end=' ')
-                    bc.addArg(self.locals[co.co_varnames[oparg]])
+                    bc.addArg(co.co_varnames[oparg])
                 elif op in dis.hascompare:
                     print('(' + cmp_op[oparg] + ')', end=' ')
                 elif op in dis.hasfree:
@@ -121,7 +121,7 @@ class Function(object):
                         free = co.co_cellvars + co.co_freevars
                     print('(' + free[oparg] + ')', end=' ')
 
-            bc.eval()
+            bc.eval(self)
             if not bc.discard:
                 self.bytecodes.append(bc)
 
