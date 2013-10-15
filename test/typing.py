@@ -2,13 +2,13 @@
 
 from stella import stella
 from random import randint
+from test import *
 
-def addition(a,b):
-    return a+b
+def return_bool(): return True
+def return_arg(x): return x
 
-def test_addition():
-    for (a,b) in [(0,0.0), (randint(0, 1000000), float(randint(0, 1000000)))]:
-        assert addition(a,b) == stella(addition)(a,b)
+make_eq_test(__name__, return_bool, [])
+make_eq_test(__name__, return_arg, single_args([True, False, 0, 1, 42.0, -42.5]))
 
 if __name__ == '__main__':
-    print(stella(addition)(41, 1.0))
+    print(stella(return_bool)())
