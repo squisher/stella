@@ -3,7 +3,15 @@ from stella.llvm import *
 from abc import ABCMeta, abstractmethod, abstractproperty
 from llvm.core import INTR_FLOOR
 
-class Variable(object):
+class CastableMixin(object):
+    def toFloat(self, builder):
+        #import pdb; pdb.set_trace()
+        assert (self.type == int)
+        self.llvm = builder.sitofp(self.llvm, py_type_to_llvm(float), "(float)"+self.name)
+        self.orig_type = self.type
+        self.type = float
+
+class Variable(CastableMixin, object):
     name = None
     type = None
 
@@ -25,6 +33,14 @@ class Const(object):
 
     def __str__(self):
         return str(self.value)
+
+    def toFloat(self, builder):
+        assert (self.type == int)
+        self.orig_type = self.type
+        self.type = float
+        self.value = float(self.value)
+        self.llvm = llvm_constant(self.value)
+
 
 class Local(Variable):
     @staticmethod
@@ -57,7 +73,7 @@ def unify_type(tp1, tp2, debuginfo):
 def use_stack(n):
     """
     Decorator, it takes n items off the stack
-    and adds the as bytecode arguments.
+    and adds them as bytecode arguments.
     """
     def extract_n(f):
         def extract_from_stack(self, *f_args):
@@ -78,6 +94,7 @@ class Bytecode(metaclass=ABCMeta):
     result = None
     debuginfo = None
     discard = False # true if it should be removed in the register representation
+    llvm = None
 
     def __init__(self, debuginfo, stack):
         self.debuginfo = debuginfo
@@ -95,7 +112,7 @@ class Bytecode(metaclass=ABCMeta):
         if self.result.type == float:
             for arg in self.args:
                 if arg.type == int:
-                    arg.llvm = builder.sitofp(arg.llvm, py_type_to_llvm(float), "(float)"+arg.name)
+                    arg.toFloat(builder)
             return True
         return False
 
@@ -181,10 +198,12 @@ class INPLACE_ADD(BinaryOp):
 
     @use_stack(2)
     def eval(self, func):
-        # TODO re-assigning args[0]'s type means its type conversion, currently
-        # happening in translate, may need to be pushed upwards
-        self.args[0].type = unify_type(self.args[0].type, self.args[1].type, self.debuginfo)
-        self.result = self.args[0]
+        tp = unify_type(self.args[0].type, self.args[1].type, self.debuginfo)
+        if tp != self.args[0].type:
+            self.result = Local.tmp(self.args[0])
+            self.result.type = tp
+        else:
+            self.result = self.args[0]
         self.stack.push(self.result)
 
     def translate(self, module, builder):
@@ -214,13 +233,14 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
         # convert all arguments to float, since fp division is required to apply floor
         for arg in self.args:
             if arg.type == int:
-                arg.llvm = builder.sitofp(arg.llvm, py_type_to_llvm(float), "(float)"+arg.name)
+                arg.toFloat(builder)
 
         tmp = builder.fdiv(self.args[0].llvm, self.args[1].llvm, self.result.name)
         llvm_floor = Function.intrinsic(module, INTR_FLOOR, [py_type_to_llvm(float)])
         self.result.llvm = builder.call(llvm_floor, [tmp])
 
         if self.result.type == int:
+            # TODO this may be superflous if both args got converted to float in the translation stage -> move toFloat partially to the analysis stage.
             self.result.llvm = builder.fptosi(self.result.llvm, py_type_to_llvm(int), "(int)"+self.result.name)
 
 class BINARY_TRUE_DIVIDE(BinaryOp):
