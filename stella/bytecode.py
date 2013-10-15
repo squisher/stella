@@ -1,5 +1,6 @@
 import dis
-from stella.llvm import *
+from .llvm import *
+from .exc import *
 from abc import ABCMeta, abstractmethod, abstractproperty
 from llvm.core import INTR_FLOOR
 

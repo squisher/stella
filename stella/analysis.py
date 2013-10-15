@@ -3,7 +3,8 @@ import inspect
 
 import logging
 
-from stella.bytecode import *
+from .bytecode import *
+from .exc import *
 
 class DebugInfo(object):
     line = None
@@ -28,20 +29,6 @@ class Stack(object):
         logging.debug("[Stack] Popping " + str(item))
         return item
 
-
-class BaseException(Exception):
-    def __init__(self, msg, debuginfo = None):
-        if debuginfo:
-            super().__init__('{0} at {1}'.format(msg, debuginfo))
-        else:
-            super().__init__(str(debuginfo))
-
-class UnsupportedOpcode(BaseException):
-    def __init__(self, op, debuginfo):
-        super().__init__(dis.opname[op], debuginfo)
-
-class TypingError(BaseException):
-    pass
 
 class Function(object):
     def __init__(self, f):
@@ -97,31 +84,35 @@ class Function(object):
             #print(repr(i).rjust(4), end=' ')
             #print(dis.opname[op].ljust(20), end=' ')
             i = i+1
-            if op >= dis.HAVE_ARGUMENT:
-                oparg = code[i] + code[i+1]*256 + extended_arg
-                extended_arg = 0
-                i = i+2
-                if op == dis.EXTENDED_ARG:
-                    extended_arg = oparg*65536
-                #print(repr(oparg).rjust(5), end=' ')
-                if op in dis.hasconst:
-                    #print('(' + repr(co.co_consts[oparg]) + ')', end=' ')
-                    bc.addConst(co.co_consts[oparg])
-                elif op in dis.hasname:
-                    print('(' + co.co_names[oparg] + ')', end=' ')
-                elif op in dis.hasjrel:
-                    print('(to ' + repr(i + oparg) + ')', end=' ')
-                elif op in dis.haslocal:
-                    #print('(' + co.co_varnames[oparg] + ')', end=' ')
-                    bc.addArg(co.co_varnames[oparg])
-                elif op in dis.hascompare:
-                    print('(' + cmp_op[oparg] + ')', end=' ')
-                elif op in dis.hasfree:
-                    if free is None:
-                        free = co.co_cellvars + co.co_freevars
-                    print('(' + free[oparg] + ')', end=' ')
+            try:
+                if op >= dis.HAVE_ARGUMENT:
+                    oparg = code[i] + code[i+1]*256 + extended_arg
+                    extended_arg = 0
+                    i = i+2
+                    if op == dis.EXTENDED_ARG:
+                        extended_arg = oparg*65536
+                    #print(repr(oparg).rjust(5), end=' ')
+                    if op in dis.hasconst:
+                        #print('(' + repr(co.co_consts[oparg]) + ')', end=' ')
+                        bc.addConst(co.co_consts[oparg])
+                    elif op in dis.hasname:
+                        print('(' + co.co_names[oparg] + ')', end=' ')
+                    elif op in dis.hasjrel:
+                        print('(to ' + repr(i + oparg) + ')', end=' ')
+                    elif op in dis.haslocal:
+                        #print('(' + co.co_varnames[oparg] + ')', end=' ')
+                        bc.addArg(co.co_varnames[oparg])
+                    elif op in dis.hascompare:
+                        print('(' + cmp_op[oparg] + ')', end=' ')
+                    elif op in dis.hasfree:
+                        if free is None:
+                            free = co.co_cellvars + co.co_freevars
+                        print('(' + free[oparg] + ')', end=' ')
 
-            bc.eval(self)
+                bc.eval(self)
+            except StellaException as e:
+                e.addDebug(di)
+                raise
             if not bc.discard:
                 self.bytecodes.append(bc)
 

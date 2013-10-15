@@ -6,9 +6,10 @@ from llvm.ee import *
 
 import logging
 
-from stella import analysis
-from stella.llvm import *
-from stella.bytecode import *
+from . import analysis
+from .llvm import *
+from .bytecode import *
+from .exc import *
 
 def example_jit(arg1_value, arg2_value):
     # Create a module, as in the previous example.
@@ -60,7 +61,7 @@ class Program(object):
             if hasattr(bc, 'translate'):
                 bc.translate(self.module, builder)
             else:
-                raise Exception("Bytedcode {0} at {1} does not yet have a LLVM translation".format(bc, bc.debuginfo))
+                raise UnimplementedException("Bytedcode {0} at {1} does not yet have a LLVM translation".format(bc))
 
     def run(self):
         logging.debug("Preparing execution...")
