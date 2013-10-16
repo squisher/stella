@@ -103,7 +103,8 @@ class Function(object):
                         #print('(' + co.co_varnames[oparg] + ')', end=' ')
                         bc.addArg(co.co_varnames[oparg])
                     elif op in dis.hascompare:
-                        print('(' + cmp_op[oparg] + ')', end=' ')
+                        #print('(' + dis.cmp_op[oparg] + ')', end=' ')
+                        bc.addCmp(dis.cmp_op[oparg])
                     elif op in dis.hasfree:
                         if free is None:
                             free = co.co_cellvars + co.co_freevars

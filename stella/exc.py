@@ -1,3 +1,5 @@
+import dis
+
 class StellaException(Exception):
     def addDebug(self, debuginfo):
         self.debuginfo = debuginfo

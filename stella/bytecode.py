@@ -212,6 +212,50 @@ class INPLACE_ADD(BinaryOp):
         f = getattr(builder, self.builderFuncName())
         self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
 
+class COMPARE_OP(Bytecode):
+    b_func = {float: 'fcmp', int: 'icmp', bool: 'icmp'}
+    op = None
+
+    icmp = {'==': ICMP_EQ,
+            '!=': ICMP_NE,
+            '>':  ICMP_SGT,
+            '>=': ICMP_SGE,
+            '<':  ICMP_SLT,
+            '<=': ICMP_SLE,
+            }
+
+    fcmp = {'==': FCMP_OEQ,
+            '!=': FCMP_ONE,
+            '>':  FCMP_OGT,
+            '>=': FCMP_OGE,
+            '<':  FCMP_OLT,
+            '<=': FCMP_OLE,
+            }
+
+    def __init__(self, debuginfo, stack):
+        super().__init__(debuginfo, stack)
+
+    def addCmp(self, op):
+        self.op = op
+
+    @use_stack(2)
+    def eval(self, func):
+        self.result = Local.tmp(bool)
+        self.stack.push(self.result)
+        if self.args[0].type != self.args[1].type:
+            raise TypingError("Comparing different types ({0} with {1})".format(self.args[0].type, self.args[1].type))
+
+    def translate(self, module, builder):
+        # assume both types are the same, see @eval
+        tp = self.args[0].type
+        if not self.args[0].type in self.b_func:
+            raise UnimplementedError(tp)
+
+        f = getattr(builder, self.b_func[tp])
+        m = getattr(self,    self.b_func[tp])
+
+        self.result.llvm = f(m[self.op], self.args[0].llvm, self.args[1].llvm, self.result.name)
+
 #class BINARY_FLOOR_DIVIDE(BinaryOp):
 #    """Floor divide for float, C integer divide for ints. Fast, but unlike the Python semantics for integers"""
 #    b_func = {float: 'fdiv', int: 'sdiv'}
