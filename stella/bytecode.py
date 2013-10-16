@@ -194,23 +194,73 @@ class BINARY_SUBTRACT(BinaryOp):
 class BINARY_MULTIPLY(BinaryOp):
     b_func = {float: 'fmul', int: 'mul'}
 
-class INPLACE_ADD(BinaryOp):
-    b_func = {float: 'fadd', int: 'add'}
+class BINARY_MODULO(BinaryOp):
+    b_func = {float: 'frem', int: 'srem'}
+
+#class BINARY_FLOOR_DIVIDE(BinaryOp):
+#    """Floor divide for float, C integer divide for ints. Fast, but unlike the Python semantics for integers"""
+#    b_func = {float: 'fdiv', int: 'sdiv'}
+#
+#    def translate(self, module, builder):
+#        self.floatArg(builder)
+#        f = getattr(builder, self.builderFuncName())
+#        if self.result.type == float:
+#            tmp = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
+#            llvm_floor = Function.intrinsic(module, INTR_FLOOR, [py_type_to_llvm(self.result.type)])
+#            self.result.llvm = builder.call(llvm_floor, [tmp])
+#        else:
+#            self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
+
+class BINARY_FLOOR_DIVIDE(BinaryOp):
+    """Python compliant `//' operator: Slow since it has to perform type conversions and floating point division for integers"""
+    b_func = {float: 'fdiv', int: 'fdiv'} # NOT USED, but required to make it a concrete class
+
+    def translate(self, module, builder):
+        # convert all arguments to float, since fp division is required to apply floor
+        for arg in self.args:
+            if arg.type == int:
+                arg.toFloat(builder)
+
+        tmp = builder.fdiv(self.args[0].llvm, self.args[1].llvm, self.result.name)
+        llvm_floor = Function.intrinsic(module, INTR_FLOOR, [py_type_to_llvm(float)])
+        self.result.llvm = builder.call(llvm_floor, [tmp])
+
+        if self.result.type == int:
+            # TODO this may be superflous if both args got converted to float in the translation stage -> move toFloat partially to the analysis stage.
+            self.result.llvm = builder.fptosi(self.result.llvm, py_type_to_llvm(int), "(int)"+self.result.name)
+
+class BINARY_TRUE_DIVIDE(BinaryOp):
+    b_func = {float: 'fdiv'}
 
     @use_stack(2)
     def eval(self, func):
-        tp = unify_type(self.args[0].type, self.args[1].type, self.debuginfo)
-        if tp != self.args[0].type:
-            self.result = Local.tmp(self.args[0])
-            self.result.type = tp
-        else:
-            self.result = self.args[0]
+        # The result of `/', true division, is always a float
+        self.result = Local.tmp(float)
         self.stack.push(self.result)
 
-    def translate(self, module, builder):
-        self.floatArg(builder)
-        f = getattr(builder, self.builderFuncName())
-        self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
+#class InplaceOp(BinaryOp):
+#    @use_stack(2)
+#    def eval(self, func):
+#        tp = unify_type(self.args[0].type, self.args[1].type, self.debuginfo)
+#        if tp != self.args[0].type:
+#            self.result = Local.tmp(self.args[0])
+#            self.result.type = tp
+#        else:
+#            self.result = self.args[0]
+#        self.stack.push(self.result)
+#
+#    def translate(self, module, builder):
+#        self.floatArg(builder)
+#        f = getattr(builder, self.builderFuncName())
+#        self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
+
+# Inplace operators don't have a semantic difference when used on primitive types
+class INPLACE_ADD(BINARY_ADD): pass
+class INPLACE_SUBTRACT(BINARY_SUBTRACT): pass
+class INPLACE_MULTIPLY(BINARY_MULTIPLY): pass
+class INPLACE_TRUE_DIVIDE(BINARY_TRUE_DIVIDE): pass
+class INPLACE_FLOOR_DIVIDE(BINARY_FLOOR_DIVIDE): pass
+class INPLACE_MODULO(BINARY_MODULO): pass
 
 class COMPARE_OP(Bytecode):
     b_func = {float: 'fcmp', int: 'icmp', bool: 'icmp'}
@@ -255,47 +305,6 @@ class COMPARE_OP(Bytecode):
         m = getattr(self,    self.b_func[tp])
 
         self.result.llvm = f(m[self.op], self.args[0].llvm, self.args[1].llvm, self.result.name)
-
-#class BINARY_FLOOR_DIVIDE(BinaryOp):
-#    """Floor divide for float, C integer divide for ints. Fast, but unlike the Python semantics for integers"""
-#    b_func = {float: 'fdiv', int: 'sdiv'}
-#
-#    def translate(self, module, builder):
-#        self.floatArg(builder)
-#        f = getattr(builder, self.builderFuncName())
-#        if self.result.type == float:
-#            tmp = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
-#            llvm_floor = Function.intrinsic(module, INTR_FLOOR, [py_type_to_llvm(self.result.type)])
-#            self.result.llvm = builder.call(llvm_floor, [tmp])
-#        else:
-#            self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
-
-class BINARY_FLOOR_DIVIDE(BinaryOp):
-    """Python compliant `//' operator: Slow since it has to perform type conversions and floating point division for integers"""
-    b_func = {float: 'fdiv', int: 'fdiv'} # NOT USED, but required to make it a concrete class
-
-    def translate(self, module, builder):
-        # convert all arguments to float, since fp division is required to apply floor
-        for arg in self.args:
-            if arg.type == int:
-                arg.toFloat(builder)
-
-        tmp = builder.fdiv(self.args[0].llvm, self.args[1].llvm, self.result.name)
-        llvm_floor = Function.intrinsic(module, INTR_FLOOR, [py_type_to_llvm(float)])
-        self.result.llvm = builder.call(llvm_floor, [tmp])
-
-        if self.result.type == int:
-            # TODO this may be superflous if both args got converted to float in the translation stage -> move toFloat partially to the analysis stage.
-            self.result.llvm = builder.fptosi(self.result.llvm, py_type_to_llvm(int), "(int)"+self.result.name)
-
-class BINARY_TRUE_DIVIDE(BinaryOp):
-    b_func = {float: 'fdiv'}
-
-    @use_stack(2)
-    def eval(self, func):
-        # The result of `/', true division, is always a float
-        self.result = Local.tmp(float)
-        self.stack.push(self.result)
 
 class RETURN_VALUE(Bytecode):
     def __init__(self, debuginfo, stack):

@@ -10,15 +10,23 @@ def subtraction(a,b):    return a-b
 def multiplication(a,b): return a*b
 def division(a,b):       return a/b
 def floor_division(a,b): return a//b
+def modulo(a,b): return a%b
 def chained(a,b): return (a-b)/b*a;
+def inplace(a,b):
+    x = a
+    x += b
+    x /= b
+    x -= b
+    x *= b
+    return x
 
 arglist1 = [(-1,0), (84, -42), (1.0, 1), (0,1), (randint(0, 1000000), randint(0, 1000000)), (-1*randint(0, 1000000), randint(0, 1000000))]
 for f in [addition, subtraction, multiplication]:
     make_eq_test(__name__, f, arglist1)
 
 
-arglist2 = [(0,1), (5,2), (5.0,2), (4.0,4), (-5,2), (5.0,-2), (randint(0, 1000000), randint(1, 1000000)), (341433, 673069)]
-for f in [division, floor_division, chained]:
+arglist2 = [(0,1), (5,2), (5.2,2), (4.0,4), (-5,2), (5.0,-2), (randint(0, 1000000), randint(1, 1000000)), (341433, 673069)]
+for f in [division, floor_division, modulo, chained, inplace]:
     make_delta_test(__name__, f, arglist2)
 
 if __name__ == '__main__':
