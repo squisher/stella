@@ -19,8 +19,10 @@ def double_cast(x,y):
     b = y // x
     return a + b
 
-for f in [direct_assignment, simple_assignment, double_assignment, double_cast]:
-    make_eq_test(__name__, f, [(40,2), (42.0, 0), (41, 1.0)])
+@mark.parametrize('f', [direct_assignment, simple_assignment, double_assignment, double_cast])
+@mark.parametrize('args', [(40,2), (42.0, 0), (41, 1.0)])
+def test1(f,args):
+    make_eq_test(f, args)
 
 if __name__ == '__main__':
     print(stella(double_cast, debug='print')(0, 42))
