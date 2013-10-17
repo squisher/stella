@@ -17,5 +17,7 @@ int main(int argc, char ** argv) {
     double rd = ((a-b)/(double)b)*a;
     printf ("Python =%10.10f\nStella =%10.10f\n", -168231.59941699886, -168231.609375);
     printf ("Cfloat =%10.10f\nCdouble=%10.10lf\n", rf, rd);
+
+    printf ("-5 %% 2 = %d|%d\n", -5%2, (-5)%2);
     return 0;
 }

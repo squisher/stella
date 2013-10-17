@@ -10,7 +10,7 @@ def make_eq_test(f, args):
     y = stella(f)(*args)
     assert x == y and type(x) == type(y)
 
-def make_delta_test(f, args, delta = 0.0000001):
+def make_delta_test(f, args, delta = 1e-7):
     x = f(*args)
     y = stella(f)(*args)
     assert x-y < delta and type(x) == type(y)

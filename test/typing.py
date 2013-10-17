@@ -11,7 +11,7 @@ def equality(a,b): return a==b
 def test1():
     make_eq_test(return_bool, ())
 
-@mark.parametrize('arg', [True, False, 0, 1, 42.0, -42.5])
+@mark.parametrize('arg', single_args([True, False, 0, 1, 42.0, -42.5]))
 def test2(arg):
     make_eq_test(return_arg, arg)
 
