@@ -7,6 +7,7 @@ import logging
 from .exc import *
 
 tp_int = Type.int(64)
+tp_int32 = Type.int(32)
 #tp_float = Type.float() # Python always works with double precision
 tp_double = Type.double()
 tp_bool = Type.int(1)

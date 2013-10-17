@@ -5,6 +5,9 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 from llvm.core import INTR_FLOOR
 
 class CastableMixin(object):
+    def __init__(self):
+        self.orig_type = None
+
     def toFloat(self, builder):
         #import pdb; pdb.set_trace()
         assert (self.type == int)
@@ -17,6 +20,7 @@ class Variable(CastableMixin, object):
     type = None
 
     def __init__(self, name):
+        super().__init__()
         self.name = name
 
     def __str__(self):
@@ -196,6 +200,38 @@ class BINARY_MULTIPLY(BinaryOp):
 
 class BINARY_MODULO(BinaryOp):
     b_func = {float: 'frem', int: 'srem'}
+
+class BINARY_POWER(BinaryOp):
+    b_func = {float: INTR_POW, int: INTR_POWI}
+
+    @use_stack(2)
+    def eval(self, func):
+        # TODO if args[1] is int but negative, then the result will be float, too!
+        if self.args[0].type == int and self.args[1].type == int:
+            self.result = Local.tmp(int)
+        else:
+            self.result = Local.tmp(float)
+        self.stack.push(self.result)
+
+    def translate(self, module, builder):
+        # llvm.pow[i]'s first argument always has to be float
+        if self.args[0].type == int:
+            self.args[0].toFloat(builder)
+
+        if self.args[1].type == int:
+            # powi takes a i32 argument
+            power = builder.trunc(self.args[1].llvm, tp_int32, '(i32)'+self.args[1].name)
+        else:
+            power = self.args[1].llvm
+
+        llvm_pow = Function.intrinsic(module, self.b_func[self.args[1].type], [py_type_to_llvm(self.args[0].type)])
+        pow_result = builder.call(llvm_pow, [self.args[0].llvm, power])
+
+        if self.args[0].orig_type == int and self.args[1].type == int:
+            # cast back to an integer
+            self.result.llvm = builder.fptosi(pow_result, py_type_to_llvm(int))
+        else:
+            self.result.llvm = pow_result
 
 #class BINARY_FLOOR_DIVIDE(BinaryOp):
 #    """Floor divide for float, C integer divide for ints. Fast, but unlike the Python semantics for integers"""
