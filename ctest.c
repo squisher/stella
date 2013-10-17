@@ -19,5 +19,12 @@ int main(int argc, char ** argv) {
     printf ("Cfloat =%10.10f\nCdouble=%10.10lf\n", rf, rd);
 
     printf ("-5 %% 2 = %d|%d\n", -5%2, (-5)%2);
+    //printf ("5.2 %% 2 = %f\n", 5.2%2);
+    //
+    {
+        double a = 5.2;
+        int b = 2;
+        printf ("(((a + b) / b) - b) * b = %.12f\n", (((a + b) / b) - b) * b);
+    }
     return 0;
 }
