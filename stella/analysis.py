@@ -18,24 +18,26 @@ class DebugInfo(object):
 class Stack(object):
     backend = None
 
-    def __init__(self):
+    def __init__(self, name="Stack"):
         self.backend = []
 
     def push(self, item):
-        logging.debug("[Stack] Pushing " + str(item))
+        logging.debug("["+self.name+"] Pushing " + str(item))
         self.backend.append(item)
     def pop(self):
         item = self.backend.pop()
-        logging.debug("[Stack] Popping " + str(item))
+        logging.debug("["+self.name+"] Popping " + str(item))
         return item
-
 
 class Function(object):
     def __init__(self, f):
         self.locals = dict()
         self.return_tp = None
         self.stack = Stack()
-        self.bytecodes = []
+        self.bytecodes = None # pointer to the first bytecode
+        self.blocks = {}
+        self.labels = {}
+        self.todo = Stack("Todo")
 
         self.f = f
         argspec = inspect.getargspec(f)
@@ -50,10 +52,17 @@ class Function(object):
         for i in range(len(args)):
             self.args[i].type = type(args[i])
         logging.debug("Analysis of " + str(self.f) + "(" + str(self.args) + ")")
+
         self.disassemble()
+        self.todo.push(self.bytecodes)
+
         for bc in self.bytecodes:
-            if isinstance(bc, RETURN_VALUE):
-                self.return_tp = unify_type(self.return_tp, bc.args[0].type, bc.debuginfo)
+            current_bc = bc
+            while current_bc != None:
+                current_bc.eval()
+                if isinstance(bc, RETURN_VALUE):
+                    self.return_tp = unify_type(self.return_tp, bc.args[0].type, bc.debuginfo)
+                current_bc = current_bc.next
         #logging.debug("last bytecode: " + str(self.bytecodes[-1]))
         logging.debug("returning type " + str(self.return_tp))
 
@@ -69,6 +78,7 @@ class Function(object):
         extended_arg = 0
         free = None
         line = 0
+        last_bc = None
         while i < n:
             op = code[i]
             if i in linestarts:
@@ -80,6 +90,9 @@ class Function(object):
                 bc = opconst[op](di, self.stack)
             else:
                 raise UnsupportedOpcode(op, di)
+
+            if i in labels:
+                self.labels[i] = bc
 
             #print(repr(i).rjust(4), end=' ')
             #print(dis.opname[op].ljust(20), end=' ')
@@ -115,7 +128,10 @@ class Function(object):
                 e.addDebug(di)
                 raise
             if not bc.discard:
-                self.bytecodes.append(bc)
+                if last_bc != None:
+                    last_bc.next = bc
+                else:
+                    self.bytecodes = bc
 
 
 def main(f, *args):

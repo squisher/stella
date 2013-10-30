@@ -66,7 +66,6 @@ class Local(Variable):
     def __repr__(self):
         return self.__str__()
 
-
 def unify_type(tp1, tp2, debuginfo):
     if tp1 == tp2:  return tp1
     if tp1 == None: return tp2
@@ -100,6 +99,8 @@ class Bytecode(metaclass=ABCMeta):
     debuginfo = None
     discard = False # true if it should be removed in the register representation
     llvm = None
+    block = None
+    next = None
 
     def __init__(self, debuginfo, stack):
         self.debuginfo = debuginfo
@@ -125,6 +126,11 @@ class Bytecode(metaclass=ABCMeta):
     def eval(self, func):
         pass
 
+    def createBlocks(self, func, label=False):
+        if label is False:
+            func.append_basic_block(label)
+            return True
+        return False
 
 class LOAD_FAST(Bytecode):
     discard = True
@@ -355,6 +361,13 @@ class RETURN_VALUE(Bytecode):
 
     def __str__(self):
         return 'RETURN ' + str(self.args[0])
+
+class JUMP_IF_FALSE_OR_POP(Bytecode):
+    def createBlocks(self, func, label=False):
+        trgt = super().createBlocks(func, label)
+        # create then block
+        # create else block
+        # create merge block? or reuse the next block?
 
 opconst = {}
 # Get all contrete subclasses of Bytecode and register them
