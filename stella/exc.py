@@ -1,6 +1,11 @@
 import dis
 
 class StellaException(Exception):
+    def __init__(self, msg, debuginfo=None):
+        super().__init__(self, msg)
+
+        self.addDebug(debuginfo)
+
     def addDebug(self, debuginfo):
         self.debuginfo = debuginfo
 

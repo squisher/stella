@@ -4,6 +4,8 @@ from .exc import *
 from abc import ABCMeta, abstractmethod, abstractproperty
 from llvm.core import INTR_FLOOR
 
+NoType = ''
+
 class CastableMixin(object):
     def __init__(self):
         self.orig_type = None
@@ -17,7 +19,7 @@ class CastableMixin(object):
 
 class Variable(CastableMixin, object):
     name = None
-    type = None
+    type = NoType
 
     def __init__(self, name):
         super().__init__()
@@ -26,8 +28,21 @@ class Variable(CastableMixin, object):
     def __str__(self):
         return self.name + self.type
 
+    def unify_type(self, tp2, debuginfo):
+        tp1 = self.type
+        if   tp1 == tp2:    pass
+        elif tp1 == NoType: self.type = tp2
+        elif tp2 == NoType: pass
+        elif (tp1 == int and tp2 == float) or (tp1 == float and tp2 == int):
+            self.type = float
+            return True
+        else:
+            raise TypingError ("Unifying of types " + str(tp1) + " and " + str(tp2) + " not yet implemented", debuginfo)
+
+        return False
+
 class Const(object):
-    type = None
+    type = ''
     value = None
 
     def __init__(self, value):
@@ -49,12 +64,12 @@ class Const(object):
 
 class Local(Variable):
     @staticmethod
-    def tmp(template):
+    def tmp():
         l = Local('')
-        if isinstance(template, Variable):
-            l.type = template.type
-        else:
-            l.type = template
+#        if isinstance(template, Variable):
+#            l.type = template.type
+#        else:
+#            l.type = template
         return l
 
     def __str__(self):
@@ -65,14 +80,6 @@ class Local(Variable):
 
     def __repr__(self):
         return self.__str__()
-
-def unify_type(tp1, tp2, debuginfo):
-    if tp1 == tp2:  return tp1
-    if tp1 == None: return tp2
-    if tp2 == None: return tp1
-    if (tp1 == int and tp2 == float) or (tp1 == float and tp2 == int):
-        return float
-    raise TypingError ("Unifying of types " + str(tp1) + " and " + str(tp2) + " not yet implemented", debuginfo)
 
 def use_stack(n):
     """
@@ -92,6 +99,20 @@ def use_stack(n):
             return f(self, *f_args)
         return extract_from_stack
     return extract_n
+
+class LinkedListIter(object):
+    def __init__(self, start):
+        self.next = start
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.next == None:
+            raise StopIteration()
+        current = self.next
+        self.next = self.next.next
+        return current
 
 class Bytecode(metaclass=ABCMeta):
     args = None
@@ -123,8 +144,14 @@ class Bytecode(metaclass=ABCMeta):
         return False
 
     @abstractmethod
-    def eval(self, func):
+    def stack_eval(self, func):
         pass
+
+    def type_eval(self, func):
+        if self.discard:
+            return
+        else:
+            raise UnimplementedError(self.__class__.__name__ + " does not implement typing rules")
 
     def createBlocks(self, func, label=False):
         if label is False:
@@ -132,13 +159,18 @@ class Bytecode(metaclass=ABCMeta):
             return True
         return False
 
+    def __iter__(self):
+        return LinkedListIter(self)
+
 class LOAD_FAST(Bytecode):
     discard = True
     def __init__(self, debuginfo, stack):
         super().__init__(debuginfo, stack)
 
-    def eval(self, func):
-        self.result = func.locals[self.args[0]]
+    def stack_eval(self, func):
+        # don't use func.getLocal() here because the semantics of
+        # LOAD_FAST require the variable to exist
+        self.result = func.locals[self.args[0].name]
         self.stack.push(self.result)
 
 class STORE_FAST(Bytecode):
@@ -146,12 +178,11 @@ class STORE_FAST(Bytecode):
         super().__init__(debuginfo, stack)
 
     @use_stack(1)
-    def eval(self, func):
-        var = Local(self.args[0])
-        var.type = self.args[1].type
-        func.locals[var.name] = var
-        self.args[0] = var
-        self.result = var
+    def stack_eval(self, func):
+        self.result = func.getLocal(self.args[0].name)
+
+    def type_eval(self, func):
+        func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
 
     def translate(self, module, builder):
         self.result.llvm = self.args[1].llvm
@@ -164,7 +195,7 @@ class LOAD_CONST(Bytecode):
     def __init__(self, debuginfo, stack):
         super().__init__(debuginfo, stack)
 
-    def eval(self, func):
+    def stack_eval(self, func):
         self.result = self.args[0]
         self.stack.push(self.result)
 
@@ -173,9 +204,14 @@ class BinaryOp(Bytecode):
         super().__init__(debuginfo, stack)
 
     @use_stack(2)
-    def eval(self, func):
-        self.result = Local.tmp(unify_type(self.args[0].type, self.args[1].type, self.debuginfo))
+    def stack_eval(self, func):
+        self.result = Local.tmp()
         self.stack.push(self.result)
+
+    def type_eval(self, func):
+        # TODO is that correct if we do several analysis runs?
+        func.retype(self.result.unify_type(self.args[0].type, self.debuginfo))
+        func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
 
     def builderFuncName(self):
         try:
@@ -211,13 +247,16 @@ class BINARY_POWER(BinaryOp):
     b_func = {float: INTR_POW, int: INTR_POWI}
 
     @use_stack(2)
-    def eval(self, func):
+    def stack_eval(self, func):
+        self.result = Local.tmp()
+        self.stack.push(self.result)
+
+    def type_eval(self, func):
         # TODO if args[1] is int but negative, then the result will be float, too!
         if self.args[0].type == int and self.args[1].type == int:
-            self.result = Local.tmp(int)
+            func.retype(self.result.unify_type(int, self.debuginfo))
         else:
-            self.result = Local.tmp(float)
-        self.stack.push(self.result)
+            func.retype(self.result.unify_type(float, self.debuginfo))
 
     def translate(self, module, builder):
         # llvm.pow[i]'s first argument always has to be float
@@ -275,14 +314,17 @@ class BINARY_TRUE_DIVIDE(BinaryOp):
     b_func = {float: 'fdiv'}
 
     @use_stack(2)
-    def eval(self, func):
+    def stack_eval(self, func):
         # The result of `/', true division, is always a float
-        self.result = Local.tmp(float)
+        self.result = Local.tmp()
         self.stack.push(self.result)
+
+    def type_eval(self, func):
+        func.retype(self.result.unify_type(float, self.debuginfo))
 
 #class InplaceOp(BinaryOp):
 #    @use_stack(2)
-#    def eval(self, func):
+#    def stack_eval(self, func):
 #        tp = unify_type(self.args[0].type, self.args[1].type, self.debuginfo)
 #        if tp != self.args[0].type:
 #            self.result = Local.tmp(self.args[0])
@@ -331,14 +373,17 @@ class COMPARE_OP(Bytecode):
         self.op = op
 
     @use_stack(2)
-    def eval(self, func):
-        self.result = Local.tmp(bool)
+    def stack_eval(self, func):
+        self.result = Local.tmp()
         self.stack.push(self.result)
+
+    def type_eval(self, func):
+        func.retype(self.result.unify_type(bool, self.debuginfo))
         if self.args[0].type != self.args[1].type:
             raise TypingError("Comparing different types ({0} with {1})".format(self.args[0].type, self.args[1].type))
 
     def translate(self, module, builder):
-        # assume both types are the same, see @eval
+        # assume both types are the same, see @stack_eval
         tp = self.args[0].type
         if not self.args[0].type in self.b_func:
             raise UnimplementedError(tp)
@@ -353,7 +398,10 @@ class RETURN_VALUE(Bytecode):
         super().__init__(debuginfo, stack)
 
     @use_stack(1)
-    def eval(self, func):
+    def stack_eval(self, func):
+        self.result = self.args[0]
+
+    def type_eval(self, func):
         pass
 
     def translate(self, module, builder):

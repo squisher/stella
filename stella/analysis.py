@@ -20,6 +20,7 @@ class Stack(object):
 
     def __init__(self, name="Stack"):
         self.backend = []
+        self.name = name
 
     def push(self, item):
         logging.debug("["+self.name+"] Pushing " + str(item))
@@ -28,11 +29,13 @@ class Stack(object):
         item = self.backend.pop()
         logging.debug("["+self.name+"] Popping " + str(item))
         return item
+    def empty(self):
+        return len(self.backend) == 0
 
 class Function(object):
     def __init__(self, f):
         self.locals = dict()
-        self.return_tp = None
+        self.result = Variable('__return__') # TODO possible name conflicts?
         self.stack = Stack()
         self.bytecodes = None # pointer to the first bytecode
         self.blocks = {}
@@ -48,23 +51,42 @@ class Function(object):
     def getName(self):
         return self.f.__name__
 
+    def getLocal(self, name):
+        if name not in self.locals:
+            var = Local(name)
+            self.locals[name] = var
+        return self.locals[name]
+
+    def retype(self, go):
+        if go:
+            self.analyze_again = True
+
     def analyze(self, *args):
         for i in range(len(args)):
             self.args[i].type = type(args[i])
         logging.debug("Analysis of " + str(self.f) + "(" + str(self.args) + ")")
 
         self.disassemble()
+
         self.todo.push(self.bytecodes)
 
-        for bc in self.bytecodes:
-            current_bc = bc
-            while current_bc != None:
-                current_bc.eval()
+        while not self.todo.empty():
+            self.analyze_again = False
+            start = self.todo.pop()
+            for bc in start:
+                bc.type_eval(self)
+                logging.debug("TYPE'D " + str(bc))
                 if isinstance(bc, RETURN_VALUE):
-                    self.return_tp = unify_type(self.return_tp, bc.args[0].type, bc.debuginfo)
-                current_bc = current_bc.next
+                    self.retype(self.result.unify_type(bc.result.type, bc.debuginfo))
+            if self.analyze_again:
+                self.todo.push(start)
+
         #logging.debug("last bytecode: " + str(self.bytecodes[-1]))
-        logging.debug("returning type " + str(self.return_tp))
+        logging.debug("returning type " + str(self.result.type))
+
+        logging.debug("PyStack bytecode:")
+        for bc in self.bytecodes:
+            logging.debug(str(bc))
 
     def disassemble(self):
         """Disassemble a code object."""
@@ -114,7 +136,7 @@ class Function(object):
                         print('(to ' + repr(i + oparg) + ')', end=' ')
                     elif op in dis.haslocal:
                         #print('(' + co.co_varnames[oparg] + ')', end=' ')
-                        bc.addArg(co.co_varnames[oparg])
+                        bc.addArg(self.getLocal(co.co_varnames[oparg]))
                     elif op in dis.hascompare:
                         #print('(' + dis.cmp_op[oparg] + ')', end=' ')
                         bc.addCmp(dis.cmp_op[oparg])
@@ -123,15 +145,18 @@ class Function(object):
                             free = co.co_cellvars + co.co_freevars
                         print('(' + free[oparg] + ')', end=' ')
 
-                bc.eval(self)
+                bc.stack_eval(self)
+                logging.debug("EVAL'D " + str(bc))
             except StellaException as e:
                 e.addDebug(di)
                 raise
+
             if not bc.discard:
                 if last_bc != None:
                     last_bc.next = bc
                 else:
                     self.bytecodes = bc
+                last_bc = bc
 
 
 def main(f, *args):

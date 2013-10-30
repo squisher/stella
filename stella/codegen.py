@@ -45,7 +45,7 @@ class Program(object):
         self.args = args
         self.module = Module.new('__stella__')
         self.arg_types = [py_type_to_llvm(arg.type) for arg in af.args]
-        func_tp = Type.function(py_type_to_llvm(af.return_tp), self.arg_types)
+        func_tp = Type.function(py_type_to_llvm(af.result.type), self.arg_types)
         self.func = self.module.add_function(func_tp, af.getName())
 
         for i in range(len(af.args)):
@@ -58,9 +58,9 @@ class Program(object):
         for i, bc in af.labels.items():
             bc.block = self.func.append_basic_block(str(i))
 
-        logging.debug("PyStack bytecode:")
+        #logging.debug("PyStack bytecode:")
         for bc in af.bytecodes:
-            logging.debug(str(bc))
+            #logging.debug(str(bc))
             if bc.block:
                 builder = Builder.new(bc.block)
             if hasattr(bc, 'translate'):
@@ -83,4 +83,4 @@ class Program(object):
 
         # The return value is also GenericValue. Let's print it.
         logging.debug("Returning...")
-        return llvm_to_py(self.af.return_tp, retval)
+        return llvm_to_py(self.af.result.type, retval)
