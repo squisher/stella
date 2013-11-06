@@ -1,5 +1,6 @@
 import dis
 import logging
+import sys
 
 from .llvm import *
 from .exc import *
@@ -62,7 +63,12 @@ class Cast(object):
         self.emitted = True
 
         #import pdb; pdb.set_trace()
-        assert self.obj.type == int and self.type == float
+
+        # TODO: HACK: instead of failing, let's make it a noop
+        #assert self.obj.type == int and self.type == float
+        if self.obj.type ==  self.type:
+            self.llvm = self.obj.llvm
+            return
 
         # if value attribute is present, then it is a Const
         if hasattr(self.obj, 'value'):
