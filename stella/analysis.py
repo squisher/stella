@@ -57,8 +57,9 @@ class Function(object):
             self.locals[name] = var
         return self.locals[name]
 
-    def retype(self, go):
+    def retype(self, go = True):
         if go:
+            #import pdb; pdb.set_trace()
             self.analyze_again = True
 
     def analyze(self, *args):
@@ -66,20 +67,29 @@ class Function(object):
             self.args[i].type = type(args[i])
         logging.debug("Analysis of " + str(self.f) + "(" + str(self.args) + ")")
 
+        logging.debug("Disassembling and Stack->Register conversion")
         self.disassemble()
 
         self.todo.push(self.bytecodes)
 
+        i = 0
         while not self.todo.empty():
+            logging.debug("Type analysis iteration {0}".format(i))
             self.analyze_again = False
             start = self.todo.pop()
+
             for bc in start:
                 bc.type_eval(self)
                 logging.debug("TYPE'D " + str(bc))
                 if isinstance(bc, RETURN_VALUE):
                     self.retype(self.result.unify_type(bc.result.type, bc.debuginfo))
+
             if self.analyze_again:
                 self.todo.push(start)
+
+            if i > 10:
+                raise Exception("Stopping after {0} type analysis iterations (failsafe)".format(i))
+            i += 1
 
         #logging.debug("last bytecode: " + str(self.bytecodes[-1]))
         logging.debug("returning type " + str(self.result.type))

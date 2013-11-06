@@ -1,4 +1,6 @@
 import dis
+import logging
+
 from .llvm import *
 from .exc import *
 from abc import ABCMeta, abstractmethod, abstractproperty
@@ -6,18 +8,7 @@ from llvm.core import INTR_FLOOR
 
 NoType = ''
 
-class CastableMixin(object):
-    def __init__(self):
-        self.orig_type = None
-
-    def toFloat(self, builder):
-        #import pdb; pdb.set_trace()
-        assert (self.type == int)
-        self.llvm = builder.sitofp(self.llvm, py_type_to_llvm(float), "(float)"+self.name)
-        self.orig_type = self.type
-        self.type = float
-
-class Variable(CastableMixin, object):
+class Variable(object):
     name = None
     type = NoType
 
@@ -54,12 +45,34 @@ class Const(object):
     def __str__(self):
         return str(self.value)
 
-    def toFloat(self, builder):
-        assert (self.type == int)
-        self.orig_type = self.type
-        self.type = float
-        self.value = float(self.value)
-        self.llvm = llvm_constant(self.value)
+class Cast(object):
+    def __init__(self, obj, tp):
+        assert obj.type != tp
+        self.obj = obj
+        self.type = tp
+        self.emitted = False
+
+        logging.debug("Casting {0} to {1}".format(self.obj.name, self.type))
+        self.name = "({0}){1}".format(self.type, self.obj.name)
+
+    def translate(self, builder):
+        if self.emitted:
+            assert hasattr(self, 'llvm')
+            return
+        self.emitted = True
+
+        #import pdb; pdb.set_trace()
+        assert self.obj.type == int and self.type == float
+
+        # if value attribute is present, then it is a Const
+        if hasattr(self.obj, 'value'):
+            self.value = float(self.value)
+            self.llvm = llvm_constant(self.value)
+        else:
+            self.llvm = builder.sitofp(self.obj.llvm, py_type_to_llvm(float), self.name)
+
+    def __str__(self):
+        return self.name
 
 
 class Local(Variable):
@@ -135,13 +148,11 @@ class Bytecode(metaclass=ABCMeta):
             self.args = []
         self.args.append(arg)
 
-    def floatArg(self, builder):
-        if self.result.type == float:
-            for arg in self.args:
-                if arg.type == int:
-                    arg.toFloat(builder)
-            return True
-        return False
+    def cast(self, builder):
+        #import pdb; pdb.set_trace()
+        for arg in self.args:
+            if isinstance(arg, Cast):
+                arg.translate(builder)
 
     @abstractmethod
     def stack_eval(self, func):
@@ -182,9 +193,16 @@ class STORE_FAST(Bytecode):
         self.result = func.getLocal(self.args[0].name)
 
     def type_eval(self, func):
-        func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
+        #func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
+        arg = self.args[1]
+        tp_changed = self.result.unify_type(arg.type, self.debuginfo)
+        if tp_changed and self.result.type != arg.type:
+            self.args[1] = Cast(arg, self.result.type)
+            # TODO: can I avoid a retype in some cases?
+            func.retype()
 
     def translate(self, module, builder):
+        self.cast(builder)
         self.result.llvm = self.args[1].llvm
 
     def __str__(self):
@@ -209,9 +227,13 @@ class BinaryOp(Bytecode):
         self.stack.push(self.result)
 
     def type_eval(self, func):
-        # TODO is that correct if we do several analysis runs?
-        func.retype(self.result.unify_type(self.args[0].type, self.debuginfo))
-        func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
+        for i in range(len(self.args)):
+            arg = self.args[i]
+            tp_changed = self.result.unify_type(arg.type, self.debuginfo)
+            if tp_changed and self.result.type != arg.type:
+                self.args[i] = Cast(arg, self.result.type)
+                # TODO: can I avoid a retype in some cases?
+                func.retype()
 
     def builderFuncName(self):
         try:
@@ -220,7 +242,7 @@ class BinaryOp(Bytecode):
             raise TypingError("{0} does not yet implement type {1}".format(self.__class__.__name__, self.result.type))
 
     def translate(self, module, builder):
-        self.floatArg(builder)
+        self.cast(builder)
         f = getattr(builder, self.builderFuncName())
         self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
 
@@ -278,35 +300,36 @@ class BINARY_POWER(BinaryOp):
         else:
             self.result.llvm = pow_result
 
-#class BINARY_FLOOR_DIVIDE(BinaryOp):
-#    """Floor divide for float, C integer divide for ints. Fast, but unlike the Python semantics for integers"""
-#    b_func = {float: 'fdiv', int: 'sdiv'}
-#
-#    def translate(self, module, builder):
-#        self.floatArg(builder)
-#        f = getattr(builder, self.builderFuncName())
-#        if self.result.type == float:
-#            tmp = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
-#            llvm_floor = Function.intrinsic(module, INTR_FLOOR, [py_type_to_llvm(self.result.type)])
-#            self.result.llvm = builder.call(llvm_floor, [tmp])
-#        else:
-#            self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
-
 class BINARY_FLOOR_DIVIDE(BinaryOp):
     """Python compliant `//' operator: Slow since it has to perform type conversions and floating point division for integers"""
     b_func = {float: 'fdiv', int: 'fdiv'} # NOT USED, but required to make it a concrete class
 
-    def translate(self, module, builder):
-        # convert all arguments to float, since fp division is required to apply floor
+    def type_eval(self, func):
         for arg in self.args:
-            if arg.type == int:
-                arg.toFloat(builder)
+            # TODO: this is a HACK
+            if isinstance(arg, Cast):
+                tp = arg.obj.type
+            else:
+                tp = arg.type
+            self.result.unify_type(tp, self.debuginfo)
+
+        # convert all arguments to float, since fp division is required to apply floor
+        for i in range(len(self.args)):
+            arg = self.args[i]
+            do_cast = arg.type != float
+            if do_cast:
+                self.args[i] = Cast(arg, float)
+                func.retype()
+
+    def translate(self, module, builder):
+        self.cast(builder)
 
         tmp = builder.fdiv(self.args[0].llvm, self.args[1].llvm, self.result.name)
         llvm_floor = Function.intrinsic(module, INTR_FLOOR, [py_type_to_llvm(float)])
         self.result.llvm = builder.call(llvm_floor, [tmp])
 
-        if self.result.type == int:
+        #import pdb; pdb.set_trace()
+        if all([isinstance(a,Cast) and a.obj.type == int for a in self.args]):
             # TODO this may be superflous if both args got converted to float in the translation stage -> move toFloat partially to the analysis stage.
             self.result.llvm = builder.fptosi(self.result.llvm, py_type_to_llvm(int), "(int)"+self.result.name)
 
@@ -320,7 +343,9 @@ class BINARY_TRUE_DIVIDE(BinaryOp):
         self.stack.push(self.result)
 
     def type_eval(self, func):
-        func.retype(self.result.unify_type(float, self.debuginfo))
+        # this op always returns a float
+        self.result.type = float
+        super().type_eval(func)
 
 #class InplaceOp(BinaryOp):
 #    @use_stack(2)
@@ -378,7 +403,8 @@ class COMPARE_OP(Bytecode):
         self.stack.push(self.result)
 
     def type_eval(self, func):
-        func.retype(self.result.unify_type(bool, self.debuginfo))
+        #func.retype(self.result.unify_type(bool, self.debuginfo))
+        self.result.type = bool
         if self.args[0].type != self.args[1].type:
             raise TypingError("Comparing different types ({0} with {1})".format(self.args[0].type, self.args[1].type))
 
