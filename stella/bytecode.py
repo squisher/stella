@@ -239,8 +239,9 @@ class BinaryOp(Bytecode):
         for i in range(len(self.args)):
             arg = self.args[i]
             tp_changed = self.result.unify_type(arg.type, self.debuginfo)
-            if tp_changed and self.result.type != arg.type:
-                self.args[i] = Cast(arg, self.result.type)
+            if tp_changed:
+                if self.result.type != arg.type:
+                    self.args[i] = Cast(arg, self.result.type)
                 # TODO: can I avoid a retype in some cases?
                 func.retype()
 
@@ -284,15 +285,18 @@ class BINARY_POWER(BinaryOp):
 
     def type_eval(self, func):
         # TODO if args[1] is int but negative, then the result will be float, too!
-        if self.args[0].type == int and self.args[1].type == int:
-            func.retype(self.result.unify_type(int, self.debuginfo))
-        else:
-            func.retype(self.result.unify_type(float, self.debuginfo))
+#        if self.args[0].type == int and self.args[1].type == int:
+#            tp = int
+#        else:
+#            tp = float
+#        tp_changed = self.result.unify_type(tp, self.debuginfo)
+        super().type_eval(func)
 
     def translate(self, module, builder):
         # llvm.pow[i]'s first argument always has to be float
         if self.args[0].type == int:
-            self.args[0].toFloat(builder)
+            self.args[0] = Cast(self.args[0], float)
+            self.args[0].translate(builder)
 
         if self.args[1].type == int:
             # powi takes a i32 argument
@@ -303,7 +307,7 @@ class BINARY_POWER(BinaryOp):
         llvm_pow = Function.intrinsic(module, self.b_func[self.args[1].type], [py_type_to_llvm(self.args[0].type)])
         pow_result = builder.call(llvm_pow, [self.args[0].llvm, power])
 
-        if self.args[0].orig_type == int and self.args[1].type == int:
+        if isinstance(self.args[0], Cast) and self.args[0].obj.type == int and self.args[1].type == int:
             # cast back to an integer
             self.result.llvm = builder.fptosi(pow_result, py_type_to_llvm(int))
         else:

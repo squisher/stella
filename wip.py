@@ -4,5 +4,5 @@ def g(a):
         return 1
     else:
         return 2
-from test.basicmath import modulo, chained, inplace, arglist2
-args_mod = list(filter(lambda e: e[0] >= 0, arglist2))
+from test.basicmath import *
+#args_mod = list(filter(lambda e: e[0] >= 0, arglist2))
