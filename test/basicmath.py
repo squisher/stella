@@ -22,19 +22,19 @@ def inplace(a,b):
     return x
 
 arglist1 = [(-1,0), (84, -42), (1.0, 1), (0,1), (randint(0, 1000000), randint(0, 1000000)), (-1*randint(0, 1000000), randint(0, 1000000))]
-@mark.parametrize('f', [addition, subtraction, multiplication])
 @mark.parametrize('args', arglist1)
+@mark.parametrize('f', [addition, subtraction, multiplication])
 def test1(f,args):
     make_eq_test(f, args)
 
 arglist2 = [(0,1), (5,2), (5.2,2), (4.0,4), (-5,2), (5.0,-2), (3,1.5), (randint(0, 1000000), randint(1, 1000000)), (341433, 673069)]
-@mark.parametrize('f', [division, floor_division])
 @mark.parametrize('args', arglist2)
+@mark.parametrize('f', [division, floor_division])
 def test2(f, args):
     make_delta_test(f, args)
 
-@mark.parametrize('f', [chained, inplace])
 @mark.parametrize('args', arglist2)
+@mark.parametrize('f', [chained, inplace])
 def test_accuracy(f, args):
     """Note: Lower accuracy"""
     make_delta_test(f, args, delta=1e-6)
@@ -54,8 +54,8 @@ def test_semantics_modulo(args):
     make_delta_test(modulo, args)
 
 arglist3 = [(0,42), (42,0), (2,5.0), (2.0,5), (1.2,2), (4,7.5), (-4,2)]
-@mark.parametrize('f', [power])
 @mark.parametrize('args', arglist3)
+@mark.parametrize('f', [power])
 def test3(f,args):
     make_delta_test(f, args)
 
