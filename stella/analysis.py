@@ -95,6 +95,7 @@ class Function(object):
         logging.debug("returning type " + str(self.result.type))
 
         logging.debug("PyStack bytecode:")
+        #import pdb; pdb.set_trace()
         for bc in self.bytecodes:
             logging.debug(str(bc))
 

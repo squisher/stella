@@ -196,16 +196,19 @@ class STORE_FAST(Bytecode):
 
     @use_stack(1)
     def stack_eval(self, func):
-        self.result = func.getLocal(self.args[0].name)
+        #self.result = func.getLocal(self.args[0].name)
+        self.result = self.args[0]
 
     def type_eval(self, func):
         #func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
         arg = self.args[1]
+        #import pdb; pdb.set_trace()
         tp_changed = self.result.unify_type(arg.type, self.debuginfo)
-        if tp_changed and self.result.type != arg.type:
-            self.args[1] = Cast(arg, self.result.type)
-            # TODO: can I avoid a retype in some cases?
+        if tp_changed:
             func.retype()
+            if self.result.type != arg.type:
+                self.args[1] = Cast(arg, self.result.type)
+            # TODO: can I avoid a retype in some cases?
 
     def translate(self, module, builder):
         self.cast(builder)
