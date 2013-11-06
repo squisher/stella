@@ -72,7 +72,7 @@ class Cast(object):
 
         # if value attribute is present, then it is a Const
         if hasattr(self.obj, 'value'):
-            self.value = float(self.value)
+            self.value = float(self.obj.value)
             self.llvm = llvm_constant(self.value)
         else:
             self.llvm = builder.sitofp(self.obj.llvm, py_type_to_llvm(float), self.name)
@@ -296,7 +296,8 @@ class BINARY_POWER(BinaryOp):
         # llvm.pow[i]'s first argument always has to be float
         if self.args[0].type == int:
             self.args[0] = Cast(self.args[0], float)
-            self.args[0].translate(builder)
+
+        self.cast(builder)
 
         if self.args[1].type == int:
             # powi takes a i32 argument
