@@ -142,9 +142,11 @@ class Function(object):
                         #print('(' + repr(co.co_consts[oparg]) + ')', end=' ')
                         bc.addConst(co.co_consts[oparg])
                     elif op in dis.hasname:
-                        print('(' + co.co_names[oparg] + ')', end=' ')
+                        #print('(' + co.co_names[oparg] + ')', end=' ')
+                        raise UnimplementedError('hasname')
                     elif op in dis.hasjrel:
-                        print('(to ' + repr(i + oparg) + ')', end=' ')
+                        #print('(to ' + repr(i + oparg) + ')', end=' ')
+                        raise UnimplementedError('hasjrel')
                     elif op in dis.haslocal:
                         #print('(' + co.co_varnames[oparg] + ')', end=' ')
                         bc.addArg(self.getLocal(co.co_varnames[oparg]))
@@ -154,7 +156,8 @@ class Function(object):
                     elif op in dis.hasfree:
                         if free is None:
                             free = co.co_cellvars + co.co_freevars
-                        print('(' + free[oparg] + ')', end=' ')
+                        #print('(' + free[oparg] + ')', end=' ')
+                        raise UnimplementedError('hasfree')
 
                 bc.stack_eval(self)
                 logging.debug("EVAL'D " + str(bc))
