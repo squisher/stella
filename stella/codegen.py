@@ -55,12 +55,15 @@ class Program(object):
         bb = self.func.append_basic_block("entry")
         builder = Builder.new(bb)
 
-        for i, bc in af.labels.items():
-            bc.block = self.func.append_basic_block(str(i))
-
         #logging.debug("PyStack bytecode:")
         for bc in af.bytecodes:
             #logging.debug(str(bc))
+            if bc.loc in af.incoming_jumps:
+                bc.block = self.func.append_basic_block(str(bc.loc))
+
+            if isinstance(bc, Jump) and not bc.next.block:
+                bc.next.block = self.func.append_basic_block(str(bc.loc))
+
             if bc.block:
                 builder = Builder.new(bc.block)
             if hasattr(bc, 'translate'):

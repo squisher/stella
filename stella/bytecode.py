@@ -158,6 +158,7 @@ class IR(metaclass=ABCMeta):
     llvm = None
     block = None
     next = None
+    loc = None
 
     def __init__(self, debuginfo, stack):
         self.debuginfo = debuginfo
@@ -190,12 +191,6 @@ class IR(metaclass=ABCMeta):
         else:
             raise UnimplementedError(self.__class__.__name__ + " does not implement typing rules")
 
-    def createBlocks(self, func, label=False):
-        if label is False:
-            func.append_basic_block(label)
-            return True
-        return False
-
     def __iter__(self):
         return LinkedListIter(self)
 
@@ -205,16 +200,13 @@ class PhiNode(IR):
         self.result = Local.tmp()
         self.stack.push(self.result)
 
-    def addArgs(self, bcs):
-        for bc in bcs:
-            self.addArg(bc.args[1])
-
     def type_eval(self, func):
         for arg in self.args:
             self.result.unify_type(arg.type, self.debuginfo)
 
     def translate(self, module, builder):
-        self.llvm = builder.phi(py_type_to_llvm(self.result.type), self.result.name)
+        self.result.llvm = builder.phi(py_type_to_llvm(self.result.type), self.result.name)
+        #import pdb; pdb.set_trace()
 
     def __str__(self):
         return "PhiNode {0} {1}".format(self.result, ", ".join([str(v) for v in self.args]))
@@ -493,7 +485,22 @@ class RETURN_VALUE(Bytecode):
     def __str__(self):
         return 'RETURN ' + str(self.args[0])
 
-class JUMP_IF_FALSE_OR_POP(Bytecode):
+class Jump(object):
+    """
+    mixin for easy identification
+    """
+    pass
+
+"""
+This would work:
+        LOAD a
+        JUMP_IF_FALSE_OR_POP dest
+        LOAD b
+            -> %1 = select a,b,a
+dest:   RETURN
+            -> return %1
+"""
+class JUMP_IF_FALSE_OR_POP(Jump, Bytecode):
     def stack_eval(self, func):
         #raise UnimplementedError(str(self.args))
         pass
@@ -505,11 +512,8 @@ class JUMP_IF_FALSE_OR_POP(Bytecode):
     def type_eval(self,func):
         pass
 
-    def createBlocks(self, func, label=False):
-        trgt = super().createBlocks(func, label)
-        # create then block
-        # create else block
-        # create merge block? or reuse the next block?
+    def translate(self, module, builder):
+        builder.cbranch(self.args[1].llvm, self.next.block, self.target.block)
 
     def __str__(self):
         return "JUMP_IF_FALSE_OR_POP {0} {1}".format(*self.args)

@@ -137,13 +137,13 @@ class Function(object):
             else:
                 raise UnsupportedOpcode(op, di)
             #import pdb; pdb.set_trace()
+            bc.loc = i
 
             if i in labels:
                 self.labels[i] = bc
 
             #print(repr(i).rjust(4), end=' ')
             #print(dis.opname[op].ljust(20), end=' ')
-            bc_i = i
             i = i+1
             try:
                 if op >= dis.HAVE_ARGUMENT:
@@ -177,11 +177,18 @@ class Function(object):
                         #print('(' + free[oparg] + ')', end=' ')
                         raise UnimplementedError('hasfree')
 
-                if bc_i in self.incoming_jumps:
+                if bc.loc in self.incoming_jumps:
                     bc_ = PhiNode(di, self.stack)
 
                     bc_.stack_eval(self)
-                    bc_.addArgs(self.incoming_jumps[bc_i])
+                    for i_bc in self.incoming_jumps[bc.loc]:
+                        bc_.addArg(i_bc.args[1])
+                        i_bc.target = bc_
+
+                    # TODO loc is only used for jumps, and we want to use
+                    # bc_ instead of bc as the target, so delete bc's loc
+                    bc_.loc = bc.loc
+                    bc.loc = None
 
                     if last_bc != None:
                         last_bc.next = bc_
