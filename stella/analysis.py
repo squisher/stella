@@ -82,8 +82,6 @@ class Function(object):
             start = self.todo.pop()
 
             for bc in start:
-                if len(bc.args) > 0 and isinstance(bc.args[0], Variable):
-                    bc.args[0].merge_eval(bc.debuginfo)
                 bc.type_eval(self)
                 logging.debug("TYPE'D " + str(bc))
                 if isinstance(bc, RETURN_VALUE):
@@ -180,9 +178,16 @@ class Function(object):
                         raise UnimplementedError('hasfree')
 
                 if bc_i in self.incoming_jumps:
-                    tos = self.stack.peek()
-                    for bc_ in self.incoming_jumps[bc_i]:
-                        tos.merge_add(bc_.args[1])
+                    bc_ = PhiNode(di, self.stack)
+
+                    bc_.stack_eval(self)
+                    bc_.addArgs(self.incoming_jumps[bc_i])
+
+                    if last_bc != None:
+                        last_bc.next = bc_
+                    else:
+                        self.bytecodes = bc_
+                    last_bc = bc_
 
                 bc.stack_eval(self)
 

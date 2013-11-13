@@ -12,12 +12,10 @@ NoType = ''
 class Variable(object):
     name = None
     type = NoType
-    merge_type = None
 
     def __init__(self, name):
         super().__init__()
         self.name = name
-        self.merge_type = []
 
     def __str__(self):
         return self.name + self.type
@@ -35,12 +33,6 @@ class Variable(object):
 
         return False
 
-    def merge_add(self, var):
-        self.merge_type.append(var)
-
-    def merge_eval(self, debuginfo):
-        for var in self.merge_type:
-            self.unify_type(var.type, debuginfo)
 
 class Const(object):
     type = ''
@@ -159,11 +151,10 @@ class LinkedListIter(object):
         self.next = self.next.next
         return current
 
-class Bytecode(metaclass=ABCMeta):
+class IR(metaclass=ABCMeta):
     args = None
     result = None
     debuginfo = None
-    discard = False # true if it should be removed in the register representation
     llvm = None
     block = None
     next = None
@@ -207,6 +198,29 @@ class Bytecode(metaclass=ABCMeta):
 
     def __iter__(self):
         return LinkedListIter(self)
+
+class PhiNode(IR):
+    @use_stack(1)
+    def stack_eval(self, func):
+        self.result = Local.tmp()
+        self.stack.push(self.result)
+
+    def addArgs(self, bcs):
+        for bc in bcs:
+            self.addArg(bc.args[1])
+
+    def type_eval(self, func):
+        for arg in self.args:
+            self.result.unify_type(arg.type, self.debuginfo)
+
+    def translate(self, module, builder):
+        self.llvm = builder.phi(py_type_to_llvm(self.result.type), self.result.name)
+
+    def __str__(self):
+        return "PhiNode {0} {1}".format(self.result, ", ".join([str(v) for v in self.args]))
+
+class Bytecode(IR):
+    discard = False # true if it should be removed in the register representation
 
 class LOAD_FAST(Bytecode):
     discard = True
@@ -498,7 +512,7 @@ class JUMP_IF_FALSE_OR_POP(Bytecode):
         # create merge block? or reuse the next block?
 
     def __str__(self):
-        return "JUMP_IF_FALSE_OR_POP {0}".format(self.args[0])
+        return "JUMP_IF_FALSE_OR_POP {0} {1}".format(*self.args)
 
 opconst = {}
 # Get all contrete subclasses of Bytecode and register them
