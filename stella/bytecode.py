@@ -46,6 +46,23 @@ class Const(object):
     def __str__(self):
         return str(self.value)
 
+class Target(object):
+    type = ''
+    target = None
+
+    def __init__(self, target, type='jabs'):
+        self.target = target
+        self.type = type
+
+    def __str__(self):
+        if self.type == 'jabs':
+            c = 'a'
+        elif self.type == 'jrel':
+            c = 'r'
+        else:
+            c = '?'
+        return 'J{0}[{1}]'.format(c, self.target)
+
 class Cast(object):
     def __init__(self, obj, tp):
         assert obj.type != tp
@@ -148,6 +165,9 @@ class Bytecode(metaclass=ABCMeta):
 
     def addConst(self, arg):
         self.addArg(Const(arg))
+
+    def addTarget(self, arg):
+        self.addArg(Target(arg))
 
     def addArg(self, arg):
         if self.args == None:
@@ -451,11 +471,18 @@ class RETURN_VALUE(Bytecode):
         return 'RETURN ' + str(self.args[0])
 
 class JUMP_IF_FALSE_OR_POP(Bytecode):
+    def stack_eval(self, func):
+        #raise UnimplementedError(str(self.args))
+        pass
+
     def createBlocks(self, func, label=False):
         trgt = super().createBlocks(func, label)
         # create then block
         # create else block
         # create merge block? or reuse the next block?
+
+    def __str__(self):
+        return "JUMP_IF_FALSE_OR_POP {0}".format(self.args[0])
 
 opconst = {}
 # Get all contrete subclasses of Bytecode and register them

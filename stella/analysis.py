@@ -123,6 +123,7 @@ class Function(object):
                 bc = opconst[op](di, self.stack)
             else:
                 raise UnsupportedOpcode(op, di)
+            #import pdb; pdb.set_trace()
 
             if i in labels:
                 self.labels[i] = bc
@@ -137,7 +138,7 @@ class Function(object):
                     i = i+2
                     if op == dis.EXTENDED_ARG:
                         extended_arg = oparg*65536
-                    #print(repr(oparg).rjust(5), end=' ')
+
                     if op in dis.hasconst:
                         #print('(' + repr(co.co_consts[oparg]) + ')', end=' ')
                         bc.addConst(co.co_consts[oparg])
@@ -146,7 +147,10 @@ class Function(object):
                         raise UnimplementedError('hasname')
                     elif op in dis.hasjrel:
                         #print('(to ' + repr(i + oparg) + ')', end=' ')
-                        raise UnimplementedError('hasjrel')
+                        bc.addTarget(i+oparg, 'jrel')
+                    elif op in dis.hasjabs:
+                        #print(repr(oparg).rjust(5), end=' ')
+                        bc.addTarget(oparg, 'jabs')
                     elif op in dis.haslocal:
                         #print('(' + co.co_varnames[oparg] + ')', end=' ')
                         bc.addArg(self.getLocal(co.co_varnames[oparg]))
