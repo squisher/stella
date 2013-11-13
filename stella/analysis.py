@@ -29,6 +29,8 @@ class Stack(object):
         item = self.backend.pop()
         logging.debug("["+self.name+"] Popping " + str(item))
         return item
+    def peek(self):
+        return self.backend[-1]
     def empty(self):
         return len(self.backend) == 0
 
@@ -41,6 +43,7 @@ class Function(object):
         self.blocks = {}
         self.labels = {}
         self.todo = Stack("Todo")
+        self.incoming_jumps = {}
 
         self.f = f
         argspec = inspect.getargspec(f)
@@ -79,6 +82,8 @@ class Function(object):
             start = self.todo.pop()
 
             for bc in start:
+                if len(bc.args) > 0 and isinstance(bc.args[0], Variable):
+                    bc.args[0].merge_eval(bc.debuginfo)
                 bc.type_eval(self)
                 logging.debug("TYPE'D " + str(bc))
                 if isinstance(bc, RETURN_VALUE):
@@ -98,6 +103,16 @@ class Function(object):
         #import pdb; pdb.set_trace()
         for bc in self.bytecodes:
             logging.debug(str(bc))
+
+    def incoming_jump(self, bc):
+        """
+        type(bc.args[0]) == Target
+        """
+        loc = bc.args[0].target
+        if loc in self.incoming_jumps:
+            self.incoming_jumps[loc].append(bc)
+        else:
+            self.incoming_jumps[loc] = [bc]
 
     def disassemble(self):
         """Disassemble a code object."""
@@ -130,6 +145,7 @@ class Function(object):
 
             #print(repr(i).rjust(4), end=' ')
             #print(dis.opname[op].ljust(20), end=' ')
+            bc_i = i
             i = i+1
             try:
                 if op >= dis.HAVE_ARGUMENT:
@@ -163,7 +179,16 @@ class Function(object):
                         #print('(' + free[oparg] + ')', end=' ')
                         raise UnimplementedError('hasfree')
 
+                if bc_i in self.incoming_jumps:
+                    tos = self.stack.peek()
+                    for bc_ in self.incoming_jumps[bc_i]:
+                        tos.merge_add(bc_.args[1])
+
                 bc.stack_eval(self)
+
+                if op in dis.hasjabs or op in dis.hasjrel:
+                    self.incoming_jump(bc)
+
                 logging.debug("EVAL'D " + str(bc))
             except StellaException as e:
                 e.addDebug(di)

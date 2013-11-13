@@ -12,10 +12,12 @@ NoType = ''
 class Variable(object):
     name = None
     type = NoType
+    merge_type = None
 
     def __init__(self, name):
         super().__init__()
         self.name = name
+        self.merge_type = []
 
     def __str__(self):
         return self.name + self.type
@@ -32,6 +34,13 @@ class Variable(object):
             raise TypingError ("Unifying of types " + str(tp1) + " and " + str(tp2) + " not yet implemented", debuginfo)
 
         return False
+
+    def merge_add(self, var):
+        self.merge_type.append(var)
+
+    def merge_eval(self, debuginfo):
+        for var in self.merge_type:
+            self.unify_type(var.type, debuginfo)
 
 class Const(object):
     type = ''
@@ -166,8 +175,8 @@ class Bytecode(metaclass=ABCMeta):
     def addConst(self, arg):
         self.addArg(Const(arg))
 
-    def addTarget(self, arg):
-        self.addArg(Target(arg))
+    def addTarget(self, arg, tp):
+        self.addArg(Target(arg, tp))
 
     def addArg(self, arg):
         if self.args == None:
@@ -473,6 +482,13 @@ class RETURN_VALUE(Bytecode):
 class JUMP_IF_FALSE_OR_POP(Bytecode):
     def stack_eval(self, func):
         #raise UnimplementedError(str(self.args))
+        pass
+
+    @use_stack(1)
+    def stack_eval(self,func):
+        pass
+
+    def type_eval(self,func):
         pass
 
     def createBlocks(self, func, label=False):

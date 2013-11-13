@@ -67,7 +67,7 @@ class Program(object):
                 bc.translate(self.module, builder)
             else:
                 # TODO Fix this exception
-                raise UnimplementedException("Bytedcode {0} at {1} does not yet have a LLVM translation".format(bc))
+                raise UnimplementedError("Bytedcode {0} does not yet have a LLVM translation".format(bc), bc.debuginfo)
 
     def run(self):
         logging.debug("Preparing execution...")
