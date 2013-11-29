@@ -18,7 +18,17 @@ class Variable(object):
         self.name = name
 
     def __str__(self):
-        return self.name + self.type
+        if not self.name:
+            name = '$'
+        else:
+            name = self.name
+
+        if self.type is NoType:
+            type_name = '?'
+        else:
+            type_name = self.type.__name__
+
+        return "{0}<{1}>".format(name, type_name)
 
     def unify_type(self, tp2, debuginfo):
         tp1 = self.type
@@ -109,15 +119,6 @@ class Local(Variable):
 #            l.type = template
         return l
 
-    def __str__(self):
-        if self.name:
-            return self.name + str(self.type)
-        else:
-            return "$" + str(self.type)
-
-    def __repr__(self):
-        return self.__str__()
-
 def use_stack(n):
     """
     Decorator, it takes n items off the stack
@@ -159,10 +160,12 @@ class IR(metaclass=ABCMeta):
     block = None
     next = None
     loc = None
+    discard = False
 
     def __init__(self, debuginfo, stack):
         self.debuginfo = debuginfo
         self.stack = stack
+        self.args = []
 
     def addConst(self, arg):
         self.addArg(Const(arg))
@@ -171,8 +174,6 @@ class IR(metaclass=ABCMeta):
         self.addArg(Target(arg, tp))
 
     def addArg(self, arg):
-        if self.args == None:
-            self.args = []
         self.args.append(arg)
 
     def cast(self, builder):
@@ -185,14 +186,22 @@ class IR(metaclass=ABCMeta):
     def stack_eval(self, func):
         pass
 
+    @abstractmethod
+    def translate(self, module, builder):
+        pass
+
+    @abstractmethod
     def type_eval(self, func):
-        if self.discard:
-            return
-        else:
-            raise UnimplementedError(self.__class__.__name__ + " does not implement typing rules")
+        pass
 
     def __iter__(self):
         return LinkedListIter(self)
+
+    def __str__(self):
+        return "{0} {1} {2}".format(
+                    self.__class__.__name__,
+                    self.result,
+                    ", ".join([str(v) for v in self.args]))
 
 class PhiNode(IR):
     @use_stack(1)
@@ -208,14 +217,10 @@ class PhiNode(IR):
         self.result.llvm = builder.phi(py_type_to_llvm(self.result.type), self.result.name)
         #import pdb; pdb.set_trace()
 
-    def __str__(self):
-        return "PhiNode {0} {1}".format(self.result, ", ".join([str(v) for v in self.args]))
-
 class Bytecode(IR):
-    discard = False # true if it should be removed in the register representation
+    pass
 
 class LOAD_FAST(Bytecode):
-    discard = True
     def __init__(self, debuginfo, stack):
         super().__init__(debuginfo, stack)
 
@@ -224,6 +229,14 @@ class LOAD_FAST(Bytecode):
         # LOAD_FAST require the variable to exist
         self.result = func.locals[self.args[0].name]
         self.stack.push(self.result)
+
+    def type_eval(self, func):
+        pass
+    def translate(self, module, builder):
+        pass
+
+    def __str__(self):
+        return "(LOAD_FAST {0})".format(self.args[0])
 
 class STORE_FAST(Bytecode):
     def __init__(self, debuginfo, stack):
@@ -240,17 +253,14 @@ class STORE_FAST(Bytecode):
         #import pdb; pdb.set_trace()
         tp_changed = self.result.unify_type(arg.type, self.debuginfo)
         if tp_changed:
+            # TODO: can I avoid a retype in some cases?
             func.retype()
             if self.result.type != arg.type:
                 self.args[1] = Cast(arg, self.result.type)
-            # TODO: can I avoid a retype in some cases?
 
     def translate(self, module, builder):
         self.cast(builder)
         self.result.llvm = self.args[1].llvm
-
-    def __str__(self):
-        return "STORE_FAST {0}, {1}".format(self.args[0].name, self.args[1])
 
 class LOAD_CONST(Bytecode):
     discard = True
@@ -260,6 +270,11 @@ class LOAD_CONST(Bytecode):
     def stack_eval(self, func):
         self.result = self.args[0]
         self.stack.push(self.result)
+
+    def type_eval(self, func):
+        pass
+    def translate(self, module, builder):
+        pass
 
 class BinaryOp(Bytecode):
     def __init__(self, debuginfo, stack):
@@ -290,9 +305,6 @@ class BinaryOp(Bytecode):
         self.cast(builder)
         f = getattr(builder, self.builderFuncName())
         self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
-
-    def __str__(self):
-        return '{0} {1}, {2}'.format(self.__class__.__name__, *self.args)
 
     @abstractproperty
     def b_func(self):
@@ -514,9 +526,6 @@ class JUMP_IF_FALSE_OR_POP(Jump, Bytecode):
 
     def translate(self, module, builder):
         builder.cbranch(self.args[1].llvm, self.next.block, self.target.block)
-
-    def __str__(self):
-        return "JUMP_IF_FALSE_OR_POP {0} {1}".format(*self.args)
 
 opconst = {}
 # Get all contrete subclasses of Bytecode and register them
