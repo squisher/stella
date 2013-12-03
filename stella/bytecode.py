@@ -59,10 +59,11 @@ class Const(object):
 
 class Target(object):
     type = ''
-    target = None
+    bc = None
+    label = None
 
-    def __init__(self, target, type='jabs'):
-        self.target = target
+    def __init__(self, label, type='jabs'):
+        self.label = label
         self.type = type
 
     def __str__(self):
@@ -72,7 +73,7 @@ class Target(object):
             c = 'r'
         else:
             c = '?'
-        return 'J{0}[{1}]'.format(c, self.target)
+        return 'J{0}[{1}]'.format(c, self.label)
 
 class Cast(object):
     def __init__(self, obj, tp):
@@ -159,6 +160,7 @@ class IR(metaclass=ABCMeta):
     llvm = None
     block = None
     next = None
+    prev = None
     loc = None
     discard = False
 
@@ -214,7 +216,11 @@ class PhiNode(IR):
             self.result.unify_type(arg.type, self.debuginfo)
 
     def translate(self, module, builder):
-        self.result.llvm = builder.phi(py_type_to_llvm(self.result.type), self.result.name)
+        phi = builder.phi(py_type_to_llvm(self.result.type), self.result.name)
+        for arg in self.args:
+            phi.add_incoming(arg.llvm, arg.block)
+
+        self.result.llvm = phi
         #import pdb; pdb.set_trace()
 
 class Bytecode(IR):
@@ -501,7 +507,12 @@ class Jump(object):
     """
     mixin for easy identification
     """
-    pass
+    def addTargetBytecode(self, bc):
+        """
+        assert isinstance(self, IR)
+        assert isinstance(self.args[0], Target)
+        """
+        self.args[0].bc = bc
 
 """
 This would work:
@@ -525,7 +536,7 @@ class JUMP_IF_FALSE_OR_POP(Jump, Bytecode):
         pass
 
     def translate(self, module, builder):
-        builder.cbranch(self.args[1].llvm, self.next.block, self.target.block)
+        builder.cbranch(self.args[1].llvm, self.next.block, self.args[0].bc.block)
 
 opconst = {}
 # Get all contrete subclasses of Bytecode and register them

@@ -52,25 +52,29 @@ class Program(object):
             self.func.args[i].name = af.args[i].name
             af.args[i].llvm = self.func.args[i]
 
+        # create blocks
         bb = self.func.append_basic_block("entry")
         builder = Builder.new(bb)
 
-        #logging.debug("PyStack bytecode:")
         for bc in af.bytecodes:
-            #logging.debug(str(bc))
             if bc.loc in af.incoming_jumps:
+                assert not bc.block
                 bc.block = self.func.append_basic_block(str(bc.loc))
 
-            if isinstance(bc, Jump) and not bc.next.block:
-                bc.next.block = self.func.append_basic_block(str(bc.loc))
+            if isinstance(bc, Jump):
+                bc_ = bc.next
 
+                assert not bc_.block
+                bc_.block = self.func.append_basic_block(str(bc_.loc))
+
+        # assign blocks for phi nodes
+
+        # emit code
+        for bc in af.bytecodes:
             if bc.block:
                 builder = Builder.new(bc.block)
-            if hasattr(bc, 'translate'):
-                bc.translate(self.module, builder)
-            else:
-                # TODO Fix this exception
-                raise UnimplementedError("{0} does not yet have a LLVM translation".format(bc), bc.debuginfo)
+
+            bc.translate(self.module, builder)
 
     def run(self):
         logging.debug("Preparing execution...")

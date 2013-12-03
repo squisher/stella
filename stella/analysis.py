@@ -79,16 +79,16 @@ class Function(object):
         while not self.todo.empty():
             logging.debug("Type analysis iteration {0}".format(i))
             self.analyze_again = False
-            start = self.todo.pop()
+            bc_list = self.todo.pop()
 
-            for bc in start:
+            for bc in bc_list:
                 bc.type_eval(self)
                 logging.debug("TYPE'D " + str(bc))
                 if isinstance(bc, RETURN_VALUE):
                     self.retype(self.result.unify_type(bc.result.type, bc.debuginfo))
 
             if self.analyze_again:
-                self.todo.push(start)
+                self.todo.push(bc_list)
 
             if i > 10:
                 raise Exception("Stopping after {0} type analysis iterations (failsafe)".format(i))
@@ -102,15 +102,15 @@ class Function(object):
         for bc in self.bytecodes:
             logging.debug(str(bc))
 
-    def incoming_jump(self, bc):
+    def incoming_jump(self, jump):
         """
-        type(bc.args[0]) == Target
+        type(jump.args[0]) == Target
         """
-        loc = bc.args[0].target
+        loc = jump.args[0].label
         if loc in self.incoming_jumps:
-            self.incoming_jumps[loc].append(bc)
+            self.incoming_jumps[loc].append(jump)
         else:
-            self.incoming_jumps[loc] = [bc]
+            self.incoming_jumps[loc] = [jump]
 
     def disassemble(self):
         """Disassemble a code object."""
@@ -182,16 +182,19 @@ class Function(object):
 
                     bc_.stack_eval(self)
                     for i_bc in self.incoming_jumps[bc.loc]:
-                        bc_.addArg(i_bc.args[1])
-                        i_bc.target = bc_
+                        bc_.addArg(i_bc.args[-1])
+                        i_bc.addTargetBytecode(bc_)
 
-                    # TODO loc is only used for jumps, and we want to use
+                    # loc is only used for jumps, and we want to use
                     # bc_ instead of bc as the target, so delete bc's loc
+                    # TODO verify that this is not causing issues elsewhere
                     bc_.loc = bc.loc
                     bc.loc = None
 
                     if last_bc != None:
                         last_bc.next = bc_
+                        bc_.prev = last_bc
+                        last_bc = bc_
                     else:
                         self.bytecodes = bc_
                     last_bc = bc_
@@ -209,6 +212,7 @@ class Function(object):
             if not bc.discard:
                 if last_bc != None:
                     last_bc.next = bc
+                    bc.prev = last_bc
                 else:
                     self.bytecodes = bc
                 last_bc = bc
