@@ -177,8 +177,18 @@ class Function(object):
                         #print('(' + free[oparg] + ')', end=' ')
                         raise UnimplementedError('hasfree')
 
+                if op in dis.hasjabs or op in dis.hasjrel:
+                    self.incoming_jump(bc)
+
                 if bc.loc in self.incoming_jumps:
                     bc_ = PhiNode(di, self.stack)
+
+                    if not isinstance(bc.prev, Jump):
+                        bc__ = Jump(di, self.stack)
+                        bc__.addTarget(bc_)
+                        bc__.stack_eval(bc_)
+                        bc__.prev = last_bc
+                        last_bc = bc__
 
                     bc_.stack_eval(self)
                     for i_bc in self.incoming_jumps[bc.loc]:
@@ -200,9 +210,6 @@ class Function(object):
                     last_bc = bc_
 
                 bc.stack_eval(self)
-
-                if op in dis.hasjabs or op in dis.hasjrel:
-                    self.incoming_jump(bc)
 
                 logging.debug("EVAL'D " + str(bc))
             except StellaException as e:

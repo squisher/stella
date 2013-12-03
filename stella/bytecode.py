@@ -172,9 +172,6 @@ class IR(metaclass=ABCMeta):
     def addConst(self, arg):
         self.addArg(Const(arg))
 
-    def addTarget(self, arg, tp):
-        self.addArg(Target(arg, tp))
-
     def addArg(self, arg):
         self.args.append(arg)
 
@@ -503,30 +500,14 @@ class RETURN_VALUE(Bytecode):
     def __str__(self):
         return 'RETURN ' + str(self.args[0])
 
-class Jump(object):
-    """
-    mixin for easy identification
-    """
+class Jump(IR):
+    target = None
     def addTargetBytecode(self, bc):
         """
         assert isinstance(self, IR)
         assert isinstance(self.args[0], Target)
         """
-        self.args[0].bc = bc
-
-"""
-This would work:
-        LOAD a
-        JUMP_IF_FALSE_OR_POP dest
-        LOAD b
-            -> %1 = select a,b,a
-dest:   RETURN
-            -> return %1
-"""
-class JUMP_IF_FALSE_OR_POP(Jump, Bytecode):
-    def stack_eval(self, func):
-        #raise UnimplementedError(str(self.args))
-        pass
+        self.target.bc = bc
 
     @use_stack(1)
     def stack_eval(self,func):
@@ -535,6 +516,13 @@ class JUMP_IF_FALSE_OR_POP(Jump, Bytecode):
     def type_eval(self,func):
         pass
 
+    def translate(self, module, builder):
+        builder.branch(self.target.bc.block)
+
+    def addTarget(self, arg, jmp_tp):
+        self.target = Target(arg, jmp_tp)
+
+class JUMP_IF_FALSE_OR_POP(Jump, Bytecode):
     def translate(self, module, builder):
         builder.cbranch(self.args[1].llvm, self.next.block, self.args[0].bc.block)
 
