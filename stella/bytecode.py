@@ -57,24 +57,6 @@ class Const(object):
     def __str__(self):
         return str(self.value)
 
-class Target(object):
-    type = ''
-    bc = None
-    label = None
-
-    def __init__(self, label, type='jabs'):
-        self.label = label
-        self.type = type
-
-    def __str__(self):
-        if self.type == 'jabs':
-            c = 'a'
-        elif self.type == 'jrel':
-            c = 'r'
-        else:
-            c = '?'
-        return 'J{0}[{1}]'.format(c, self.label)
-
 class Cast(object):
     def __init__(self, obj, tp):
         assert obj.type != tp
@@ -505,9 +487,8 @@ class Jump(IR):
     def addTargetBytecode(self, bc):
         """
         assert isinstance(self, IR)
-        assert isinstance(self.args[0], Target)
         """
-        self.target.bc = bc
+        self.target_bc = bc
 
     @use_stack(1)
     def stack_eval(self,func):
@@ -517,14 +498,14 @@ class Jump(IR):
         pass
 
     def translate(self, module, builder):
-        builder.branch(self.target.bc.block)
+        builder.branch(self.target_bc.block)
 
-    def addTarget(self, arg, jmp_tp):
-        self.target = Target(arg, jmp_tp)
+    def addTarget(self, label):
+        self.target_label = label
 
 class JUMP_IF_FALSE_OR_POP(Jump, Bytecode):
     def translate(self, module, builder):
-        builder.cbranch(self.args[1].llvm, self.next.block, self.args[0].bc.block)
+        builder.cbranch(self.args[0].llvm, self.next.block, self.args[0].bc.block)
 
 opconst = {}
 # Get all contrete subclasses of Bytecode and register them

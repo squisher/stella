@@ -17,11 +17,9 @@ class DebugInfo(object):
 
 class Stack(object):
     backend = None
-
     def __init__(self, name="Stack"):
         self.backend = []
         self.name = name
-
     def push(self, item):
         logging.debug("["+self.name+"] Pushing " + str(item))
         self.backend.append(item)
@@ -33,6 +31,10 @@ class Stack(object):
         return self.backend[-1]
     def empty(self):
         return len(self.backend) == 0
+    def clone(self):
+        s = Stack(self.name)
+        s.backend = [x for x in self.backend]
+        return s
 
 class Function(object):
     def __init__(self, f):
@@ -106,7 +108,7 @@ class Function(object):
         """
         type(jump.args[0]) == Target
         """
-        loc = jump.args[0].label
+        loc = jump.target_label
         if loc in self.incoming_jumps:
             self.incoming_jumps[loc].append(jump)
         else:
@@ -161,10 +163,10 @@ class Function(object):
                         raise UnimplementedError('hasname')
                     elif op in dis.hasjrel:
                         #print('(to ' + repr(i + oparg) + ')', end=' ')
-                        bc.addTarget(i+oparg, 'jrel')
+                        bc.addTarget(i+oparg)
                     elif op in dis.hasjabs:
                         #print(repr(oparg).rjust(5), end=' ')
-                        bc.addTarget(oparg, 'jabs')
+                        bc.addTarget(oparg)
                     elif op in dis.haslocal:
                         #print('(' + co.co_varnames[oparg] + ')', end=' ')
                         bc.addArg(self.getLocal(co.co_varnames[oparg]))
@@ -183,10 +185,17 @@ class Function(object):
                 if bc.loc in self.incoming_jumps:
                     bc_ = PhiNode(di, self.stack)
 
+                    # loc is only used for jumps, and we want to use
+                    # bc_ instead of bc as the target, so delete bc's loc
+                    # TODO verify that this is not causing issues elsewhere
+                    bc_.loc = bc.loc
+                    bc.loc = None
+
                     if not isinstance(bc.prev, Jump):
                         bc__ = Jump(di, self.stack)
-                        bc__.addTarget(bc_)
-                        bc__.stack_eval(bc_)
+                        bc__.addTarget(bc_.loc)
+                        self.incoming_jump(bc__)
+                        bc__.stack_eval(self)
                         bc__.prev = last_bc
                         last_bc = bc__
 
@@ -194,12 +203,6 @@ class Function(object):
                     for i_bc in self.incoming_jumps[bc.loc]:
                         bc_.addArg(i_bc.args[-1])
                         i_bc.addTargetBytecode(bc_)
-
-                    # loc is only used for jumps, and we want to use
-                    # bc_ instead of bc as the target, so delete bc's loc
-                    # TODO verify that this is not causing issues elsewhere
-                    bc_.loc = bc.loc
-                    bc.loc = None
 
                     if last_bc != None:
                         last_bc.next = bc_
