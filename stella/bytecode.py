@@ -102,22 +102,22 @@ class Local(Variable):
 #            l.type = template
         return l
 
-def use_stack(n):
+def pop_stack(n):
     """
     Decorator, it takes n items off the stack
     and adds them as bytecode arguments.
     """
     def extract_n(f):
-        def extract_from_stack(self, *f_args):
+        def extract_from_stack(self, func, stack):
             args = []
             for i in range(n):
-                args.append(self.stack.pop())
+                args.append(stack.pop())
             args.reverse()
             if self.args == None:
                 self.args = args
             else:
                 self.args.extend(args)
-            return f(self, *f_args)
+            return f(self, func, stack)
         return extract_from_stack
     return extract_n
 
@@ -146,9 +146,8 @@ class IR(metaclass=ABCMeta):
     loc = None
     discard = False
 
-    def __init__(self, debuginfo, stack):
+    def __init__(self, debuginfo):
         self.debuginfo = debuginfo
-        self.stack = stack
         self.args = []
 
     def addConst(self, arg):
@@ -164,7 +163,7 @@ class IR(metaclass=ABCMeta):
                 arg.translate(builder)
 
     @abstractmethod
-    def stack_eval(self, func):
+    def stack_eval(self, func, stack):
         pass
 
     @abstractmethod
@@ -185,10 +184,10 @@ class IR(metaclass=ABCMeta):
                     ", ".join([str(v) for v in self.args]))
 
 class PhiNode(IR):
-    @use_stack(1)
-    def stack_eval(self, func):
+    @pop_stack(1)
+    def stack_eval(self, func, stack):
         self.result = Local.tmp()
-        self.stack.push(self.result)
+        stack.push(self.result)
 
     def type_eval(self, func):
         for arg in self.args:
@@ -206,14 +205,14 @@ class Bytecode(IR):
     pass
 
 class LOAD_FAST(Bytecode):
-    def __init__(self, debuginfo, stack):
-        super().__init__(debuginfo, stack)
+    def __init__(self, debuginfo):
+        super().__init__(debuginfo)
 
-    def stack_eval(self, func):
+    def stack_eval(self, func, stack):
         # don't use func.getLocal() here because the semantics of
         # LOAD_FAST require the variable to exist
         self.result = func.locals[self.args[0].name]
-        self.stack.push(self.result)
+        stack.push(self.result)
 
     def type_eval(self, func):
         pass
@@ -224,11 +223,11 @@ class LOAD_FAST(Bytecode):
         return "(LOAD_FAST {0})".format(self.args[0])
 
 class STORE_FAST(Bytecode):
-    def __init__(self, debuginfo, stack):
-        super().__init__(debuginfo, stack)
+    def __init__(self, debuginfo):
+        super().__init__(debuginfo)
 
-    @use_stack(1)
-    def stack_eval(self, func):
+    @pop_stack(1)
+    def stack_eval(self, func, stack):
         #self.result = func.getLocal(self.args[0].name)
         self.result = self.args[0]
 
@@ -249,12 +248,12 @@ class STORE_FAST(Bytecode):
 
 class LOAD_CONST(Bytecode):
     discard = True
-    def __init__(self, debuginfo, stack):
-        super().__init__(debuginfo, stack)
+    def __init__(self, debuginfo):
+        super().__init__(debuginfo)
 
-    def stack_eval(self, func):
+    def stack_eval(self, func, stack):
         self.result = self.args[0]
-        self.stack.push(self.result)
+        stack.push(self.result)
 
     def type_eval(self, func):
         pass
@@ -262,13 +261,13 @@ class LOAD_CONST(Bytecode):
         pass
 
 class BinaryOp(Bytecode):
-    def __init__(self, debuginfo, stack):
-        super().__init__(debuginfo, stack)
+    def __init__(self, debuginfo):
+        super().__init__(debuginfo)
 
-    @use_stack(2)
-    def stack_eval(self, func):
+    @pop_stack(2)
+    def stack_eval(self, func, stack):
         self.result = Local.tmp()
-        self.stack.push(self.result)
+        stack.push(self.result)
 
     def type_eval(self, func):
         for i in range(len(self.args)):
@@ -310,10 +309,10 @@ class BINARY_MODULO(BinaryOp):
 class BINARY_POWER(BinaryOp):
     b_func = {float: INTR_POW, int: INTR_POWI}
 
-    @use_stack(2)
-    def stack_eval(self, func):
+    @pop_stack(2)
+    def stack_eval(self, func, stack):
         self.result = Local.tmp()
-        self.stack.push(self.result)
+        stack.push(self.result)
 
     def type_eval(self, func):
         # TODO if args[1] is int but negative, then the result will be float, too!
@@ -382,11 +381,11 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
 class BINARY_TRUE_DIVIDE(BinaryOp):
     b_func = {float: 'fdiv'}
 
-    @use_stack(2)
-    def stack_eval(self, func):
+    @pop_stack(2)
+    def stack_eval(self, func, stack):
         # The result of `/', true division, is always a float
         self.result = Local.tmp()
-        self.stack.push(self.result)
+        stack.push(self.result)
 
     def type_eval(self, func):
         # this op always returns a float
@@ -394,15 +393,15 @@ class BINARY_TRUE_DIVIDE(BinaryOp):
         super().type_eval(func)
 
 #class InplaceOp(BinaryOp):
-#    @use_stack(2)
-#    def stack_eval(self, func):
+#    @pop_stack(2)
+#    def stack_eval(self, func, stack):
 #        tp = unify_type(self.args[0].type, self.args[1].type, self.debuginfo)
 #        if tp != self.args[0].type:
 #            self.result = Local.tmp(self.args[0])
 #            self.result.type = tp
 #        else:
 #            self.result = self.args[0]
-#        self.stack.push(self.result)
+#        stack.push(self.result)
 #
 #    def translate(self, module, builder):
 #        self.floatArg(builder)
@@ -437,16 +436,16 @@ class COMPARE_OP(Bytecode):
             '<=': FCMP_OLE,
             }
 
-    def __init__(self, debuginfo, stack):
-        super().__init__(debuginfo, stack)
+    def __init__(self, debuginfo):
+        super().__init__(debuginfo)
 
     def addCmp(self, op):
         self.op = op
 
-    @use_stack(2)
-    def stack_eval(self, func):
+    @pop_stack(2)
+    def stack_eval(self, func, stack):
         self.result = Local.tmp()
-        self.stack.push(self.result)
+        stack.push(self.result)
 
     def type_eval(self, func):
         #func.retype(self.result.unify_type(bool, self.debuginfo))
@@ -466,11 +465,11 @@ class COMPARE_OP(Bytecode):
         self.result.llvm = f(m[self.op], self.args[0].llvm, self.args[1].llvm, self.result.name)
 
 class RETURN_VALUE(Bytecode):
-    def __init__(self, debuginfo, stack):
-        super().__init__(debuginfo, stack)
+    def __init__(self, debuginfo):
+        super().__init__(debuginfo)
 
-    @use_stack(1)
-    def stack_eval(self, func):
+    @pop_stack(1)
+    def stack_eval(self, func, stack):
         self.result = self.args[0]
 
     def type_eval(self, func):
@@ -478,9 +477,6 @@ class RETURN_VALUE(Bytecode):
 
     def translate(self, module, builder):
         builder.ret(self.args[0].llvm)
-
-    def __str__(self):
-        return 'RETURN ' + str(self.args[0])
 
 class Jump(IR):
     target = None
@@ -490,8 +486,8 @@ class Jump(IR):
         """
         self.target_bc = bc
 
-    @use_stack(1)
-    def stack_eval(self,func):
+    @pop_stack(1)
+    def stack_eval(self,func, stack):
         pass
 
     def type_eval(self,func):

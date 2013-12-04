@@ -40,7 +40,6 @@ class Function(object):
     def __init__(self, f):
         self.locals = dict()
         self.result = Variable('__return__') # TODO possible name conflicts?
-        self.stack = Stack()
         self.bytecodes = None # pointer to the first bytecode
         self.blocks = {}
         self.labels = {}
@@ -74,6 +73,10 @@ class Function(object):
 
         logging.debug("Disassembling and Stack->Register conversion")
         self.disassemble()
+
+        stack = Stack()
+        for bc in self.bytecodes:
+            bc.stack_eval(self, stack)
 
         self.todo.push(self.bytecodes)
 
@@ -135,7 +138,7 @@ class Function(object):
             di = DebugInfo(co.co_filename, line)
 
             if extended_arg == 0 and op in opconst:
-                bc = opconst[op](di, self.stack)
+                bc = opconst[op](di)
             else:
                 raise UnsupportedOpcode(op, di)
             #import pdb; pdb.set_trace()
@@ -183,7 +186,7 @@ class Function(object):
                     self.incoming_jump(bc)
 
                 if bc.loc in self.incoming_jumps:
-                    bc_ = PhiNode(di, self.stack)
+                    bc_ = PhiNode(di)
 
                     # loc is only used for jumps, and we want to use
                     # bc_ instead of bc as the target, so delete bc's loc
@@ -192,14 +195,12 @@ class Function(object):
                     bc.loc = None
 
                     if not isinstance(bc.prev, Jump):
-                        bc__ = Jump(di, self.stack)
+                        bc__ = Jump(di)
                         bc__.addTarget(bc_.loc)
                         self.incoming_jump(bc__)
-                        bc__.stack_eval(self)
                         bc__.prev = last_bc
                         last_bc = bc__
 
-                    bc_.stack_eval(self)
                     for i_bc in self.incoming_jumps[bc.loc]:
                         bc_.addArg(i_bc.args[-1])
                         i_bc.addTargetBytecode(bc_)
@@ -211,8 +212,6 @@ class Function(object):
                     else:
                         self.bytecodes = bc_
                     last_bc = bc_
-
-                bc.stack_eval(self)
 
                 logging.debug("EVAL'D " + str(bc))
             except StellaException as e:
