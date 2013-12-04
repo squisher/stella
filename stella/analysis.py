@@ -20,6 +20,10 @@ class Stack(object):
     def __init__(self, name="Stack"):
         self.backend = []
         self.name = name
+    def __str__(self):
+        return "["+self.name+"("+str(len(self.backend))+")]"
+    def __repr__(self):
+        return "["+self.name+"="+", ".join([str(x) for x in self.backend])+"]"
     def push(self, item):
         logging.debug("["+self.name+"] Pushing " + str(item))
         self.backend.append(item)
@@ -41,7 +45,6 @@ class Function(object):
         self.locals = dict()
         self.result = Variable('__return__') # TODO possible name conflicts?
         self.bytecodes = None # pointer to the first bytecode
-        self.blocks = {}
         self.labels = {}
         self.todo = Stack("Todo")
         self.incoming_jumps = {}
@@ -75,8 +78,24 @@ class Function(object):
         self.disassemble()
 
         stack = Stack()
-        for bc in self.bytecodes:
-            bc.stack_eval(self, stack)
+        self.todo.push((self.bytecodes, stack))
+
+        while not self.todo.empty():
+            (bc, stack) = self.todo.pop()
+            r = bc.stack_eval(self, stack)
+            if r == None:
+                # default case: no control flow diversion, just continue with the next
+                # instruction in the list
+                if bc.next:
+                    self.todo.push((bc.next, stack))
+                else:
+                    logging.debug("Reached EOP.")
+                    assert stack.empty()
+            else:
+                # there is (one or more) control flow changes, add them all to the todo list
+                assert isinstance(r, list)
+                for (bc_, stack_) in r:
+                    self.todo.push((bc_, stack_))
 
         self.todo.push(self.bytecodes)
 
@@ -186,34 +205,35 @@ class Function(object):
                     self.incoming_jump(bc)
 
                 if bc.loc in self.incoming_jumps:
-                    bc_ = PhiNode(di)
-
-                    # loc is only used for jumps, and we want to use
-                    # bc_ instead of bc as the target, so delete bc's loc
-                    # TODO verify that this is not causing issues elsewhere
-                    bc_.loc = bc.loc
-                    bc.loc = None
-
                     if not isinstance(bc.prev, Jump):
                         bc__ = Jump(di)
-                        bc__.addTarget(bc_.loc)
+                        bc__.addTarget(bc.loc)
                         self.incoming_jump(bc__)
                         bc__.prev = last_bc
+                        last_bc.next = bc__
                         last_bc = bc__
 
-                    for i_bc in self.incoming_jumps[bc.loc]:
-                        bc_.addArg(i_bc.args[-1])
+                    if len(self.incoming_jumps[bc.loc]) > 1:
+                        bc_ = PhiNode(di)
+
+                        # loc is only used for jumps, and we want to use
+                        # bc_ instead of bc as the target, so delete bc's loc
+                        # TODO verify that this is not causing issues elsewhere
+                        bc_.loc = bc.loc
+                        bc.loc = None
+
+                        if last_bc != None:
+                            last_bc.next = bc_
+                            bc_.prev = last_bc
+                            last_bc = bc_
+                        else:
+                            self.bytecodes = bc_
+                        last_bc = bc_
+
+                    for i_bc in self.incoming_jumps[bc_.loc]:
                         i_bc.addTargetBytecode(bc_)
 
-                    if last_bc != None:
-                        last_bc.next = bc_
-                        bc_.prev = last_bc
-                        last_bc = bc_
-                    else:
-                        self.bytecodes = bc_
-                    last_bc = bc_
-
-                logging.debug("EVAL'D " + str(bc))
+                logging.debug("DIS'D " + str(bc))
             except StellaException as e:
                 e.addDebug(di)
                 raise

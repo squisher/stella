@@ -19,10 +19,15 @@ def double_cast(x,y):
     b = y // x
     return a + b
 
-@mark.parametrize('f', [direct_assignment, simple_assignment, double_assignment, double_cast])
+def and_(a,b): return a and b
+def or_(a,b):  return a or b
+
 @mark.parametrize('args', [(40,2), (43.0, -1), (41, 1.0)])
+@mark.parametrize('f', [direct_assignment, simple_assignment, double_assignment, double_cast])
 def test1(f,args):
     make_eq_test(f, args)
 
-if __name__ == '__main__':
-    print(stella(double_cast, debug='print')(0, 42))
+@mark.parametrize('args', [(True, True), (True, False), (False, True), (False, False)])
+@mark.parametrize('f', [and_, or_])
+def test2(f,args):
+    make_eq_test(f, args)

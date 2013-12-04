@@ -54,24 +54,21 @@ class Program(object):
 
         # create blocks
         bb = self.func.append_basic_block("entry")
-        builder = Builder.new(bb)
 
         for bc in af.bytecodes:
-            if bc.loc in af.incoming_jumps:
+            if bc.loc in af.incoming_jumps or isinstance(bc.prev, Jump):
                 assert not bc.block
                 bc.block = self.func.append_basic_block(str(bc.loc))
+                bb = bc.block
+            else:
+                bc.block = bb
 
-            if isinstance(bc, Jump):
-                bc_ = bc.next
 
-                assert not bc_.block
-                bc_.block = self.func.append_basic_block(str(bc_.loc))
-
-        # assign blocks for phi nodes
-
+        bb = None
         # emit code
         for bc in af.bytecodes:
-            if bc.block:
+            if bb != bc.block:
+                # new basic block, use a new builder
                 builder = Builder.new(bc.block)
 
             bc.translate(self.module, builder)

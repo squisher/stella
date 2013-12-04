@@ -182,26 +182,39 @@ class IR(metaclass=ABCMeta):
                     self.__class__.__name__,
                     self.result,
                     ", ".join([str(v) for v in self.args]))
+    def __repr__(self):
+        # TODO: are there reasons not to do this?
+        return self.__str__()
 
 class PhiNode(IR):
+    def __init__(self, debuginfo):
+        super().__init__(debuginfo)
+
+        self.result = Local.tmp()
+        self.blocks = []
+
     @pop_stack(1)
     def stack_eval(self, func, stack):
-        self.result = Local.tmp()
+        self.blocks.append(self.args[-1].bc)
         stack.push(self.result)
 
     def type_eval(self, func):
         for arg in self.args:
             self.result.unify_type(arg.type, self.debuginfo)
 
+
     def translate(self, module, builder):
         phi = builder.phi(py_type_to_llvm(self.result.type), self.result.name)
         for arg in self.args:
-            phi.add_incoming(arg.llvm, arg.block)
+            phi.add_incoming(arg.llvm, arg.bc.block)
 
         self.result.llvm = phi
         #import pdb; pdb.set_trace()
 
 class Bytecode(IR):
+    """
+    Parent class for all Python bytecodes
+    """
     pass
 
 class LOAD_FAST(Bytecode):
@@ -247,7 +260,6 @@ class STORE_FAST(Bytecode):
         self.result.llvm = self.args[1].llvm
 
 class LOAD_CONST(Bytecode):
-    discard = True
     def __init__(self, debuginfo):
         super().__init__(debuginfo)
 
@@ -259,6 +271,9 @@ class LOAD_CONST(Bytecode):
         pass
     def translate(self, module, builder):
         pass
+
+    def __str__(self):
+        return "(LOAD_CONST {0})".format(self.args[0])
 
 class BinaryOp(Bytecode):
     def __init__(self, debuginfo):
@@ -383,12 +398,11 @@ class BINARY_TRUE_DIVIDE(BinaryOp):
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        # The result of `/', true division, is always a float
         self.result = Local.tmp()
         stack.push(self.result)
 
     def type_eval(self, func):
-        # this op always returns a float
+        # The result of `/', true division, is always a float
         self.result.type = float
         super().type_eval(func)
 
@@ -470,25 +484,33 @@ class RETURN_VALUE(Bytecode):
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
-        self.result = self.args[0]
+        self.result = Local.tmp()
 
     def type_eval(self, func):
-        pass
+        for arg in self.args:
+            func.retype(self.result.unify_type(arg.type, self.debuginfo))
 
     def translate(self, module, builder):
         builder.ret(self.args[0].llvm)
 
 class Jump(IR):
-    target = None
+    target_label = None
+    target_bc = None
+    def __init__(self, debuginfo):
+        super().__init__(debuginfo)
+
     def addTargetBytecode(self, bc):
         """
         assert isinstance(self, IR)
         """
         self.target_bc = bc
 
-    @pop_stack(1)
-    def stack_eval(self,func, stack):
-        pass
+    def addTarget(self, label):
+        self.target_label = label
+
+    def stack_eval(self, func, stack):
+        stack.peek().bc = self
+        return [(self.target_bc, stack)]
 
     def type_eval(self,func):
         pass
@@ -496,12 +518,39 @@ class Jump(IR):
     def translate(self, module, builder):
         builder.branch(self.target_bc.block)
 
-    def addTarget(self, label):
-        self.target_label = label
+class Jump_if_X_or_pop(Jump):
+    def __init__(self, debuginfo):
+        super().__init__(debuginfo)
 
-class JUMP_IF_FALSE_OR_POP(Jump, Bytecode):
+    @pop_stack(1)
+    def stack_eval(self, func, stack):
+        stack2 = stack.clone()
+        r = []
+        # if false, push back onto stack and jump:
+        self.args[0].bc = self
+        stack.push(self.args[0])
+        r.append((self.target_bc, stack))
+        # else continue with the next instruction (and keep the popped value)
+        if not stack2.empty():
+            # TODO: is stack2 always empty?
+            stack2.peek().bc = self
+        r.append((self.next, stack2))
+
+        return r
+
+class JUMP_IF_FALSE_OR_POP(Jump_if_X_or_pop, Bytecode):
+    def __init__(self, debuginfo):
+        super().__init__(debuginfo)
+
     def translate(self, module, builder):
-        builder.cbranch(self.args[0].llvm, self.next.block, self.args[0].bc.block)
+        builder.cbranch(self.args[0].llvm, self.next.block, self.target_bc.block)
+
+class JUMP_IF_TRUE_OR_POP(Jump_if_X_or_pop, Bytecode):
+    def __init__(self, debuginfo):
+        super().__init__(debuginfo)
+
+    def translate(self, module, builder):
+        builder.cbranch(self.args[0].llvm, self.target_bc.block, self.next.block)
 
 opconst = {}
 # Get all contrete subclasses of Bytecode and register them
