@@ -160,6 +160,9 @@ class Function(object):
         pp.next = bc
         self.last_bc.prev = bc
 
+        bc.prev = pp
+        bc.next = self.last_bc
+
     def remove(self, bc):
         if bc.loc in self.incoming_jumps:
             for i_bc in self.incoming_jumps[bc.loc]:
@@ -249,10 +252,13 @@ class Function(object):
                     if not isinstance(bc.prev, BlockTerminal):
                         #logging.debug("PREV_TYPE " + str(type(bc.prev)))
                         bc__ = Jump(di)
+                        # TODO find a better location
+                        bc__.loc = bc.prev.loc
                         bc__.addTarget(bc.loc)
                         self.incoming_jump(bc__)
                         self.insert_before(bc__)
-                        logging.debug("DIS'D " + str(bc__))
+
+                        logging.debug("DIS ADD  " + bc__.locStr())
 
                     if len(self.incoming_jumps[bc.loc]) > 1:
                         bc_ = PhiNode(di)
@@ -261,10 +267,11 @@ class Function(object):
                         # bc_ instead of bc as the target, so delete bc's loc
                         # TODO verify that this is not causing issues elsewhere
                         bc_.loc = bc.loc
-                        bc.loc = None
+                        #bc.loc = -1 #None
 
                         self.insert_before(bc_)
-                        logging.debug("DIS'D " + str(bc_))
+                        #import pdb; pdb.set_trace()
+                        logging.debug("DIS'D {0}".format(bc_.locStr()))
 
                         for i_bc in self.incoming_jumps[bc_.loc]:
                             i_bc.addTargetBytecode(bc_)
@@ -272,7 +279,7 @@ class Function(object):
                         for i_bc in self.incoming_jumps[bc.loc]:
                             i_bc.addTargetBytecode(bc)
 
-                logging.debug("DIS'D {0:2d} {1}".format(bc.loc, bc))
+                logging.debug("DIS'D {0}".format(bc.locStr()))
             except StellaException as e:
                 e.addDebug(di)
                 raise

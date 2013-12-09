@@ -185,6 +185,8 @@ class IR(metaclass=ABCMeta):
     def __repr__(self):
         # TODO: are there reasons not to do this?
         return self.__str__()
+    def locStr(self):
+        return "{0:2s} {1}".format(str(self.loc), str(self))
 
 class BlockTerminal(object):
     """

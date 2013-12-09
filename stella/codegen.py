@@ -58,6 +58,7 @@ class Program(object):
         for bc in af.bytecodes:
             if bc.discard:
                 af.remove(bc)
+                logging.debug("BLOCK skipped {0}".format(bc))
                 continue
 
             if bc.loc in af.incoming_jumps or isinstance(bc.prev, Jump):
@@ -66,6 +67,7 @@ class Program(object):
                 bb = bc.block
             else:
                 bc.block = bb
+            logging.debug("BLOCK'D {0}".format(bc))
 
 
         bb = None
@@ -76,6 +78,7 @@ class Program(object):
                 builder = Builder.new(bc.block)
 
             bc.translate(self.module, builder)
+            logging.debug("TRANS'D {0}".format(bc))
             # Note: the `and not' part is a basic form of dead code elimination
             #       This is used to drop unreachable "return None" which are implicitly added
             #       by Python to the end of functions.
@@ -83,6 +86,8 @@ class Program(object):
             #            NEEDS REVIEW
             #       See also analysis.Function.analyze
             if isinstance(bc, BlockTerminal) and bc.next and bc.next.loc not in af.incoming_jumps:
+                logging.debug("TRANS stopping")
+                import pdb; pdb.set_trace()
                 break
 
     def run(self):
