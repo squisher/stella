@@ -49,5 +49,9 @@ def llvm_constant(val):
         return Constant.real(tp_double, val)
     elif tp == bool:
         return Constant.int(tp_bool, val)
+    # HACK {
+    elif tp == None.__class__:
+        return Constant.int(tp_int, 0)
+    # } HACK
     else:
         raise UnimplementedError("Unknown constant type {0}".format(tp))

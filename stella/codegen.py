@@ -56,6 +56,10 @@ class Program(object):
         bb = self.func.append_basic_block("entry")
 
         for bc in af.bytecodes:
+            if bc.discard:
+                af.remove(bc)
+                continue
+
             if bc.loc in af.incoming_jumps or isinstance(bc.prev, Jump):
                 assert not bc.block
                 bc.block = self.func.append_basic_block(str(bc.loc))
@@ -72,6 +76,14 @@ class Program(object):
                 builder = Builder.new(bc.block)
 
             bc.translate(self.module, builder)
+            # Note: the `and not' part is a basic form of dead code elimination
+            #       This is used to drop unreachable "return None" which are implicitly added
+            #       by Python to the end of functions.
+            #       TODO is this the proper way to handle those returns? Any side effects?
+            #            NEEDS REVIEW
+            #       See also analysis.Function.analyze
+            if isinstance(bc, BlockTerminal) and bc.next and bc.next.loc not in af.incoming_jumps:
+                break
 
     def run(self):
         logging.debug("Preparing execution...")

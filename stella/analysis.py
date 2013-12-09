@@ -74,9 +74,10 @@ class Function(object):
             self.args[i].type = type(args[i])
         logging.debug("Analysis of " + str(self.f) + "(" + str(self.args) + ")")
 
-        logging.debug("Disassembling and Stack->Register conversion")
+        logging.debug("Disassembling")
         self.disassemble()
 
+        logging.debug("Stack->Register Conversion")
         stack = Stack()
         self.todo.push((self.bytecodes, stack))
 
@@ -86,7 +87,13 @@ class Function(object):
             if r == None:
                 # default case: no control flow diversion, just continue with the next
                 # instruction in the list
-                if bc.next:
+                # Note: the `and not' part is a basic form of dead code elimination
+                #       This is used to drop unreachable "return None" which are implicitly added
+                #       by Python to the end of functions.
+                #       TODO is this the proper way to handle those returns? Any side effects?
+                #            NEEDS REVIEW
+                #       See also codegen.Program.__init__
+                if bc.next and not isinstance(bc, BlockTerminal):
                     self.todo.push((bc.next, stack))
                 else:
                     logging.debug("Reached EOP.")
@@ -97,6 +104,7 @@ class Function(object):
                 for (bc_, stack_) in r:
                     self.todo.push((bc_, stack_))
 
+        logging.debug("Type Analysis")
         self.todo.push(self.bytecodes)
 
         i = 0
@@ -121,10 +129,10 @@ class Function(object):
         #logging.debug("last bytecode: " + str(self.bytecodes[-1]))
         logging.debug("returning type " + str(self.result.type))
 
-        logging.debug("PyStack bytecode:")
+        #logging.debug("PyStack bytecode:")
         #import pdb; pdb.set_trace()
-        for bc in self.bytecodes:
-            logging.debug(str(bc))
+        #for bc in self.bytecodes:
+        #    logging.debug(str(bc))
 
     def incoming_jump(self, jump):
         """
@@ -135,6 +143,38 @@ class Function(object):
             self.incoming_jumps[loc].append(jump)
         else:
             self.incoming_jumps[loc] = [jump]
+
+    def insert_after(self, bc):
+        if self.last_bc != None:
+            self.last_bc.next = bc
+            bc.prev = self.last_bc
+        else:
+            self.bytecodes = bc
+        self.last_bc = bc
+
+    def insert_before(self, bc):
+        if self.last_bc == None:
+            logging.warn("Insert_before called on an empty list")
+            insert_after(bc)
+        pp = self.last_bc.prev
+        pp.next = bc
+        self.last_bc.prev = bc
+
+    def remove(self, bc):
+        if bc.loc in self.incoming_jumps:
+            for i_bc in self.incoming_jumps[bc.loc]:
+                i_bc.addTargetBytecode(bc.next)
+
+        if bc.prev:
+            bc.prev.next = bc.next
+        else:
+            # it's the first
+            self.bytecodes = bc.next
+        if bc.next:
+            # TODO this should never happen, should it?
+            bc.next.prev = bc.prev
+        # Note that bc's prev and next remain untouched so that
+        # the iterator remains valid
 
     def disassemble(self):
         """Disassemble a code object."""
@@ -148,7 +188,7 @@ class Function(object):
         extended_arg = 0
         free = None
         line = 0
-        last_bc = None
+        self.last_bc = None
         while i < n:
             op = code[i]
             if i in linestarts:
@@ -162,6 +202,7 @@ class Function(object):
                 raise UnsupportedOpcode(op, di)
             #import pdb; pdb.set_trace()
             bc.loc = i
+            self.insert_after(bc)
 
             if i in labels:
                 self.labels[i] = bc
@@ -205,13 +246,13 @@ class Function(object):
                     self.incoming_jump(bc)
 
                 if bc.loc in self.incoming_jumps:
-                    if not isinstance(bc.prev, Jump):
+                    if not isinstance(bc.prev, BlockTerminal):
+                        #logging.debug("PREV_TYPE " + str(type(bc.prev)))
                         bc__ = Jump(di)
                         bc__.addTarget(bc.loc)
                         self.incoming_jump(bc__)
-                        bc__.prev = last_bc
-                        last_bc.next = bc__
-                        last_bc = bc__
+                        self.insert_before(bc__)
+                        logging.debug("DIS'D " + str(bc__))
 
                     if len(self.incoming_jumps[bc.loc]) > 1:
                         bc_ = PhiNode(di)
@@ -222,29 +263,19 @@ class Function(object):
                         bc_.loc = bc.loc
                         bc.loc = None
 
-                        if last_bc != None:
-                            last_bc.next = bc_
-                            bc_.prev = last_bc
-                            last_bc = bc_
-                        else:
-                            self.bytecodes = bc_
-                        last_bc = bc_
+                        self.insert_before(bc_)
+                        logging.debug("DIS'D " + str(bc_))
 
-                    for i_bc in self.incoming_jumps[bc_.loc]:
-                        i_bc.addTargetBytecode(bc_)
+                        for i_bc in self.incoming_jumps[bc_.loc]:
+                            i_bc.addTargetBytecode(bc_)
+                    else:
+                        for i_bc in self.incoming_jumps[bc.loc]:
+                            i_bc.addTargetBytecode(bc)
 
-                logging.debug("DIS'D " + str(bc))
+                logging.debug("DIS'D {0:2d} {1}".format(bc.loc, bc))
             except StellaException as e:
                 e.addDebug(di)
                 raise
-
-            if not bc.discard:
-                if last_bc != None:
-                    last_bc.next = bc
-                    bc.prev = last_bc
-                else:
-                    self.bytecodes = bc
-                last_bc = bc
 
 
 def main(f, *args):
