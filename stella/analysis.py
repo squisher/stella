@@ -135,14 +135,17 @@ class Function(object):
         #    logging.debug(str(bc))
 
     def incoming_jump(self, jump):
-        """
-        type(jump.args[0]) == Target
-        """
         loc = jump.target_label
         if loc in self.incoming_jumps:
             self.incoming_jumps[loc].append(jump)
         else:
             self.incoming_jumps[loc] = [jump]
+        if jump.doesFallThrough():
+            loc = jump.next.loc
+            if loc in self.incoming_jumps:
+                self.incoming_jumps[loc].append(jump)
+            else:
+                self.incoming_jumps[loc] = [jump]
 
     def insert_after(self, bc):
         if self.last_bc != None:

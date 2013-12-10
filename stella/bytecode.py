@@ -516,6 +516,10 @@ class Jump(BlockTerminal, IR):
     def addTarget(self, label):
         self.target_label = label
 
+    @staticmethod
+    def doesFallThrough():
+        return True
+
     def stack_eval(self, func, stack):
         stack.peek().bc = self
         return [(self.target_bc, stack)]
@@ -535,6 +539,10 @@ class Jump(BlockTerminal, IR):
 class Jump_if_X_or_pop(Jump):
     def __init__(self, debuginfo):
         super().__init__(debuginfo)
+
+    @staticmethod
+    def doesFallThrough():
+        return True
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
@@ -569,6 +577,10 @@ class JUMP_IF_TRUE_OR_POP(Jump_if_X_or_pop, Bytecode):
 class Pop_jump_if_X(Jump):
     def __init__(self, debuginfo):
         super().__init__(debuginfo)
+
+    @staticmethod
+    def doesFallThrough():
+        return True
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
