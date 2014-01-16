@@ -48,6 +48,7 @@ class Function(object):
         self.labels = {}
         self.todo = Stack("Todo")
         self.incoming_jumps = {}
+        self.fellthrough = False
 
         self.f = f
         argspec = inspect.getargspec(f)
@@ -134,18 +135,13 @@ class Function(object):
         #for bc in self.bytecodes:
         #    logging.debug(str(bc))
 
-    def incoming_jump(self, jump):
-        loc = jump.target_label
+    def incoming_jump(self, jump, loc = None):
+        if loc == None:
+            loc = jump.target_label
         if loc in self.incoming_jumps:
             self.incoming_jumps[loc].append(jump)
         else:
             self.incoming_jumps[loc] = [jump]
-        if jump.doesFallThrough():
-            loc = jump.next.loc
-            if loc in self.incoming_jumps:
-                self.incoming_jumps[loc].append(jump)
-            else:
-                self.incoming_jumps[loc] = [jump]
 
     def insert_after(self, bc):
         if self.last_bc != None:
@@ -250,6 +246,14 @@ class Function(object):
 
                 if op in dis.hasjabs or op in dis.hasjrel:
                     self.incoming_jump(bc)
+
+                if self.fellthrough:
+                    self.incoming_jump(bc.prev, bc.loc)
+
+                if isinstance(bc, Jump) and bc.doesFallThrough():
+                    self.fellthrough = True
+                else:
+                    self.fellthrough = False
 
                 if bc.loc in self.incoming_jumps:
                     if not isinstance(bc.prev, BlockTerminal):
