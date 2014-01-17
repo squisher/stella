@@ -47,7 +47,7 @@ class Function(object):
         self.bytecodes = None # pointer to the first bytecode
         self.labels = {}
         self.todo = Stack("Todo")
-        self.incoming_jumps = {}
+        self.no_incoming_jumps = {}
         self.fellthrough = False
 
         self.f = f
@@ -70,6 +70,31 @@ class Function(object):
             #import pdb; pdb.set_trace()
             self.analyze_again = True
 
+    def intraflow(self):
+        for bc in self.bytecodes:
+            if isinstance(bc, Jump):
+                if bc.processFallThrough():
+                    self.no_incoming_jumps[bc.next] += 1
+                target_bc = self.labels[bc.target_label]
+                bc.addTargetBytecode(target_bc)
+                self.no_incoming_jumps[target_bc] += 1
+
+        for bc in self.bytecodes:
+            if self.no_incoming_jumps[bc] > 0:
+                if not isinstance(bc.prev, BlockTerminal):
+                    #logging.debug("PREV_TYPE " + str(type(bc.prev)))
+                    bc_ = Jump(bc.debuginfo)
+                    bc_.addTargetBytecode(bc)
+                    self.insert_before(bc_)
+
+                    logging.debug("IF ADD  " + bc_.locStr())
+
+                bc_ = PhiNode(bc.debuginfo)
+
+                self.insert_before(bc_)
+                #import pdb; pdb.set_trace()
+
+
     def analyze(self, *args):
         for i in range(len(args)):
             self.args[i].type = type(args[i])
@@ -77,6 +102,9 @@ class Function(object):
 
         logging.debug("Disassembling")
         self.disassemble()
+
+        logging.debug("Building Intra-Flowgraph")
+        self.intraflow()
 
         logging.debug("Stack->Register Conversion")
         stack = Stack()
@@ -134,14 +162,6 @@ class Function(object):
         #import pdb; pdb.set_trace()
         #for bc in self.bytecodes:
         #    logging.debug(str(bc))
-
-    def incoming_jump(self, jump, loc = None):
-        if loc == None:
-            loc = jump.target_label
-        if loc in self.incoming_jumps:
-            self.incoming_jumps[loc].append(jump)
-        else:
-            self.incoming_jumps[loc] = [jump]
 
     def insert_after(self, bc):
         if self.last_bc != None:
@@ -204,6 +224,7 @@ class Function(object):
                 raise UnsupportedOpcode(op, di)
             #import pdb; pdb.set_trace()
             bc.loc = i
+            self.no_incoming_jumps[bc] = 0
             self.insert_after(bc)
 
             if i in labels:
@@ -243,48 +264,6 @@ class Function(object):
                             free = co.co_cellvars + co.co_freevars
                         #print('(' + free[oparg] + ')', end=' ')
                         raise UnimplementedError('hasfree')
-
-                if op in dis.hasjabs or op in dis.hasjrel:
-                    self.incoming_jump(bc)
-
-                if self.fellthrough:
-                    self.incoming_jump(bc.prev, bc.loc)
-
-                if isinstance(bc, Jump) and bc.doesFallThrough():
-                    self.fellthrough = True
-                else:
-                    self.fellthrough = False
-
-                if bc.loc in self.incoming_jumps:
-                    if not isinstance(bc.prev, BlockTerminal):
-                        #logging.debug("PREV_TYPE " + str(type(bc.prev)))
-                        bc__ = Jump(di)
-                        # TODO find a better location
-                        bc__.loc = bc.prev.loc
-                        bc__.addTarget(bc.loc)
-                        self.incoming_jump(bc__)
-                        self.insert_before(bc__)
-
-                        logging.debug("DIS ADD  " + bc__.locStr())
-
-                    if len(self.incoming_jumps[bc.loc]) > 1:
-                        bc_ = PhiNode(di)
-
-                        # loc is only used for jumps, and we want to use
-                        # bc_ instead of bc as the target, so delete bc's loc
-                        # TODO verify that this is not causing issues elsewhere
-                        bc_.loc = bc.loc
-                        #bc.loc = -1 #None
-
-                        self.insert_before(bc_)
-                        #import pdb; pdb.set_trace()
-                        logging.debug("DIS'D {0}".format(bc_.locStr()))
-
-                        for i_bc in self.incoming_jumps[bc_.loc]:
-                            i_bc.addTargetBytecode(bc_)
-                    else:
-                        for i_bc in self.incoming_jumps[bc.loc]:
-                            i_bc.addTargetBytecode(bc)
 
                 logging.debug("DIS'D {0}".format(bc.locStr()))
             except StellaException as e:
