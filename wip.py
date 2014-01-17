@@ -12,3 +12,6 @@ def g(a):
 
 from test.basicmath import *
 #args_mod = list(filter(lambda e: e[0] >= 0, arglist2))
+
+def current_work():
+    stella(f)(False, True)
