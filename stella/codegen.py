@@ -61,13 +61,15 @@ class Program(object):
                 logging.debug("BLOCK skipped {0}".format(bc))
                 continue
 
-            if bc.loc in af.incoming_jumps or isinstance(bc.prev, Jump):
+            newblock = ''
+            if bc.loc in af.incoming_jumps:
                 assert not bc.block
                 bc.block = self.func.append_basic_block(str(bc.loc))
                 bb = bc.block
+                newblock = ' NEW BLOCK (' + str(bc.loc) + ')'
             else:
                 bc.block = bb
-            logging.debug("BLOCK'D {0}".format(bc))
+            logging.debug("BLOCK'D {0}{1}".format(bc, newblock))
 
 
         bb = None
@@ -87,7 +89,7 @@ class Program(object):
             #       See also analysis.Function.analyze
             if isinstance(bc, BlockTerminal) and bc.next and bc.next.loc not in af.incoming_jumps:
                 logging.debug("TRANS stopping")
-                import pdb; pdb.set_trace()
+                #import pdb; pdb.set_trace()
                 break
 
     def run(self):

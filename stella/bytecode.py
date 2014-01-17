@@ -564,6 +564,7 @@ class JUMP_IF_FALSE_OR_POP(Jump_if_X_or_pop, Bytecode):
         super().__init__(debuginfo)
 
     def translate(self, module, builder):
+        #import pdb; pdb.set_trace()
         builder.cbranch(self.args[0].llvm, self.next.block, self.target_bc.block)
 
 class JUMP_IF_TRUE_OR_POP(Jump_if_X_or_pop, Bytecode):
