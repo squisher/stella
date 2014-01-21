@@ -47,7 +47,7 @@ class Function(object):
         self.bytecodes = None # pointer to the first bytecode
         self.labels = {}
         self.todo = Stack("Todo")
-        self.no_incoming_jumps = {}
+        self.incoming_jumps = {}
         self.fellthrough = False
 
         self.f = f
@@ -74,24 +74,27 @@ class Function(object):
         for bc in self.bytecodes:
             if isinstance(bc, Jump):
                 if bc.processFallThrough():
-                    self.no_incoming_jumps[bc.next] += 1
+                    self.incoming_jumps[bc.next].append(bc)
                 target_bc = self.labels[bc.target_label]
                 bc.addTargetBytecode(target_bc)
-                self.no_incoming_jumps[target_bc] += 1
+                self.incoming_jumps[target_bc].append(bc)
 
         for bc in self.bytecodes:
-            if self.no_incoming_jumps[bc] > 0:
+            if len(self.incoming_jumps[bc]) > 1:
                 if not isinstance(bc.prev, BlockTerminal):
                     #logging.debug("PREV_TYPE " + str(type(bc.prev)))
                     bc_ = Jump(bc.debuginfo)
                     bc_.addTargetBytecode(bc)
+                    bc_.addTarget(bc.loc) # for printing purposes only
                     self.insert_before(bc_)
 
                     logging.debug("IF ADD  " + bc_.locStr())
 
                 bc_ = PhiNode(bc.debuginfo)
+                bc_.loc = bc.loc # for printing purposes only
 
                 self.insert_before(bc_)
+                logging.debug("IF ADD  " + bc_.locStr())
                 #import pdb; pdb.set_trace()
 
 
@@ -183,8 +186,8 @@ class Function(object):
         bc.next = self.last_bc
 
     def remove(self, bc):
-        if bc.loc in self.incoming_jumps:
-            for i_bc in self.incoming_jumps[bc.loc]:
+        if bc in self.incoming_jumps:
+            for i_bc in self.incoming_jumps[bc]:
                 i_bc.addTargetBytecode(bc.next)
 
         if bc.prev:
@@ -224,7 +227,7 @@ class Function(object):
                 raise UnsupportedOpcode(op, di)
             #import pdb; pdb.set_trace()
             bc.loc = i
-            self.no_incoming_jumps[bc] = 0
+            self.incoming_jumps[bc] = []
             self.insert_after(bc)
 
             if i in labels:

@@ -71,6 +71,7 @@ class Program(object):
                 bc.block = bb
             logging.debug("BLOCK'D {0}{1}".format(bc, newblock))
 
+        af.bytecodes.printAll()
 
         bb = None
         # emit code
@@ -91,6 +92,7 @@ class Program(object):
                 logging.debug("TRANS stopping")
                 #import pdb; pdb.set_trace()
                 break
+
 
     def run(self):
         logging.debug("Preparing execution...")

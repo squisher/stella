@@ -176,6 +176,16 @@ class IR(metaclass=ABCMeta):
 
     def __iter__(self):
         return LinkedListIter(self)
+    def printAll(self):
+        """Debugging: print all IRs in this list"""
+
+        # find the first bytecode
+        bc_start = self
+        while bc_start.prev != None:
+            bc_start = bc_start.prev
+
+        for bc in bc_start:
+            logging.debug(str(bc))
 
     def __str__(self):
         return "{0} {1} {2}".format(
