@@ -7,6 +7,11 @@ Structure (WIP)
 ---------------
 -virtualenv, then install required modules?
 
+Example Installation
+--------------------
+
+llvmpy$ LLVM_CONFIG_PATH=$HOME/opt/numba/bin/llvm-config python setup.py build
+
 Components
 ----------
 
