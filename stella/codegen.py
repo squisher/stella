@@ -96,7 +96,37 @@ class Program(object):
 
     def run(self):
         logging.debug("Preparing execution...")
-        ee = ExecutionEngine.new(self.module)
+
+        #m = Module.new('-lm')
+        #fntp = Type.function(Type.float(), [Type.int()])
+        #func = m.add_function(fntp, '__powidf2')
+
+        import ctypes
+        from llvmpy import _api
+        clib = ctypes.cdll.LoadLibrary(_api.__file__)
+        logging.debug(str(clib))
+
+        #import pdb; pdb.set_trace()
+
+        # BUG: clib.__powidf2 gets turned into the following bytecode:
+        # 103 LOAD_FAST                3 (clib) 
+        # 106 LOAD_ATTR               11 (_Program__powidf2) 
+        # 109 STORE_FAST               5 (f) 
+        # which is not correct. I have no idea where _Program is coming from,
+        # I'm assuming it is some internal Python magic going wrong
+        f = getattr(clib,'__powidf2')
+
+        logging.debug(str(f))
+
+        dylib_add_symbol('__powidf2', ctypes.addressof(f))
+
+        #ee = ExecutionEngine.new(self.module)
+        eb = EngineBuilder.new(self.module)
+
+        logging.debug("Enabling mcjit...")
+        eb.mcjit(True)
+
+        ee = eb.create()
 
         logging.debug("Arguments: {0}".format(list(zip(self.arg_types, self.args))))
         # The arguments needs to be passed as "GenericValue" objects.
