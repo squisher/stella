@@ -93,6 +93,17 @@ class Program(object):
                 #import pdb; pdb.set_trace()
                 break
 
+        self.func = self.makeStub()
+
+    def makeStub(self):
+        args = [llvm_constant(arg) for arg in self.args]
+        func_tp = Type.function(py_type_to_llvm(self.af.result.type), [])
+        func = self.module.add_function(func_tp, self.af.getName()+'__stub__')
+        bb = func.append_basic_block("entry")
+        builder = Builder.new(bb)
+        call = builder.call(self.func, args)
+        builder.ret(call)
+        return func
 
     def run(self):
         logging.debug("Preparing execution...")
@@ -129,12 +140,10 @@ class Program(object):
         ee = eb.create()
 
         logging.debug("Arguments: {0}".format(list(zip(self.arg_types, self.args))))
-        # The arguments needs to be passed as "GenericValue" objects.
-        llvm_args = [get_generic_value(tp, arg) for tp, arg in zip(self.arg_types, self.args)]
 
         # Now let's compile and run!
         logging.debug("Running...")
-        retval = ee.run_function(self.func, llvm_args)
+        retval = ee.run_function(self.func, [])
 
         # The return value is also GenericValue. Let's print it.
         logging.debug("Returning...")
