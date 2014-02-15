@@ -129,7 +129,7 @@ class Program(object):
 
         logging.debug(str(f))
 
-        dylib_add_symbol('__powidf2', ctypes.addressof(f))
+        dylib_add_symbol('__powidf2', ctypes.cast(f, ctypes.c_void_p).value)
 
         #ee = ExecutionEngine.new(self.module)
         eb = EngineBuilder.new(self.module)
