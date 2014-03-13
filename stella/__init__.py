@@ -6,7 +6,8 @@ import stella.codegen as codegen
 import logging
 import faulthandler
 
-faulthandler.enable()
+_f = open('faulthandler.err', 'w')
+faulthandler.enable(_f)
 
 logging.getLogger().setLevel(logging.DEBUG)
 

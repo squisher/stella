@@ -176,6 +176,16 @@ class IR(metaclass=ABCMeta):
 
     def __iter__(self):
         return LinkedListIter(self)
+    def printAll(self):
+        """Debugging: print all IRs in this list"""
+
+        # find the first bytecode
+        bc_start = self
+        while bc_start.prev != None:
+            bc_start = bc_start.prev
+
+        for bc in bc_start:
+            logging.debug(str(bc))
 
     def __str__(self):
         return "{0} {1} {2}".format(
@@ -185,6 +195,14 @@ class IR(metaclass=ABCMeta):
     def __repr__(self):
         # TODO: are there reasons not to do this?
         return self.__str__()
+    def locStr(self):
+        return "{0:2s} {1}".format(str(self.loc), str(self))
+
+class BlockTerminal(object):
+    """
+    Marker class for instructions which terminate a block.
+    """
+    pass
 
 class PhiNode(IR):
     def __init__(self, debuginfo):
@@ -218,6 +236,7 @@ class Bytecode(IR):
     pass
 
 class LOAD_FAST(Bytecode):
+    discard = True
     def __init__(self, debuginfo):
         super().__init__(debuginfo)
 
@@ -260,6 +279,7 @@ class STORE_FAST(Bytecode):
         self.result.llvm = self.args[1].llvm
 
 class LOAD_CONST(Bytecode):
+    discard = True
     def __init__(self, debuginfo):
         super().__init__(debuginfo)
 
@@ -478,13 +498,14 @@ class COMPARE_OP(Bytecode):
 
         self.result.llvm = f(m[self.op], self.args[0].llvm, self.args[1].llvm, self.result.name)
 
-class RETURN_VALUE(Bytecode):
+class RETURN_VALUE(BlockTerminal, Bytecode):
     def __init__(self, debuginfo):
         super().__init__(debuginfo)
+        self.result = Local.tmp()
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
-        self.result = Local.tmp()
+        pass
 
     def type_eval(self, func):
         for arg in self.args:
@@ -493,20 +514,20 @@ class RETURN_VALUE(Bytecode):
     def translate(self, module, builder):
         builder.ret(self.args[0].llvm)
 
-class Jump(IR):
+class Jump(BlockTerminal, IR):
     target_label = None
     target_bc = None
     def __init__(self, debuginfo):
         super().__init__(debuginfo)
 
     def addTargetBytecode(self, bc):
-        """
-        assert isinstance(self, IR)
-        """
         self.target_bc = bc
 
     def addTarget(self, label):
         self.target_label = label
+
+    def processFallThrough(self):
+        return False
 
     def stack_eval(self, func, stack):
         stack.peek().bc = self
@@ -515,6 +536,12 @@ class Jump(IR):
     def type_eval(self,func):
         pass
 
+    def __str__(self):
+        return "{0} {1} {2}".format(
+                    self.__class__.__name__,
+                    self.target_label,
+                    ", ".join([str(v) for v in self.args]))
+
     def translate(self, module, builder):
         builder.branch(self.target_bc.block)
 
@@ -522,11 +549,15 @@ class Jump_if_X_or_pop(Jump):
     def __init__(self, debuginfo):
         super().__init__(debuginfo)
 
+    def processFallThrough(self):
+        self.fallthrough = self.next
+        return True
+
     @pop_stack(1)
     def stack_eval(self, func, stack):
         stack2 = stack.clone()
         r = []
-        # if false, push back onto stack and jump:
+        # if X, push back onto stack and jump:
         self.args[0].bc = self
         stack.push(self.args[0])
         r.append((self.target_bc, stack))
@@ -543,9 +574,44 @@ class JUMP_IF_FALSE_OR_POP(Jump_if_X_or_pop, Bytecode):
         super().__init__(debuginfo)
 
     def translate(self, module, builder):
+        #import pdb; pdb.set_trace()
         builder.cbranch(self.args[0].llvm, self.next.block, self.target_bc.block)
 
 class JUMP_IF_TRUE_OR_POP(Jump_if_X_or_pop, Bytecode):
+    def __init__(self, debuginfo):
+        super().__init__(debuginfo)
+
+    def translate(self, module, builder):
+        builder.cbranch(self.args[0].llvm, self.target_bc.block, self.next.block)
+
+class Pop_jump_if_X(Jump):
+    def __init__(self, debuginfo):
+        super().__init__(debuginfo)
+
+    def processFallThrough(self):
+        self.fallthrough = self.next
+        return True
+
+    @pop_stack(1)
+    def stack_eval(self, func, stack):
+        r = []
+        # if X, jump
+        self.args[0].bc = self
+        r.append((self.target_bc, stack))
+        # else continue to the next instruction
+        r.append((self.next, stack))
+        # (pop happens in any case)
+
+        return r
+
+class POP_JUMP_IF_FALSE(Pop_jump_if_X, Bytecode):
+    def __init__(self, debuginfo):
+        super().__init__(debuginfo)
+
+    def translate(self, module, builder):
+        builder.cbranch(self.args[0].llvm, self.next.block, self.target_bc.block)
+
+class POP_JUMP_IF_TRUE(Pop_jump_if_X, Bytecode):
     def __init__(self, debuginfo):
         super().__init__(debuginfo)
 
