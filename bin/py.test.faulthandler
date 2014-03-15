@@ -1,0 +1,17 @@
+#!/bin/bash
+
+f=faulthandler.err
+
+#unalias py.test
+
+handler() {
+    echo "Abnormal program termination."
+    cat faulthandler.err
+}
+
+trap handler INT ABRT
+
+rm -f $f
+py.test "$@"
+[ $? != 0 ] && handler
+echo "DONE"
