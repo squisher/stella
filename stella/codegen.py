@@ -106,6 +106,9 @@ class Program(object):
         return func
 
     def run(self):
+        logging.debug("Verifying...")
+        self.module.verify()
+
         logging.debug("Preparing execution...")
 
         #m = Module.new('-lm')
