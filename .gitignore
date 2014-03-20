@@ -10,3 +10,4 @@ ctest.o
 ctest*.s
 core.*
 faulthandler.err
+faulthandler.err
