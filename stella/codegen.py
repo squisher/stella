@@ -62,7 +62,7 @@ class Program(object):
                 continue
 
             newblock = ''
-            if bc.loc in af.incoming_jumps:
+            if bc in af.incoming_jumps:
                 assert not bc.block
                 bc.block = self.func.append_basic_block(str(bc.loc))
                 bb = bc.block
@@ -71,10 +71,11 @@ class Program(object):
                 bc.block = bb
             logging.debug("BLOCK'D {0}{1}".format(bc, newblock))
 
+        logging.debug("Printing all bytecodes:")
         af.bytecodes.printAll()
 
+        logging.debug("Emitting code:")
         bb = None
-        # emit code
         for bc in af.bytecodes:
             if bb != bc.block:
                 # new basic block, use a new builder
@@ -88,8 +89,9 @@ class Program(object):
             #       TODO is this the proper way to handle those returns? Any side effects?
             #            NEEDS REVIEW
             #       See also analysis.Function.analyze
-            if isinstance(bc, BlockTerminal) and bc.next and bc.next.loc not in af.incoming_jumps:
+            if isinstance(bc, BlockTerminal) and bc.next and bc.next not in af.incoming_jumps:
                 logging.debug("TRANS stopping")
+                logging.debug("Incoming: {0}".format([str(x) + "\n" for x in af.incoming_jumps]))
                 #import pdb; pdb.set_trace()
                 break
 

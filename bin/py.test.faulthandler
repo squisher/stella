@@ -5,7 +5,7 @@ f=faulthandler.err
 #unalias py.test
 
 handler() {
-    echo "Abnormal program termination."
+    echo "Program terminated with $1"
     cat faulthandler.err
 }
 
@@ -13,5 +13,5 @@ trap handler INT ABRT
 
 rm -f $f
 py.test "$@"
-[ $? != 0 ] && handler
-echo "DONE"
+r=$?
+[ $r != 0 -a $r != 2 ] && handler $r

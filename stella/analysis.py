@@ -70,17 +70,23 @@ class Function(object):
             #import pdb; pdb.set_trace()
             self.analyze_again = True
 
+    def add_incoming_jump(self, target_bc, source_bc):
+        if target_bc in self.incoming_jumps:
+            self.incoming_jumps[target_bc].append(source_bc)
+        else:
+            self.incoming_jumps[target_bc] = [source_bc]
+
     def intraflow(self):
         for bc in self.bytecodes:
             if isinstance(bc, Jump):
                 if bc.processFallThrough():
-                    self.incoming_jumps[bc.next].append(bc)
+                    self.add_incoming_jump(bc.next, bc)
                 target_bc = self.labels[bc.target_label]
                 bc.addTargetBytecode(target_bc)
-                self.incoming_jumps[target_bc].append(bc)
+                self.add_incoming_jump(target_bc, bc)
 
         for bc in self.bytecodes:
-            if len(self.incoming_jumps[bc]) > 1:
+            if bc in self.incoming_jumps:
                 if not isinstance(bc.prev, BlockTerminal):
                     #logging.debug("PREV_TYPE " + str(type(bc.prev)))
                     bc_ = Jump(bc.debuginfo)
@@ -90,12 +96,13 @@ class Function(object):
 
                     logging.debug("IF ADD  " + bc_.locStr())
 
-                bc_ = PhiNode(bc.debuginfo)
-                bc_.loc = bc.loc # for printing purposes only
+                if len(self.incoming_jumps[bc]) > 1:
+                    bc_ = PhiNode(bc.debuginfo)
+                    bc_.loc = bc.loc # for printing purposes only
 
-                self.insert_before(bc_)
-                logging.debug("IF ADD  " + bc_.locStr())
-                #import pdb; pdb.set_trace()
+                    self.insert_before(bc_)
+                    logging.debug("IF ADD  " + bc_.locStr())
+                    #import pdb; pdb.set_trace()
 
 
     def analyze(self, *args):
@@ -227,7 +234,7 @@ class Function(object):
                 raise UnsupportedOpcode(op, di)
             #import pdb; pdb.set_trace()
             bc.loc = i
-            self.incoming_jumps[bc] = []
+            #self.incoming_jumps[bc] = []
             self.insert_after(bc)
 
             if i in labels:

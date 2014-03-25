@@ -236,7 +236,6 @@ class Bytecode(IR):
     pass
 
 class LOAD_FAST(Bytecode):
-    discard = True
     def __init__(self, debuginfo):
         super().__init__(debuginfo)
 
@@ -248,11 +247,12 @@ class LOAD_FAST(Bytecode):
 
     def type_eval(self, func):
         pass
-    def translate(self, module, builder):
-        pass
 
-    def __str__(self):
-        return "(LOAD_FAST {0})".format(self.args[0])
+    def translate(self, module, builder):
+        self.result = builder.alloca(py_type_to_llvm(self.args[0].type), name='@{0}'.format(self.loc))
+
+    #def __str__(self):
+    #    return "(LOAD_FAST {0})".format(self.args[0])
 
 class STORE_FAST(Bytecode):
     def __init__(self, debuginfo):
