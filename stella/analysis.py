@@ -42,28 +42,33 @@ class Stack(object):
 
 class Function(object):
     def __init__(self, f):
-        self.locals = dict()
-        self.result = Variable('__return__') # TODO possible name conflicts?
+        self.registers= dict()
+        self.result = Register(self, '__return__') # TODO possible name conflicts?
         self.bytecodes = None # pointer to the first bytecode
         self.labels = {}
         self.todo = Stack("Todo")
         self.incoming_jumps = {}
         self.fellthrough = False
+        self.register_n = 0
 
         self.f = f
         argspec = inspect.getargspec(f)
-        self.args = [Local(n) for n in argspec.args]
+        self.args = [Register(self, n) for n in argspec.args]
         for arg in self.args:
-            self.locals[arg.name] = arg
+            self.registers[arg.name] = arg
 
     def getName(self):
         return self.f.__name__
 
-    def getLocal(self, name):
-        if name not in self.locals:
-            var = Local(name)
-            self.locals[name] = var
-        return self.locals[name]
+    def newRegisterName(self):
+        n = str(self.register_n)
+        self.register_n += 1
+        return n
+
+    def getOrNewRegister(self, name):
+        if name not in self.registers:
+            self.registers[name] = Register(self, name)
+        return self.registers[name]
 
     def retype(self, go = True):
         if go:
@@ -265,7 +270,7 @@ class Function(object):
                         bc.addTarget(oparg)
                     elif op in dis.haslocal:
                         #print('(' + co.co_varnames[oparg] + ')', end=' ')
-                        bc.addArg(self.getLocal(co.co_varnames[oparg]))
+                        bc.addArg(self.getOrNewRegister(co.co_varnames[oparg]))
                     elif op in dis.hascompare:
                         #print('(' + dis.cmp_op[oparg] + ')', end=' ')
                         bc.addCmp(dis.cmp_op[oparg])

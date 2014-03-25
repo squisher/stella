@@ -7,28 +7,26 @@ from .exc import *
 from abc import ABCMeta, abstractmethod, abstractproperty
 from llvm.core import INTR_FLOOR
 
-NoType = ''
+#NoType = {'__name__': '?', '__str__': lambda: '<?>'}
+class NoType:
+    __name__ = '?'
+    @classmethod
+    def __str__(klass):
+        return '<?>'
 
-class Variable(object):
+class Register(object):
     name = None
     type = NoType
 
-    def __init__(self, name):
+    def __init__(self, func, name = None):
         super().__init__()
-        self.name = name
+        if name:
+            self.name = name
+        else:
+            self.name = func.newRegisterName()
 
     def __str__(self):
-        if not self.name:
-            name = '$'
-        else:
-            name = self.name
-
-        if self.type is NoType:
-            type_name = '?'
-        else:
-            type_name = self.type.__name__
-
-        return "{0}<{1}>".format(name, type_name)
+        return "{0}<{1}>".format(self.name, self.type.__name__)
 
     def unify_type(self, tp2, debuginfo):
         tp1 = self.type
@@ -43,6 +41,9 @@ class Variable(object):
 
         return False
 
+class StackVariable(Register):
+    def __init__(self, func, name):
+        super().__init__(func, name)
 
 class Const(object):
     type = ''
@@ -92,16 +93,6 @@ class Cast(object):
         return self.name
 
 
-class Local(Variable):
-    @staticmethod
-    def tmp():
-        l = Local('')
-#        if isinstance(template, Variable):
-#            l.type = template.type
-#        else:
-#            l.type = template
-        return l
-
 def pop_stack(n):
     """
     Decorator, it takes n items off the stack
@@ -141,10 +132,11 @@ class IR(metaclass=ABCMeta):
     debuginfo = None
     llvm = None
     block = None
-    next = None
-    prev = None
     loc = None
     discard = False
+
+    next = None
+    prev = None
 
     def __init__(self, debuginfo):
         self.debuginfo = debuginfo
@@ -176,6 +168,7 @@ class IR(metaclass=ABCMeta):
 
     def __iter__(self):
         return LinkedListIter(self)
+
     def printAll(self):
         """Debugging: print all IRs in this list"""
 
@@ -208,11 +201,11 @@ class PhiNode(IR):
     def __init__(self, debuginfo):
         super().__init__(debuginfo)
 
-        self.result = Local.tmp()
         self.blocks = []
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
+        self.result = Register(func)
         self.blocks.append(self.args[-1].bc)
         stack.push(self.result)
 
@@ -242,7 +235,7 @@ class LOAD_FAST(Bytecode):
     def stack_eval(self, func, stack):
         # don't use func.getLocal() here because the semantics of
         # LOAD_FAST require the variable to exist
-        self.result = func.locals[self.args[0].name]
+        self.result = func.registers[self.args[0].name]
         stack.push(self.result)
 
     def type_eval(self, func):
@@ -260,7 +253,6 @@ class STORE_FAST(Bytecode):
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
-        #self.result = func.getLocal(self.args[0].name)
         self.result = self.args[0]
 
     def type_eval(self, func):
@@ -301,7 +293,7 @@ class BinaryOp(Bytecode):
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        self.result = Local.tmp()
+        self.result = Register(func)
         stack.push(self.result)
 
     def type_eval(self, func):
@@ -346,7 +338,7 @@ class BINARY_POWER(BinaryOp):
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        self.result = Local.tmp()
+        self.result = Register(func)
         stack.push(self.result)
 
     def type_eval(self, func):
@@ -418,7 +410,7 @@ class BINARY_TRUE_DIVIDE(BinaryOp):
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        self.result = Local.tmp()
+        self.result = Register(func)
         stack.push(self.result)
 
     def type_eval(self, func):
@@ -478,7 +470,7 @@ class COMPARE_OP(Bytecode):
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        self.result = Local.tmp()
+        self.result = Register(func)
         stack.push(self.result)
 
     def type_eval(self, func):
@@ -501,10 +493,11 @@ class COMPARE_OP(Bytecode):
 class RETURN_VALUE(BlockTerminal, Bytecode):
     def __init__(self, debuginfo):
         super().__init__(debuginfo)
-        self.result = Local.tmp()
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
+        # Fake register for typing reasons
+        self.result = Register(func, '__return__')
         pass
 
     def type_eval(self, func):
