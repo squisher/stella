@@ -14,22 +14,8 @@ class NoType:
     def __str__(klass):
         return '<?>'
 
-class Register(object):
-    name = None
+class Typable(object):
     type = NoType
-
-    def __init__(self, func, name = None):
-        super().__init__()
-        if name:
-            self.name = name
-        else:
-            self.name = func.newRegisterName()
-
-    def __str__(self):
-        return "{0}<{1}>".format(self.name, self.type.__name__)
-    def __repr__(self):
-        return 'Reg|'+self.__str__()
-
     def unify_type(self, tp2, debuginfo):
         tp1 = self.type
         if   tp1 == tp2:    pass
@@ -43,19 +29,42 @@ class Register(object):
 
         return False
 
+class Register(Typable):
+    name = None
+
+    def __init__(self, func, name = None):
+        super().__init__()
+        if name:
+            self.name = name
+        else:
+            self.name = func.newRegisterName()
+
+    def __str__(self):
+        return "{0}<{1}>".format(self.name, self.type.__name__)
+    def __repr__(self):
+        return 'Reg|'+self.__str__()
+
 class StackVariable(Register):
     def __init__(self, func, name):
         super().__init__(func, name)
 
-class Const(object):
-    type = ''
+class Const(Typable):
     value = None
 
     def __init__(self, value):
         self.value = value
         self.type = type(value)
-        self.llvm = llvm_constant(value)
         self.name = str(value)
+        self.translate()
+
+    def translate(self):
+        self.llvm = llvm_constant(self.value)
+
+    def unify_type(self, tp2, debuginfo):
+        r = super().unify_type(tp2, debuginfo)
+        if r:
+            self.translate()
+        return r
 
     def __str__(self):
         return str(self.value)
