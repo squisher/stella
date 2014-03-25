@@ -110,14 +110,26 @@ class Function(object):
                     bc.insert_before(bc_)
 
                     # Move jumps over to the PhiNode
-                    self.incoming_jumps[bc_] = self.incoming_jumps[bc]
-                    for bc__ in self.incoming_jumps[bc_]:
-                        bc__.setTargetBytecode(bc_)
-                    del self.incoming_jumps[bc]
+                    if bc in self.incoming_jumps:
+                        self.incoming_jumps[bc_] = self.incoming_jumps[bc]
+                        for bc__ in self.incoming_jumps[bc_]:
+                            bc__.setTargetBytecode(bc_)
+                        del self.incoming_jumps[bc]
 
                     logging.debug("IF ADD  " + bc_.locStr())
                     #import pdb; pdb.set_trace()
 
+    def remove(self, bc):
+        #import pdb; pdb.set_trace()
+        if bc.prev == None:
+            self.bytecodes = bc.next
+        if bc in self.incoming_jumps:
+            assert bc.next
+            self.incoming_jumps[bc.next] = self.incoming_jumps[bc]
+            for bc_ in self.incoming_jumps[bc.next]:
+                bc_.updateTargetBytecode(bc, bc.next)
+            del self.incoming_jumps[bc]
+        bc.remove()
 
     def analyze(self, *args):
         for i in range(len(args)):

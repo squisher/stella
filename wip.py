@@ -1,17 +1,6 @@
-def f(a,b): return a and b
-#       select on %a, %r, %a, %a  // assign a to r
-#       jump :phi
-#       select on %b, %r, %b, %b  // assign b to r
-#       phi %r
-#       return %r
-def g(a):
-    if a:
-        return 1
-    else:
-        return 2
-
-from test.basicmath import *
+from test.langconstr import *
 #args_mod = list(filter(lambda e: e[0] >= 0, arglist2))
 
 def current_work():
-    stella(f, debug='print')(False, True)
+    #stella(simple_assignment, debug='print')(40, 2)
+    stella(and_, debug='print')(True, False)

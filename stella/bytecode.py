@@ -162,7 +162,10 @@ def linkedlist(klass):
     klass.insert_before = insert_before
 
     def remove(self):
-        self.prev.next = self.next
+        if self.prev:
+            self.prev.next = self.next
+        if self.next:
+            self.next.prev = self.prev
     klass.remove = remove
 
     return klass
@@ -254,6 +257,7 @@ class Bytecode(IR):
     pass
 
 class LOAD_FAST(Bytecode):
+    discard = True
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
@@ -267,10 +271,11 @@ class LOAD_FAST(Bytecode):
         pass
 
     def translate(self, module, builder):
-        self.result = builder.alloca(py_type_to_llvm(self.args[0].type), name='@{0}'.format(self.loc))
+        #self.result = builder.alloca(py_type_to_llvm(self.args[0].type), name='@{0}'.format(self.loc))
+        pass
 
-    #def __str__(self):
-    #    return "(LOAD_FAST {0})".format(self.args[0])
+    def __str__(self):
+        return "(LOAD_FAST {0})".format(self.args[0])
 
 class STORE_FAST(Bytecode):
     def __init__(self, func, debuginfo):
@@ -544,7 +549,11 @@ class Jump(BlockTerminal, IR):
         super().__init__(func, debuginfo)
 
     def setTargetBytecode(self, bc):
+        #import pdb; pdb.set_trace()
         self.target_bc = bc
+
+    def updateTargetBytecode(self, old_bc, new_bc):
+        self.setTargetBytecode(new_bc)
 
     def setTarget(self, label):
         self.target_label = label
@@ -575,6 +584,13 @@ class Jump_if_X_or_pop(Jump):
     def processFallThrough(self):
         self.fallthrough = self.next
         return True
+
+    def updateTargetBytecode(self, old_bc, new_bc):
+        if old_bc == self.target_bc:
+            self.setTargetBytecode(new_bc)
+        else:
+            assert self.fallthrough == old_bc
+            self.fallthrough = new_bc
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
@@ -614,6 +630,13 @@ class Pop_jump_if_X(Jump):
     def processFallThrough(self):
         self.fallthrough = self.next
         return True
+
+    def updateTargetBytecode(self, old_bc, new_bc):
+        if old_bc == self.target_bc:
+            self.setTargetBytecode(new_bc)
+        else:
+            assert self.fallthrough == old_bc
+            self.fallthrough = new_bc
 
     @pop_stack(1)
     def stack_eval(self, func, stack):

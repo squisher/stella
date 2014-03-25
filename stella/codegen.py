@@ -57,7 +57,7 @@ class Program(object):
 
         for bc in af.bytecodes:
             if bc.discard:
-                bc.remove()
+                af.remove(bc)
                 logging.debug("BLOCK skipped {0}".format(bc))
                 continue
 
