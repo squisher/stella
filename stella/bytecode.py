@@ -126,6 +126,46 @@ class LinkedListIter(object):
         self.next = self.next.next
         return current
 
+def linkedlist(klass):
+    klass.next = None
+    klass.prev = None
+
+    def __iter__(self):
+        return LinkedListIter(self)
+    klass.__iter__ = __iter__
+
+    def printAll(self):
+        """Debugging: print all IRs in this list"""
+
+        # find the first bytecode
+        bc_start = self
+        while bc_start.prev != None:
+            bc_start = bc_start.prev
+
+        for bc in bc_start:
+            logging.debug(str(bc))
+    klass.printAll = printAll
+    
+    def insert_after(self, bc):
+        self.next = bc
+        bc.prev = self
+    klass.insert_after = insert_after
+
+    def insert_before(self, bc):
+        bc.prev = self.prev
+        bc.next = self
+
+        bc.prev.next = bc
+        self.prev = bc
+    klass.insert_before = insert_before
+
+    def remove(self):
+        self.prev.next = self.next
+    klass.remove = remove
+
+    return klass
+
+@linkedlist
 class IR(metaclass=ABCMeta):
     args = None
     result = None
@@ -134,9 +174,6 @@ class IR(metaclass=ABCMeta):
     block = None
     loc = None
     discard = False
-
-    next = None
-    prev = None
 
     def __init__(self, debuginfo):
         self.debuginfo = debuginfo
@@ -165,20 +202,6 @@ class IR(metaclass=ABCMeta):
     @abstractmethod
     def type_eval(self, func):
         pass
-
-    def __iter__(self):
-        return LinkedListIter(self)
-
-    def printAll(self):
-        """Debugging: print all IRs in this list"""
-
-        # find the first bytecode
-        bc_start = self
-        while bc_start.prev != None:
-            bc_start = bc_start.prev
-
-        for bc in bc_start:
-            logging.debug(str(bc))
 
     def __str__(self):
         return "{0} {1} {2}".format(

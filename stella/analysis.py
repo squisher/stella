@@ -95,9 +95,10 @@ class Function(object):
                 if not isinstance(bc.prev, BlockTerminal):
                     #logging.debug("PREV_TYPE " + str(type(bc.prev)))
                     bc_ = Jump(bc.debuginfo)
+                    bc_.loc = ''
                     bc_.addTargetBytecode(bc)
                     bc_.addTarget(bc.loc) # for printing purposes only
-                    self.insert_before(bc_)
+                    bc.insert_before(bc_)
 
                     logging.debug("IF ADD  " + bc_.locStr())
 
@@ -105,7 +106,7 @@ class Function(object):
                     bc_ = PhiNode(bc.debuginfo)
                     bc_.loc = bc.loc # for printing purposes only
 
-                    self.insert_before(bc_)
+                    bc.insert_before(bc_)
                     logging.debug("IF ADD  " + bc_.locStr())
                     #import pdb; pdb.set_trace()
 
@@ -178,41 +179,6 @@ class Function(object):
         #for bc in self.bytecodes:
         #    logging.debug(str(bc))
 
-    def insert_after(self, bc):
-        if self.last_bc != None:
-            self.last_bc.next = bc
-            bc.prev = self.last_bc
-        else:
-            self.bytecodes = bc
-        self.last_bc = bc
-
-    def insert_before(self, bc):
-        if self.last_bc == None:
-            logging.warn("Insert_before called on an empty list")
-            insert_after(bc)
-        pp = self.last_bc.prev
-        pp.next = bc
-        self.last_bc.prev = bc
-
-        bc.prev = pp
-        bc.next = self.last_bc
-
-    def remove(self, bc):
-        if bc in self.incoming_jumps:
-            for i_bc in self.incoming_jumps[bc]:
-                i_bc.addTargetBytecode(bc.next)
-
-        if bc.prev:
-            bc.prev.next = bc.next
-        else:
-            # it's the first
-            self.bytecodes = bc.next
-        if bc.next:
-            # TODO this should never happen, should it?
-            bc.next.prev = bc.prev
-        # Note that bc's prev and next remain untouched so that
-        # the iterator remains valid
-
     def disassemble(self):
         """Disassemble a code object."""
         lasti=-1
@@ -240,7 +206,11 @@ class Function(object):
             #import pdb; pdb.set_trace()
             bc.loc = i
             #self.incoming_jumps[bc] = []
-            self.insert_after(bc)
+            if self.last_bc == None:
+                self.bytecodes = bc
+            else:
+                self.last_bc.insert_after(bc)
+            self.last_bc = bc
 
             if i in labels:
                 self.labels[i] = bc
@@ -270,6 +240,7 @@ class Function(object):
                         bc.addTarget(oparg)
                     elif op in dis.haslocal:
                         #print('(' + co.co_varnames[oparg] + ')', end=' ')
+                        # Python does not allocate new names, it just refers to them
                         bc.addArg(self.getOrNewRegister(co.co_varnames[oparg]))
                     elif op in dis.hascompare:
                         #print('(' + dis.cmp_op[oparg] + ')', end=' ')
