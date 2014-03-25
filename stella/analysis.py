@@ -87,26 +87,34 @@ class Function(object):
                 if bc.processFallThrough():
                     self.add_incoming_jump(bc.next, bc)
                 target_bc = self.labels[bc.target_label]
-                bc.addTargetBytecode(target_bc)
+                bc.setTargetBytecode(target_bc)
                 self.add_incoming_jump(target_bc, bc)
 
         for bc in self.bytecodes:
             if bc in self.incoming_jumps:
                 if not isinstance(bc.prev, BlockTerminal):
                     #logging.debug("PREV_TYPE " + str(type(bc.prev)))
-                    bc_ = Jump(bc.debuginfo)
+                    bc_ = Jump(self, bc.debuginfo)
                     bc_.loc = ''
-                    bc_.addTargetBytecode(bc)
-                    bc_.addTarget(bc.loc) # for printing purposes only
+                    bc_.setTargetBytecode(bc)
+                    bc_.setTarget(bc.loc) # for printing purposes only
                     bc.insert_before(bc_)
+                    self.add_incoming_jump(bc, bc_)
 
                     logging.debug("IF ADD  " + bc_.locStr())
 
                 if len(self.incoming_jumps[bc]) > 1:
-                    bc_ = PhiNode(bc.debuginfo)
+                    bc_ = PhiNode(self, bc.debuginfo)
                     bc_.loc = bc.loc # for printing purposes only
 
                     bc.insert_before(bc_)
+
+                    # Move jumps over to the PhiNode
+                    self.incoming_jumps[bc_] = self.incoming_jumps[bc]
+                    for bc__ in self.incoming_jumps[bc_]:
+                        bc__.setTargetBytecode(bc_)
+                    del self.incoming_jumps[bc]
+
                     logging.debug("IF ADD  " + bc_.locStr())
                     #import pdb; pdb.set_trace()
 
@@ -200,7 +208,7 @@ class Function(object):
             di = DebugInfo(co.co_filename, line)
 
             if extended_arg == 0 and op in opconst:
-                bc = opconst[op](di)
+                bc = opconst[op](self, di)
             else:
                 raise UnsupportedOpcode(op, di)
             #import pdb; pdb.set_trace()
@@ -234,10 +242,10 @@ class Function(object):
                         raise UnimplementedError('hasname')
                     elif op in dis.hasjrel:
                         #print('(to ' + repr(i + oparg) + ')', end=' ')
-                        bc.addTarget(i+oparg)
+                        bc.setTarget(i+oparg)
                     elif op in dis.hasjabs:
                         #print(repr(oparg).rjust(5), end=' ')
-                        bc.addTarget(oparg)
+                        bc.setTarget(oparg)
                     elif op in dis.haslocal:
                         #print('(' + co.co_varnames[oparg] + ')', end=' ')
                         # Python does not allocate new names, it just refers to them

@@ -27,6 +27,8 @@ class Register(object):
 
     def __str__(self):
         return "{0}<{1}>".format(self.name, self.type.__name__)
+    def __repr__(self):
+        return 'Reg|'+self.__str__()
 
     def unify_type(self, tp2, debuginfo):
         tp1 = self.type
@@ -175,7 +177,7 @@ class IR(metaclass=ABCMeta):
     loc = None
     discard = False
 
-    def __init__(self, debuginfo):
+    def __init__(self, func, debuginfo):
         self.debuginfo = debuginfo
         self.args = []
 
@@ -221,14 +223,14 @@ class BlockTerminal(object):
     pass
 
 class PhiNode(IR):
-    def __init__(self, debuginfo):
-        super().__init__(debuginfo)
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
 
+        self.result = Register(func)
         self.blocks = []
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
-        self.result = Register(func)
         self.blocks.append(self.args[-1].bc)
         stack.push(self.result)
 
@@ -252,8 +254,8 @@ class Bytecode(IR):
     pass
 
 class LOAD_FAST(Bytecode):
-    def __init__(self, debuginfo):
-        super().__init__(debuginfo)
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
 
     def stack_eval(self, func, stack):
         # don't use func.getLocal() here because the semantics of
@@ -271,8 +273,8 @@ class LOAD_FAST(Bytecode):
     #    return "(LOAD_FAST {0})".format(self.args[0])
 
 class STORE_FAST(Bytecode):
-    def __init__(self, debuginfo):
-        super().__init__(debuginfo)
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
@@ -295,8 +297,8 @@ class STORE_FAST(Bytecode):
 
 class LOAD_CONST(Bytecode):
     discard = True
-    def __init__(self, debuginfo):
-        super().__init__(debuginfo)
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
 
     def stack_eval(self, func, stack):
         self.result = self.args[0]
@@ -311,12 +313,12 @@ class LOAD_CONST(Bytecode):
         return "(LOAD_CONST {0})".format(self.args[0])
 
 class BinaryOp(Bytecode):
-    def __init__(self, debuginfo):
-        super().__init__(debuginfo)
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+        self.result = Register(func)
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        self.result = Register(func)
         stack.push(self.result)
 
     def type_eval(self, func):
@@ -359,6 +361,9 @@ class BINARY_MODULO(BinaryOp):
 class BINARY_POWER(BinaryOp):
     b_func = {float: INTR_POW, int: INTR_POWI}
 
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
     @pop_stack(2)
     def stack_eval(self, func, stack):
         self.result = Register(func)
@@ -398,6 +403,9 @@ class BINARY_POWER(BinaryOp):
 class BINARY_FLOOR_DIVIDE(BinaryOp):
     """Python compliant `//' operator: Slow since it has to perform type conversions and floating point division for integers"""
     b_func = {float: 'fdiv', int: 'fdiv'} # NOT USED, but required to make it a concrete class
+
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
 
     def type_eval(self, func):
         for arg in self.args:
@@ -485,8 +493,8 @@ class COMPARE_OP(Bytecode):
             '<=': FCMP_OLE,
             }
 
-    def __init__(self, debuginfo):
-        super().__init__(debuginfo)
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
 
     def addCmp(self, op):
         self.op = op
@@ -514,13 +522,12 @@ class COMPARE_OP(Bytecode):
         self.result.llvm = f(m[self.op], self.args[0].llvm, self.args[1].llvm, self.result.name)
 
 class RETURN_VALUE(BlockTerminal, Bytecode):
-    def __init__(self, debuginfo):
-        super().__init__(debuginfo)
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
-        # Fake register for typing reasons
-        self.result = Register(func, '__return__')
+        self.result = self.args[0]
         pass
 
     def type_eval(self, func):
@@ -533,13 +540,13 @@ class RETURN_VALUE(BlockTerminal, Bytecode):
 class Jump(BlockTerminal, IR):
     target_label = None
     target_bc = None
-    def __init__(self, debuginfo):
-        super().__init__(debuginfo)
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
 
-    def addTargetBytecode(self, bc):
+    def setTargetBytecode(self, bc):
         self.target_bc = bc
 
-    def addTarget(self, label):
+    def setTarget(self, label):
         self.target_label = label
 
     def processFallThrough(self):
@@ -562,8 +569,8 @@ class Jump(BlockTerminal, IR):
         builder.branch(self.target_bc.block)
 
 class Jump_if_X_or_pop(Jump):
-    def __init__(self, debuginfo):
-        super().__init__(debuginfo)
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
 
     def processFallThrough(self):
         self.fallthrough = self.next
@@ -586,23 +593,23 @@ class Jump_if_X_or_pop(Jump):
         return r
 
 class JUMP_IF_FALSE_OR_POP(Jump_if_X_or_pop, Bytecode):
-    def __init__(self, debuginfo):
-        super().__init__(debuginfo)
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
 
     def translate(self, module, builder):
         #import pdb; pdb.set_trace()
         builder.cbranch(self.args[0].llvm, self.next.block, self.target_bc.block)
 
 class JUMP_IF_TRUE_OR_POP(Jump_if_X_or_pop, Bytecode):
-    def __init__(self, debuginfo):
-        super().__init__(debuginfo)
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
 
     def translate(self, module, builder):
         builder.cbranch(self.args[0].llvm, self.target_bc.block, self.next.block)
 
 class Pop_jump_if_X(Jump):
-    def __init__(self, debuginfo):
-        super().__init__(debuginfo)
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
 
     def processFallThrough(self):
         self.fallthrough = self.next
@@ -621,15 +628,15 @@ class Pop_jump_if_X(Jump):
         return r
 
 class POP_JUMP_IF_FALSE(Pop_jump_if_X, Bytecode):
-    def __init__(self, debuginfo):
-        super().__init__(debuginfo)
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
 
     def translate(self, module, builder):
         builder.cbranch(self.args[0].llvm, self.next.block, self.target_bc.block)
 
 class POP_JUMP_IF_TRUE(Pop_jump_if_X, Bytecode):
-    def __init__(self, debuginfo):
-        super().__init__(debuginfo)
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
 
     def translate(self, module, builder):
         builder.cbranch(self.args[0].llvm, self.target_bc.block, self.next.block)

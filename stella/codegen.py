@@ -91,7 +91,6 @@ class Program(object):
             #       See also analysis.Function.analyze
             if isinstance(bc, BlockTerminal) and bc.next and bc.next not in af.incoming_jumps:
                 logging.debug("TRANS stopping")
-                logging.debug("Incoming: {0}".format([str(x) + "\n" for x in af.incoming_jumps]))
                 #import pdb; pdb.set_trace()
                 break
 
