@@ -19,6 +19,12 @@ def double_cast(x,y):
     b = y // x
     return a + b
 
+def simple_if(x):
+    if x:
+        return 0
+    else:
+        return 42
+
 def and_(a,b): return a and b
 def or_(a,b):  return a or b
 
@@ -31,3 +37,8 @@ def test1(f,args):
 @mark.parametrize('f', [and_, or_])
 def test2(f,args):
     make_eq_test(f, args)
+
+@mark.parametrize('arg', single_args([True, False]))
+@mark.parametrize('f', [simple_if])
+def test3(f,arg):
+    make_eq_test(f, arg)

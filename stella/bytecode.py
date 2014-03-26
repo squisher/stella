@@ -194,6 +194,7 @@ class IR(metaclass=ABCMeta):
         self.args = []
 
     def addConst(self, arg):
+        #import pdb; pdb.set_trace()
         self.addArg(Const(arg))
 
     def addArg(self, arg):
@@ -541,6 +542,7 @@ class RETURN_VALUE(BlockTerminal, Bytecode):
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
+        #import pdb; pdb.set_trace()
         self.result = self.args[0]
         pass
 

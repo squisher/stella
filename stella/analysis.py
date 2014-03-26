@@ -183,6 +183,9 @@ class Function(object):
                 logging.debug("TYPE'D " + str(bc))
                 if isinstance(bc, RETURN_VALUE):
                     self.retype(self.result.unify_type(bc.result.type, bc.debuginfo))
+                if isinstance(bc, BlockTerminal) and not bc.next in self.incoming_jumps:
+                    logging.debug("Unreachable {0}, aborting".format(bc.next))
+                    break
 
             if self.analyze_again:
                 self.todo.push(bc_list)
