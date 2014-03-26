@@ -25,6 +25,18 @@ def simple_if(x):
     else:
         return 42
 
+def simple_ifeq(x,y):
+    if x==y:
+        return 0
+    else:
+        return 42
+
+def simple_ifeq_const(x):
+    if x==False:
+        return 0
+    else:
+        return 42
+
 def and_(a,b): return a and b
 def or_(a,b):  return a or b
 
@@ -39,6 +51,11 @@ def test2(f,args):
     make_eq_test(f, args)
 
 @mark.parametrize('arg', single_args([True, False]))
-@mark.parametrize('f', [simple_if])
+@mark.parametrize('f', [simple_if, simple_ifeq_const])
 def test3(f,arg):
     make_eq_test(f, arg)
+
+@mark.parametrize('args', [(True, False), (True, True), (4, 2), (4.0, 4.0)])
+@mark.parametrize('f', [simple_ifeq])
+def test4(f,args):
+    make_eq_test(f, args)
