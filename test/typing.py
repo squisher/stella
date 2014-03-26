@@ -19,7 +19,7 @@ def test2(arg):
 def test3(args):
     make_eq_test(equality, args)
 
-@mark.parametrize('args', [(False, 1), (42.0, True), (1, 1.0), (randint(0, 10000000), float(randint(-10000 , 1000000)))])
+@mark.parametrize('args', [(False, 1), (False, 0), (True, 1), (42.0, True), (1, 1.0), (randint(0, 10000000), float(randint(-10000 , 1000000)))])
 @mark.xfail()
 def test3fail(args):
     make_eq_test(equality, args)

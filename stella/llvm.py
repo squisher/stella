@@ -21,7 +21,7 @@ def py_type_to_llvm(tp):
     elif tp == bool:
         return tp_bool
     else:
-        raise TypingError("Unknown type " + tp)
+        raise TypingError("Unknown type " + str(tp))
 
 def get_generic_value(tp, val):
     if type(val) == int:
