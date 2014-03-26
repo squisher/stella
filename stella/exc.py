@@ -25,3 +25,5 @@ class TypingError(StellaException):
     pass
 class UnimplementedError(StellaException):
     pass
+class UndefinedError(StellaException):
+    pass

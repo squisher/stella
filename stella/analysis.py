@@ -70,6 +70,11 @@ class Function(object):
             self.registers[name] = Register(self, name)
         return self.registers[name]
 
+    def getRegister(self, name):
+        if name not in self.registers:
+            raise UndefinedError(name)
+        return self.registers[name]
+
     def retype(self, go = True):
         if go:
             #import pdb; pdb.set_trace()
@@ -183,7 +188,7 @@ class Function(object):
                 logging.debug("TYPE'D " + str(bc))
                 if isinstance(bc, RETURN_VALUE):
                     self.retype(self.result.unify_type(bc.result.type, bc.debuginfo))
-                if isinstance(bc, BlockTerminal) and not bc.next in self.incoming_jumps:
+                if isinstance(bc, BlockTerminal) and bc.next != None and bc.next not in self.incoming_jumps:
                     logging.debug("Unreachable {0}, aborting".format(bc.next))
                     break
 
@@ -263,8 +268,7 @@ class Function(object):
                         bc.setTarget(oparg)
                     elif op in dis.haslocal:
                         #print('(' + co.co_varnames[oparg] + ')', end=' ')
-                        # Python does not allocate new names, it just refers to them
-                        bc.addArg(self.getOrNewRegister(co.co_varnames[oparg]))
+                        bc.addArgByName(self, co.co_varnames[oparg])
                     elif op in dis.hascompare:
                         #print('(' + dis.cmp_op[oparg] + ')', end=' ')
                         bc.addCmp(dis.cmp_op[oparg])

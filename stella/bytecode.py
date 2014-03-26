@@ -193,6 +193,9 @@ class IR(metaclass=ABCMeta):
     def addArg(self, arg):
         self.args.append(arg)
 
+    def addArgByName(self, func, name):
+        self.args.append(func.getRegister(name))
+
     def cast(self, builder):
         #import pdb; pdb.set_trace()
         for arg in self.args:
@@ -267,7 +270,7 @@ class LOAD_FAST(Bytecode):
     def stack_eval(self, func, stack):
         # don't use func.getLocal() here because the semantics of
         # LOAD_FAST require the variable to exist
-        self.result = func.registers[self.args[0].name]
+        self.result = func.getRegister(self.args[0].name)
         stack.push(self.result)
 
     def type_eval(self, func):
@@ -283,6 +286,10 @@ class LOAD_FAST(Bytecode):
 class STORE_FAST(Bytecode):
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
+
+    def addArgByName(self, func, name):
+        # Python does not allocate new names, it just refers to them
+        self.args.append(func.getOrNewRegister(name))
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
