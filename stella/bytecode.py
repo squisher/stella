@@ -7,13 +7,6 @@ from .exc import *
 from abc import ABCMeta, abstractmethod, abstractproperty
 from llvm.core import INTR_FLOOR
 
-#NoType = {'__name__': '?', '__str__': lambda: '<?>'}
-class NoType:
-    __name__ = '?'
-    @classmethod
-    def __str__(klass):
-        return '<?>'
-
 class Typable(object):
     type = NoType
     def unify_type(self, tp2, debuginfo):

@@ -7,7 +7,8 @@ class StellaException(Exception):
         self.addDebug(debuginfo)
 
     def addDebug(self, debuginfo):
-        self.debuginfo = debuginfo
+        if debuginfo:
+            self.debuginfo = debuginfo
 
     def __str__(self):
         if hasattr(self, 'debuginfo'):

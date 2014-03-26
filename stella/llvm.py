@@ -6,6 +6,12 @@ import logging
 
 from .exc import *
 
+class NoType:
+    __name__ = '?'
+    @classmethod
+    def __str__(klass):
+        return '<?>'
+
 tp_int = Type.int(64)
 tp_int32 = Type.int(32)
 #tp_float = Type.float() # Python always works with double precision
@@ -20,6 +26,8 @@ def py_type_to_llvm(tp):
         return tp_double
     elif tp == bool:
         return tp_bool
+    elif tp == NoType:
+        raise TypingError("Insufficient knowledge to derive a type")
     else:
         raise TypingError("Unknown type " + str(tp))
 
