@@ -37,6 +37,12 @@ def simple_ifeq_const(x):
     else:
         return 42
 
+def for1(x):
+    r = 0
+    for i in range(x):
+        r += i
+    return r
+
 def and_(a,b): return a and b
 def or_(a,b):  return a or b
 
@@ -59,3 +65,9 @@ def test3(f,arg):
 @mark.parametrize('f', [simple_ifeq])
 def test4(f,args):
     make_eq_test(f, args)
+
+@mark.parametrize('arg', single_args([0, 1, 42]))
+@mark.parametrize('f', [for1])
+def test3(f,arg):
+    make_eq_test(f, arg)
+
