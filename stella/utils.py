@@ -95,16 +95,23 @@ def linkedlist(klass):
 
 @linkedlist
 class Block(object):
+    """A block is a nested list of bytecodes."""
     _block_start = None
     def blockStart(self):
         self._block_start = BlockStart()
         return self._block_start
+    def blockContent(self):
+        return self._block_start.next
 
 @linkedlist
 class BlockStart(object):
-    """Dummy start object, ignore when iterating"""
+    """Dummy start object, ignore when iterating.
+    
+    This is only used to make the insertion code easier."""
     pass
 
 class BlockEnd(object):
-    """Only a marker"""
+    """Marks the end of a block of nested bytecodes.
+    
+    Enables checks via multiple inheritance."""
     pass

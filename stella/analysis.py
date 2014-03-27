@@ -62,6 +62,7 @@ class Function(object):
             self.incoming_jumps[target_bc] = [source_bc]
 
     def intraflow(self):
+        logging.debug("Building Intra-Flowgraph")
         for bc in self.bytecodes:
             if isinstance(bc, Jump):
                 if bc.processFallThrough():
@@ -99,29 +100,7 @@ class Function(object):
                     logging.debug("IF ADD  " + bc_.locStr())
                     #import pdb; pdb.set_trace()
 
-    def remove(self, bc):
-        #import pdb; pdb.set_trace()
-        if bc.prev == None:
-            self.bytecodes = bc.next
-        if bc in self.incoming_jumps:
-            assert bc.next
-            self.incoming_jumps[bc.next] = self.incoming_jumps[bc]
-            for bc_ in self.incoming_jumps[bc.next]:
-                bc_.updateTargetBytecode(bc, bc.next)
-            del self.incoming_jumps[bc]
-        bc.remove()
-
-    def analyze(self, *args):
-        for i in range(len(args)):
-            self.args[i].type = type(args[i])
-        logging.debug("Analysis of " + str(self.f) + "(" + str(self.args) + ")")
-
-        logging.debug("Disassembling")
-        self.disassemble()
-
-        logging.debug("Building Intra-Flowgraph")
-        self.intraflow()
-
+    def stack_to_register(self):
         logging.debug("Stack->Register Conversion")
         stack = Stack()
         self.todo.push((self.bytecodes, stack))
@@ -140,6 +119,10 @@ class Function(object):
                 #       See also codegen.Program.__init__
                 if bc.next and not isinstance(bc, BlockTerminal):
                     self.todo.push((bc.next, stack))
+                    if isinstance(bc, Block):
+                        # the next instruction after the block is now already on the todo list,
+                        # but first lets work inside the block
+                        self.todo.push((bc.blockContent(), stack))
                 else:
                     logging.debug("Reached EOP.")
                     assert stack.empty()
@@ -149,6 +132,7 @@ class Function(object):
                 for (bc_, stack_) in r:
                     self.todo.push((bc_, stack_))
 
+    def type_analysis(self):
         logging.debug("Type Analysis")
         self.todo.push(self.bytecodes)
 
@@ -177,6 +161,32 @@ class Function(object):
         #logging.debug("last bytecode: " + str(self.bytecodes[-1]))
         logging.debug("returning type " + str(self.result.type))
 
+
+    def remove(self, bc):
+        #import pdb; pdb.set_trace()
+        if bc.prev == None:
+            self.bytecodes = bc.next
+        if bc in self.incoming_jumps:
+            assert bc.next
+            self.incoming_jumps[bc.next] = self.incoming_jumps[bc]
+            for bc_ in self.incoming_jumps[bc.next]:
+                bc_.updateTargetBytecode(bc, bc.next)
+            del self.incoming_jumps[bc]
+        bc.remove()
+
+    def analyze(self, *args):
+        for i in range(len(args)):
+            self.args[i].type = type(args[i])
+        logging.debug("Analysis of " + str(self.f) + "(" + str(self.args) + ")")
+
+        self.disassemble()
+
+        self.intraflow()
+
+        self.stack_to_register()
+
+        self.type_analysis()
+
         #logging.debug("PyStack bytecode:")
         #import pdb; pdb.set_trace()
         #for bc in self.bytecodes:
@@ -184,6 +194,8 @@ class Function(object):
 
     def disassemble(self):
         """Disassemble a code object."""
+        logging.debug("Disassembling")
+
         lasti=-1
         co = self.f.__code__
         code = co.co_code
