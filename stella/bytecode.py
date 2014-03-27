@@ -498,12 +498,9 @@ class RETURN_VALUE(BlockTerminal, Bytecode):
     def translate(self, module, builder):
         builder.ret(self.args[0].llvm)
 
-class Jump(BlockTerminal, IR):
+class HasTarget(object):
     target_label = None
     target_bc = None
-    def __init__(self, func, debuginfo):
-        super().__init__(func, debuginfo)
-
     def setTargetBytecode(self, bc):
         #import pdb; pdb.set_trace()
         self.target_bc = bc
@@ -514,6 +511,17 @@ class Jump(BlockTerminal, IR):
     def setTarget(self, label):
         self.target_label = label
 
+    def __str__(self):
+        return "{0} {1} {2}".format(
+                    self.__class__.__name__,
+                    self.target_label,
+                    ", ".join([str(v) for v in self.args]))
+
+
+class Jump(BlockTerminal, HasTarget, IR):
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
     def processFallThrough(self):
         return False
 
@@ -523,12 +531,6 @@ class Jump(BlockTerminal, IR):
 
     def type_eval(self,func):
         pass
-
-    def __str__(self):
-        return "{0} {1} {2}".format(
-                    self.__class__.__name__,
-                    self.target_label,
-                    ", ".join([str(v) for v in self.args]))
 
     def translate(self, module, builder):
         builder.branch(self.target_bc.block)
@@ -620,7 +622,7 @@ class POP_JUMP_IF_TRUE(Pop_jump_if_X, Bytecode):
     def translate(self, module, builder):
         builder.cbranch(self.args[0].llvm, self.target_bc.block, self.next.block)
 
-class SETUP_LOOP(Bytecode):
+class SETUP_LOOP(Block, HasTarget, Bytecode):
     discard = True
 
     def __init__(self, func, debuginfo):
@@ -635,7 +637,7 @@ class SETUP_LOOP(Bytecode):
     def type_eval(self, func):
         pass
 
-class POP_BLOCK(Bytecode):
+class POP_BLOCK(BlockEnd, Bytecode):
     discard = True
 
     def __init__(self, func, debuginfo):
@@ -649,6 +651,80 @@ class POP_BLOCK(Bytecode):
 
     def type_eval(self, func):
         pass
+
+class LOAD_GLOBAL(Bytecode):
+    discard = True
+
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    def addName(self, name):
+        self.args.append(name)
+
+    def stack_eval(self, func, stack):
+        pass
+
+    def translate(self, module, builder):
+        pass
+
+    def type_eval(self, func):
+        pass
+
+class CALL_FUNCTION(Bytecode):
+    """WIP"""
+    discard = True
+
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    def stack_eval(self, func, stack):
+        pass
+
+    def translate(self, module, builder):
+        pass
+
+    def type_eval(self, func):
+        pass
+
+class GET_ITER(Bytecode):
+    """WIP"""
+    discard = True
+
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    def stack_eval(self, func, stack):
+        pass
+
+    def translate(self, module, builder):
+        pass
+
+    def type_eval(self, func):
+        pass
+
+class FOR_ITER(HasTarget, Bytecode):
+    """WIP"""
+    discard = True
+
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    def stack_eval(self, func, stack):
+        pass
+
+    def translate(self, module, builder):
+        pass
+
+    def type_eval(self, func):
+        pass
+
+class JUMP_ABSOLUTE(Jump, Bytecode):
+    """WIP"""
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+
+#---
 
 opconst = {}
 # Get all contrete subclasses of Bytecode and register them

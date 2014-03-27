@@ -3,4 +3,4 @@ from test.langconstr import *
 
 def current_work():
     #stella(simple_assignment, debug='print')(40, 2)
-    stella(and_, debug='print')(True, False)
+    stella(for1, debug='print')(3)

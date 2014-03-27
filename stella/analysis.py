@@ -194,6 +194,7 @@ class Function(object):
         extended_arg = 0
         free = None
         line = 0
+        self.blocks = Stack('blocks')
         self.last_bc = None
         while i < n:
             op = code[i]
@@ -208,12 +209,18 @@ class Function(object):
                 raise UnsupportedOpcode(op, di)
             #import pdb; pdb.set_trace()
             bc.loc = i
-            #self.incoming_jumps[bc] = []
+
             if self.last_bc == None:
                 self.bytecodes = bc
             else:
                 self.last_bc.insert_after(bc)
             self.last_bc = bc
+
+            if isinstance(bc, Block):
+                self.blocks.push(bc)
+                self.last_bc = bc.blockStart()
+            elif isinstance(bc, BlockEnd):
+                self.last_bc = self.blocks.pop()
 
             if i in labels:
                 self.labels[i] = bc
@@ -234,7 +241,7 @@ class Function(object):
                         bc.addConst(co.co_consts[oparg])
                     elif op in dis.hasname:
                         #print('(' + co.co_names[oparg] + ')', end=' ')
-                        raise UnimplementedError('hasname')
+                        bc.addName(co.co_names[oparg])
                     elif op in dis.hasjrel:
                         #print('(to ' + repr(i + oparg) + ')', end=' ')
                         bc.setTarget(i+oparg)
