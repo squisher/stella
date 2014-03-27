@@ -61,6 +61,46 @@ class Function(object):
         else:
             self.incoming_jumps[target_bc] = [source_bc]
 
+    def rewrite(self):
+        logging.debug("Rewriting (peephole optimizations)")
+        for bc in self.bytecodes:
+            if isinstance(bc, FOR_ITER):
+                cur = bc.prev
+                if not isinstance(cur, GET_ITER):
+                    raise UnimplementedError('unsupported for loop')
+                cur.remove()
+                cur = bc.prev
+                if not isinstance(cur, CALL_FUNCTION):
+                    raise UnimplementedError('unsupported for loop')
+                cur.remove()
+                cur = bc.prev
+                if not isinstance(cur, LOAD_FAST):
+                    raise UnimplementedError('unsupported for loop')
+                limit = cur.args[0]
+                cur.remove()
+                cur = bc.prev
+                if not isinstance(cur, LOAD_GLOBAL):
+                    raise UnimplementedError('unsupported for loop')
+                cur.remove()
+                cur = bc.prev
+                if not isinstance(cur, SETUP_LOOP):
+                    raise UnimplementedError('unsupported for loop')
+                cur.remove()
+
+                cur = bc.next
+                if not isinstance(cur, STORE_FAST):
+                    raise UnimplementedError('unsupported for loop')
+                loop_var = cur.args[0]
+                cur.remove()
+
+                for_loop = ForLoop(self, bc.debuginfo)
+                for_loop.setLoopVar(loop_var)
+                for_loop.setLimit(limit)
+
+                bc.insert_after(for_loop)
+                self.remove(bc)
+
+
     def intraflow(self):
         logging.debug("Building Intra-Flowgraph")
         for bc in self.bytecodes:
@@ -181,6 +221,8 @@ class Function(object):
 
         self.disassemble()
 
+        self.rewrite()
+
         self.intraflow()
 
         self.stack_to_register()
@@ -228,9 +270,9 @@ class Function(object):
                 self.last_bc.insert_after(bc)
             self.last_bc = bc
 
-            if isinstance(bc, Block):
-                self.blocks.push(bc)
-                self.last_bc = bc.blockStart()
+            if isinstance(bc, BlockStart):
+                block = Block(bc)
+                self.blocks.push(block)
             elif isinstance(bc, BlockEnd):
                 self.last_bc = self.blocks.pop()
 

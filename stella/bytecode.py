@@ -622,7 +622,7 @@ class POP_JUMP_IF_TRUE(Pop_jump_if_X, Bytecode):
     def translate(self, module, builder):
         builder.cbranch(self.args[0].llvm, self.target_bc.block, self.next.block)
 
-class SETUP_LOOP(Block, HasTarget, Bytecode):
+class SETUP_LOOP(BlockStart, HasTarget, Bytecode):
     discard = True
 
     def __init__(self, func, debuginfo):
@@ -724,6 +724,23 @@ class JUMP_ABSOLUTE(Jump, Bytecode):
         super().__init__(func, debuginfo)
 
 
+class ForLoop(IR):
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    def setLoopVar(self, loop_var):
+        self.loop_var = loop_var
+    def setLimit(self, limit):
+        self.limit = limit
+
+    def stack_eval(self, func, stack):
+        pass
+
+    def translate(self, module, builder):
+        pass
+
+    def type_eval(self, func):
+        pass
 #---
 
 opconst = {}

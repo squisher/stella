@@ -97,11 +97,11 @@ def linkedlist(klass):
 class Block(object):
     """A block is a nested list of bytecodes."""
     _block_start = None
-    def blockStart(self):
-        self._block_start = BlockStart()
-        return self._block_start
+    def __init__(self, bc):
+        self._block_start = bc
+
     def blockContent(self):
-        return self._block_start.next
+        return self._block_start
 
 @linkedlist
 class BlockStart(object):
