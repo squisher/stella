@@ -38,3 +38,5 @@ In [1]: dis(for1)
  44     >>   39 LOAD_FAST                1 (r) 
              42 RETURN_VALUE         
 ```
+
+_Idea_: use disassemble to create the bytecodes for the init, test and increment part of the for loop
