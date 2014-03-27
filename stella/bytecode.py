@@ -4,6 +4,7 @@ import sys
 
 from .llvm import *
 from .exc import *
+from .utils import *
 from abc import ABCMeta, abstractmethod, abstractproperty
 from llvm.core import INTR_FLOOR
 
@@ -115,62 +116,6 @@ def pop_stack(n):
             return f(self, func, stack)
         return extract_from_stack
     return extract_n
-
-class LinkedListIter(object):
-    def __init__(self, start):
-        self.next = start
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        if self.next == None:
-            raise StopIteration()
-        current = self.next
-        self.next = self.next.next
-        return current
-
-def linkedlist(klass):
-    klass.next = None
-    klass.prev = None
-
-    def __iter__(self):
-        return LinkedListIter(self)
-    klass.__iter__ = __iter__
-
-    def printAll(self):
-        """Debugging: print all IRs in this list"""
-
-        # find the first bytecode
-        bc_start = self
-        while bc_start.prev != None:
-            bc_start = bc_start.prev
-
-        for bc in bc_start:
-            logging.debug(str(bc))
-    klass.printAll = printAll
-    
-    def insert_after(self, bc):
-        self.next = bc
-        bc.prev = self
-    klass.insert_after = insert_after
-
-    def insert_before(self, bc):
-        bc.prev = self.prev
-        bc.next = self
-
-        bc.prev.next = bc
-        self.prev = bc
-    klass.insert_before = insert_before
-
-    def remove(self):
-        if self.prev:
-            self.prev.next = self.next
-        if self.next:
-            self.next.prev = self.prev
-    klass.remove = remove
-
-    return klass
 
 @linkedlist
 class IR(metaclass=ABCMeta):
@@ -674,6 +619,36 @@ class POP_JUMP_IF_TRUE(Pop_jump_if_X, Bytecode):
 
     def translate(self, module, builder):
         builder.cbranch(self.args[0].llvm, self.target_bc.block, self.next.block)
+
+class SETUP_LOOP(Bytecode):
+    discard = True
+
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    def stack_eval(self, func, stack):
+        pass
+
+    def translate(self, module, builder):
+        pass
+
+    def type_eval(self, func):
+        pass
+
+class POP_BLOCK(Bytecode):
+    discard = True
+
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    def stack_eval(self, func, stack):
+        pass
+
+    def translate(self, module, builder):
+        pass
+
+    def type_eval(self, func):
+        pass
 
 opconst = {}
 # Get all contrete subclasses of Bytecode and register them

@@ -15,31 +15,6 @@ class DebugInfo(object):
     def __str__(self):
         return self.filename + ':' + str(self.line)
 
-class Stack(object):
-    backend = None
-    def __init__(self, name="Stack"):
-        self.backend = []
-        self.name = name
-    def __str__(self):
-        return "["+self.name+"("+str(len(self.backend))+")]"
-    def __repr__(self):
-        return "["+self.name+"="+", ".join([str(x) for x in self.backend])+"]"
-    def push(self, item):
-        logging.debug("["+self.name+"] Pushing " + str(item))
-        self.backend.append(item)
-    def pop(self):
-        item = self.backend.pop()
-        logging.debug("["+self.name+"] Popping " + str(item))
-        return item
-    def peek(self):
-        return self.backend[-1]
-    def empty(self):
-        return len(self.backend) == 0
-    def clone(self):
-        s = Stack(self.name)
-        s.backend = [x for x in self.backend]
-        return s
-
 class Function(object):
     def __init__(self, f):
         self.registers= dict()
