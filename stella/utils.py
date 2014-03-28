@@ -72,6 +72,9 @@ def linkedlist(klass):
     klass.printAll = printAll
     
     def insert_after(self, bc):
+        bc.next = self.next
+        if bc.next:
+            bc.next.prev = bc
         self.next = bc
         bc.prev = self
     klass.insert_after = insert_after

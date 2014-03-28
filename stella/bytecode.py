@@ -734,13 +734,15 @@ class ForLoop(IR):
         self.limit = limit
 
     def stack_eval(self, func, stack):
-        pass
+        self.result = func.getOrNewRegister(self.loop_var)
+        stack.push(self.result)
 
     def translate(self, module, builder):
         pass
 
     def type_eval(self, func):
-        pass
+        self.result.unify_type(int, self.debuginfo)
+
 #---
 
 opconst = {}

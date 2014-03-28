@@ -93,12 +93,15 @@ class Function(object):
                 loop_var = cur.args[0]
                 cur.remove()
 
+                import pdb; pdb.set_trace()
                 for_loop = ForLoop(self, bc.debuginfo)
                 for_loop.setLoopVar(loop_var)
                 for_loop.setLimit(limit)
 
                 bc.insert_after(for_loop)
                 self.remove(bc)
+
+        self.bytecodes.printAll()
 
 
     def intraflow(self):
