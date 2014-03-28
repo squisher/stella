@@ -41,19 +41,18 @@ class LinkedListIter(object):
             raise StopIteration()
 
         if isinstance(self.next, Block):
-            # TODO this doesn't allow empty blocks
-            current = self.next._block_start.next
-            self.stack.push(self.next)
-        else:
-            current = self.next
+            self.stack.push(self.next.next)
+            self.next = self.next._block_start
+            return self.__next__()
 
-
-        self.next = current.next
+        current = self.next
+        self.next = self.next.next
         return current
 
 def linkedlist(klass):
     klass.next = None
     klass.prev = None
+    klass._block_parent = None
 
     def __iter__(self):
         return LinkedListIter(self)
@@ -92,7 +91,18 @@ def linkedlist(klass):
             self.prev.next = self.next
         if self.next:
             self.next.prev = self.prev
+            if self.blockStart():
+                # Move the block start attribute over to the next
+                self.next.blockStart(self.blockStart())
     klass.remove = remove
+
+    def blockStart(self, new_parent = None):
+        """Get the block parent, or set a new block parent."""
+        if new_parent == None:
+            return self._block_parent
+        new_parent._block_start = self
+        self._block_parent = new_parent
+    klass.blockStart = blockStart
 
     return klass
 
@@ -102,15 +112,16 @@ class Block(object):
     _block_start = None
     def __init__(self, bc):
         self._block_start = bc
+        bc._block_parent = self
 
     def blockContent(self):
         return self._block_start
 
 @linkedlist
 class BlockStart(object):
-    """Dummy start object, ignore when iterating.
+    """Marks the start of a block of nested bytecodes.
     
-    This is only used to make the insertion code easier."""
+    Enables checks via multiple inheritance."""
     pass
 
 class BlockEnd(object):

@@ -62,6 +62,7 @@ class Function(object):
             self.incoming_jumps[target_bc] = [source_bc]
 
     def rewrite(self):
+        self.bytecodes.printAll()
         logging.debug("Rewriting (peephole optimizations)")
         for bc in self.bytecodes:
             if isinstance(bc, FOR_ITER):
@@ -85,6 +86,7 @@ class Function(object):
                 cur = bc.prev
                 if not isinstance(cur, SETUP_LOOP):
                     raise UnimplementedError('unsupported for loop')
+                #import pdb; pdb.set_trace()
                 cur.remove()
 
                 cur = bc.next
@@ -93,7 +95,6 @@ class Function(object):
                 loop_var = cur.args[0]
                 cur.remove()
 
-                import pdb; pdb.set_trace()
                 for_loop = ForLoop(self, bc.debuginfo)
                 for_loop.setLoopVar(loop_var)
                 for_loop.setLimit(limit)
@@ -150,6 +151,10 @@ class Function(object):
 
         while not self.todo.empty():
             (bc, stack) = self.todo.pop()
+
+            if isinstance(bc, Block):
+                bc = bc.blockContent()
+
             r = bc.stack_eval(self, stack)
             if r == None:
                 # default case: no control flow diversion, just continue with the next
@@ -207,8 +212,9 @@ class Function(object):
 
     def remove(self, bc):
         #import pdb; pdb.set_trace()
-        if bc.prev == None:
+        if bc == self.bytecodes:
             self.bytecodes = bc.next
+
         if bc in self.incoming_jumps:
             assert bc.next
             self.incoming_jumps[bc.next] = self.incoming_jumps[bc]
@@ -267,18 +273,6 @@ class Function(object):
             #import pdb; pdb.set_trace()
             bc.loc = i
 
-            if self.last_bc == None:
-                self.bytecodes = bc
-            else:
-                self.last_bc.insert_after(bc)
-            self.last_bc = bc
-
-            if isinstance(bc, BlockStart):
-                block = Block(bc)
-                self.blocks.push(block)
-            elif isinstance(bc, BlockEnd):
-                self.last_bc = self.blocks.pop()
-
             if i in labels:
                 self.labels[i] = bc
 
@@ -322,6 +316,21 @@ class Function(object):
                 e.addDebug(di)
                 raise
 
+            if isinstance(bc, BlockStart):
+                block = Block(bc)
+                self.blocks.push(block)
+                bc = block
+            elif isinstance(bc, BlockEnd):
+                self.last_bc = self.blocks.pop()
+
+            if self.last_bc == None:
+                self.bytecodes = bc
+            else:
+                self.last_bc.insert_after(bc)
+            self.last_bc = bc
+
+            if isinstance(bc, Block):
+                self.last_bc = bc.blockContent()
 
 def main(f, *args):
     f = Function(f)
