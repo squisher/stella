@@ -40,3 +40,17 @@ In [1]: dis(for1)
 ```
 
 _Idea_: use disassemble to create the bytecodes for the init, test and increment part of the for loop
+```for i in range(x):```
+=>
+```
+i=0 # init
+
+if i>=x then jump end :test
+
+$body
+
+i=i+1
+jump test
+
+:end
+```

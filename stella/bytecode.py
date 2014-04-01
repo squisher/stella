@@ -733,9 +733,39 @@ class ForLoop(IR):
     def setLimit(self, limit):
         self.limit = limit
 
+    def rewrite(self, func, insertion_point):
+        b = LOAD_CONST(func, self.debuginfo)
+        b.addArg(Const(0))
+        # prepend
+        b = LOAD_FAST(func, self.debuginfo)
+        b.addArg(func.getRegister(self.loop_var))
+        # prepend
+        b = COMPARE_OP(func, self.debuginfo)
+        b.addCmp('>=')
+        # prepend
+        b = JUMP_IF_FALSE_OR_POP(func, self.debuginfo)
+        b.setTarget(end_loc)
+        # target bytecode => from jumps
+        # prepend
+
+        # $body, keep
+
+        b = LOAD_FAST(func, self.debuginfo)
+        b.addArg(func.getRegister(self.loop_var))
+        # append
+        b = LOAD_CONST(Const(1))
+        # append
+        b = ADD_INPLACE(func, self.debuginfo)
+        # append
+
+        # JUMP to COMPARE_OP is already part of the bytecodes
+
+        
+
     def stack_eval(self, func, stack):
-        self.result = func.getOrNewRegister(self.loop_var)
-        stack.push(self.result)
+        #self.result = func.getOrNewRegister(self.loop_var)
+        #stack.push(self.result)
+        pass
 
     def translate(self, module, builder):
         pass

@@ -63,11 +63,17 @@ def linkedlist(klass):
 
         # find the first bytecode
         bc_start = self
-        while bc_start.prev != None:
-            bc_start = bc_start.prev
+        while True:
+            while bc_start.prev != None:
+                bc_start = bc_start.prev
+            if bc_start._block_parent == None:
+                break
+            else:
+                bc_start = bc_start._block_parent
 
         for bc in bc_start:
-            logging.debug(str(bc))
+            #logging.debug(str(bc))
+            logging.debug(bc.locStr())
     klass.printAll = printAll
     
     def insert_after(self, bc):

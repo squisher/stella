@@ -96,6 +96,7 @@ class Function(object):
                 cur.remove()
 
                 for_loop = ForLoop(self, bc.debuginfo)
+                # TODO set location for for_loop and transfer jumps!
                 for_loop.setLoopVar(loop_var)
                 for_loop.setLimit(limit)
 
