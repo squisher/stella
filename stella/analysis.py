@@ -86,6 +86,7 @@ class Function(object):
                 cur = bc.prev
                 if not isinstance(cur, SETUP_LOOP):
                     raise UnimplementedError('unsupported for loop')
+                end_loc = cur.target_label
                 #import pdb; pdb.set_trace()
                 cur.remove()
 
@@ -99,9 +100,12 @@ class Function(object):
                 # TODO set location for for_loop and transfer jumps!
                 for_loop.setLoopVar(loop_var)
                 for_loop.setLimit(limit)
+                for_loop.setEndLoc(end_loc)
 
                 bc.insert_after(for_loop)
                 self.remove(bc)
+
+                for_loop.rewrite(self)
 
         self.bytecodes.printAll()
 

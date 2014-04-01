@@ -20,19 +20,19 @@ In [1]: dis(for1)
  41           0 LOAD_CONST               1 (0) 
               3 STORE_FAST               1 (r) 
 
- 42           6 SETUP_LOOP              30 (to 39) 
-              9 LOAD_GLOBAL              0 (range) 
+ 42           6 SETUP_LOOP              30 (to 39)      ForLoop
+              9 LOAD_GLOBAL              0 (range)      $init
              12 LOAD_FAST                0 (x) 
              15 CALL_FUNCTION            1 
              18 GET_ITER             
-        >>   19 FOR_ITER                16 (to 38) 
+        >>   19 FOR_ITER                16 (to 38)      
              22 STORE_FAST               2 (i) 
 
- 43          25 LOAD_FAST                1 (r) 
+ 43          25 LOAD_FAST                1 (r)          $body
              28 LOAD_FAST                2 (i) 
              31 INPLACE_ADD          
              32 STORE_FAST               1 (r) 
-             35 JUMP_ABSOLUTE           19 
+             35 JUMP_ABSOLUTE           19              $jump, move down one, place test and increment here
         >>   38 POP_BLOCK            
 
  44     >>   39 LOAD_FAST                1 (r) 
@@ -41,6 +41,7 @@ In [1]: dis(for1)
 
 _Idea_: use disassemble to create the bytecodes for the init, test and increment part of the for loop
 ```for i in range(x):```
+is not flexible enough
 =>
 ```
 i=0 # init

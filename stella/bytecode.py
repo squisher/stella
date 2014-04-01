@@ -732,31 +732,53 @@ class ForLoop(IR):
         self.loop_var = loop_var
     def setLimit(self, limit):
         self.limit = limit
+    def setEndLoc(self, end_loc):
+        self.end_loc = end_loc
 
-    def rewrite(self, func, insertion_point):
+    def rewrite(self, func):
+        last = self
+
         b = LOAD_CONST(func, self.debuginfo)
         b.addArg(Const(0))
-        # prepend
+        self.insert_after(last)
+        last = b
+
+        b = STORE_FAST(func, self.debuginfo)
+        b.addArg(func.getOrNewRegister(self.loop_var))
+        self.insert_after(last)
+        last = b
+
         b = LOAD_FAST(func, self.debuginfo)
         b.addArg(func.getRegister(self.loop_var))
-        # prepend
+        self.insert_after(last)
+        last = b
+
         b = COMPARE_OP(func, self.debuginfo)
         b.addCmp('>=')
-        # prepend
-        b = JUMP_IF_FALSE_OR_POP(func, self.debuginfo)
-        b.setTarget(end_loc)
-        # target bytecode => from jumps
-        # prepend
+        self.insert_after(last)
+        last = b
 
-        # $body, keep
+        b = JUMP_IF_FALSE_OR_POP(func, self.debuginfo)
+        b.setTarget(self.end_loc)
+        self.insert_after(last)
+        last = b
+
+        # $body, keep, find the end of it
+        while b.next != None:
+            b = b.next
+        assert isinstance(b, BlockEnd)
+        # go back to the JUMP
+        last = b.prev
 
         b = LOAD_FAST(func, self.debuginfo)
         b.addArg(func.getRegister(self.loop_var))
-        # append
+        last.insert_before(b)
+
         b = LOAD_CONST(Const(1))
-        # append
+        last.insert_before(b)
+
         b = ADD_INPLACE(func, self.debuginfo)
-        # append
+        last.insert_before(b)
 
         # JUMP to COMPARE_OP is already part of the bytecodes
 
@@ -771,7 +793,8 @@ class ForLoop(IR):
         pass
 
     def type_eval(self, func):
-        self.result.unify_type(int, self.debuginfo)
+        #self.result.unify_type(int, self.debuginfo)
+        pass
 
 #---
 
