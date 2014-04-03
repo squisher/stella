@@ -184,17 +184,22 @@ class PhiNode(IR):
         self.result = Register(func)
         self.blocks = []
 
-    @pop_stack(1)
     def stack_eval(self, func, stack):
-        self.blocks.append(self.args[-1].bc)
-        stack.push(self.result)
+        tos = stack.peek()
+        if tos:
+            self.args.append(stack.pop())
+            self.blocks.append(self.args[-1].bc)
+            stack.push(self.result)
 
     def type_eval(self, func):
+        if len(self.args) == 0:
+            return
         for arg in self.args:
             self.result.unify_type(arg.type, self.debuginfo)
 
-
     def translate(self, module, builder):
+        if len(self.args) == 0:
+            return
         phi = builder.phi(py_type_to_llvm(self.result.type), self.result.name)
         for arg in self.args:
             phi.add_incoming(arg.llvm, arg.bc.block)
