@@ -78,6 +78,9 @@ def linkedlist(klass):
     klass.printAll = printAll
     
     def insert_after(self, bc):
+        """Insert bc after self.
+
+        Note: block start and end are not adjusted here! They're only checked at remove()"""
         bc.next = self.next
         if bc.next:
             bc.next.prev = bc
@@ -86,6 +89,9 @@ def linkedlist(klass):
     klass.insert_after = insert_after
 
     def insert_before(self, bc):
+        """Insert bc before self.
+
+        Note: block start and end are not adjusted here! They're only checked at remove()"""
         bc.prev = self.prev
         bc.next = self
 
@@ -94,13 +100,16 @@ def linkedlist(klass):
     klass.insert_before = insert_before
 
     def remove(self):
-        if self.prev:
-            self.prev.next = self.next
         if self.next:
             self.next.prev = self.prev
             if self.blockStart():
                 # Move the block start attribute over to the next
                 self.next.blockStart(self.blockStart())
+        if self.prev:
+            self.prev.next = self.next
+            if self.blockEnd():
+                # Move the block end attribute over to the prev
+                self.prev.blockEnd(self.blockEnd())
     klass.remove = remove
 
     def blockStart(self, new_parent = None):
@@ -114,12 +123,37 @@ def linkedlist(klass):
         self._block_parent = new_parent
     klass.blockStart = blockStart
 
+    def blockEnd(self, new_parent = None):
+        """Get the block parent, or set a new block parent."""
+        if new_parent == None:
+            return self._block_parent
+
+        # Update the block's end
+        new_parent._block_end = self
+        # Remember the block
+        self._block_parent = new_parent
+    klass.blockEnd = blockEnd
+
+    def linearPrev(self):
+        """Move to the previous bytecode, transparently handling blocks"""
+        # TODO should this be its own iterator?
+        if self.prev == None:
+            if self._block_parent:
+                return self._block_parent.prev
+            else:
+                return None
+        if isinstance(self.prev, Block):
+            return self.prev._block_end
+        return self.prev
+    klass.linearPrev = linearPrev
+
     return klass
 
 @linkedlist
 class Block(object):
     """A block is a nested list of bytecodes."""
     _block_start = None
+    _block_end = None
     def __init__(self, bc):
         self._block_start = bc
         bc._block_parent = self

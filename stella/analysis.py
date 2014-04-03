@@ -61,7 +61,7 @@ class Function(object):
 
     def rewrite(self):
         self.bytecodes.printAll()
-        logging.debug("Rewriting (peephole optimizations)")
+        logging.debug("Rewriting (peephole optimizations) ------------------------------")
         for bc in self.bytecodes:
             if isinstance(bc, FOR_ITER):
                 cur = bc.prev
@@ -111,7 +111,7 @@ class Function(object):
 
 
     def intraflow(self):
-        logging.debug("Building Intra-Flowgraph")
+        logging.debug("Building Intra-Flowgraph ------------------------------")
         for bc in self.bytecodes:
             if isinstance(bc, Jump):
                 if bc.processFallThrough():
@@ -122,7 +122,8 @@ class Function(object):
 
         for bc in self.bytecodes:
             if bc in self.incoming_jumps:
-                if not isinstance(bc.prev, BlockTerminal):
+                if not isinstance(bc.linearPrev(), BlockTerminal):
+                    #import pdb; pdb.set_trace()
                     #logging.debug("PREV_TYPE " + str(type(bc.prev)))
                     bc_ = Jump(self, bc.debuginfo)
                     bc_.loc = ''
@@ -150,7 +151,7 @@ class Function(object):
                     #import pdb; pdb.set_trace()
 
     def stack_to_register(self):
-        logging.debug("Stack->Register Conversion")
+        logging.debug("Stack->Register Conversion ------------------------------")
         stack = Stack()
         self.todo.push((self.bytecodes, stack))
 
@@ -186,7 +187,7 @@ class Function(object):
                     self.todo.push((bc_, stack_))
 
     def type_analysis(self):
-        logging.debug("Type Analysis")
+        logging.debug("Type Analysis ------------------------------")
         self.todo.push(self.bytecodes)
 
         i = 0
@@ -239,6 +240,8 @@ class Function(object):
 
         self.intraflow()
 
+        self.bytecodes.printAll()
+
         self.stack_to_register()
 
         self.type_analysis()
@@ -250,7 +253,7 @@ class Function(object):
 
     def disassemble(self):
         """Disassemble a code object."""
-        logging.debug("Disassembling")
+        logging.debug("Disassembling ------------------------------")
 
         lasti=-1
         co = self.f.__code__
@@ -322,9 +325,14 @@ class Function(object):
                 raise
 
             if isinstance(bc, BlockStart):
+                # Start of a block.
+                # The current bc gets added as the first within the block
                 block = Block(bc)
                 self.blocks.push(block)
+                # Then handle the block as any regular bytecode
+                # so that it will be registered appropriately
                 bc = block
+                # Note the instance(bc, Block) below
 
             if self.last_bc == None:
                 self.bytecodes = bc
@@ -332,10 +340,15 @@ class Function(object):
                 self.last_bc.insert_after(bc)
             self.last_bc = bc
 
-            if isinstance(bc, BlockEnd):
-                self.last_bc = self.blocks.pop()
-            elif isinstance(bc, Block):
+            if isinstance(bc, Block):
+                # Block is inserted, now switch back to appending to the block content
                 self.last_bc = bc.blockContent()
+            elif isinstance(bc, BlockEnd):
+                # Block end, install the block itself as last_bc
+                # so that the next instruction is added outside tho block
+                self.last_bc = self.blocks.pop()
+                # mark the instruction as being the last of the block
+                bc.blockEnd(self.last_bc)
 
 def main(f, *args):
     f = Function(f)
