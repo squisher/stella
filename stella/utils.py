@@ -17,7 +17,10 @@ class Stack(object):
         logging.debug("["+self.name+"] Popping " + str(item))
         return item
     def peek(self):
-        return self.backend[-1]
+        if len(self.backend) > 0:
+            return self.backend[-1]
+        else:
+            return None
     def empty(self):
         return len(self.backend) == 0
     def clone(self):

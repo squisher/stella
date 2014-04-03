@@ -527,7 +527,9 @@ class Jump(BlockTerminal, HasTarget, IR):
         return False
 
     def stack_eval(self, func, stack):
-        stack.peek().bc = self
+        tos = stack.peek()
+        if tos:
+            tos.bc = self
         return [(self.target_bc, stack)]
 
     def type_eval(self,func):
@@ -562,7 +564,9 @@ class Jump_if_X_or_pop(Jump):
         # else continue with the next instruction (and keep the popped value)
         if not stack2.empty():
             # TODO: is stack2 always empty?
-            stack2.peek().bc = self
+            tos = stack2.peek()
+            if tos:
+                tos.bc = self
         r.append((self.next, stack2))
 
         return r
