@@ -125,7 +125,7 @@ class IR(metaclass=ABCMeta):
     debuginfo = None
     llvm = None
     block = None
-    loc = None
+    loc = ''
     discard = False
 
     def __init__(self, func, debuginfo):
@@ -779,12 +779,14 @@ class ForLoop(IR):
         while b.next != None:
             b = b.next
         assert isinstance(b, BlockEnd)
+        #import pdb; pdb.set_trace()
         jump_loc = b.loc
         last = b.prev
         b.remove()
+
         # go back to the JUMP and switch locations
-        incr_loc = b.loc
-        b.loc = jump_loc
+        incr_loc = last.loc
+        last.loc = jump_loc
 
         # increment
         b = LOAD_FAST(func, self.debuginfo)
@@ -792,10 +794,15 @@ class ForLoop(IR):
         b.loc = incr_loc
         last.insert_before(b)
 
-        b = LOAD_CONST(func, Const(1))
+        b = LOAD_CONST(func, self.debuginfo)
+        b.addArg(Const(1))
         last.insert_before(b)
 
         b = INPLACE_ADD(func, self.debuginfo)
+        last.insert_before(b)
+
+        b = STORE_FAST(func, self.debuginfo)
+        b.addArg(self.loop_var)
         last.insert_before(b)
 
         # JUMP to COMPARE_OP is already part of the bytecodes

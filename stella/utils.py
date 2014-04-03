@@ -36,7 +36,8 @@ class LinkedListIter(object):
     def __next__(self):
         if self.next == None:
             if not self.stack.empty():
-                self.next = self.stack.pop().next
+                #import pdb; pdb.set_trace()
+                self.next = self.stack.pop()
                 return self.__next__()
             raise StopIteration()
 
@@ -106,7 +107,10 @@ def linkedlist(klass):
         """Get the block parent, or set a new block parent."""
         if new_parent == None:
             return self._block_parent
+
+        # Update the block's start
         new_parent._block_start = self
+        # Remember the block
         self._block_parent = new_parent
     klass.blockStart = blockStart
 
