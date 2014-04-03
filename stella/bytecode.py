@@ -760,6 +760,7 @@ class ForLoop(IR):
         b = LOAD_FAST(func, self.debuginfo)
         b.addArg(self.loop_var)
         b.loc = self.test_loc
+        func.replaceLocation(b)
         last.insert_after(b)
         last = b
 
@@ -773,7 +774,7 @@ class ForLoop(IR):
         last.insert_after(b)
         last = b
 
-        b = JUMP_IF_FALSE_OR_POP(func, self.debuginfo)
+        b = POP_JUMP_IF_FALSE(func, self.debuginfo)
         b.setTarget(self.end_loc)
         last.insert_after(b)
         last = b
@@ -791,11 +792,13 @@ class ForLoop(IR):
         # go back to the JUMP and switch locations
         incr_loc = last.loc
         last.loc = jump_loc
+        func.replaceLocation(last)
 
         # increment
         b = LOAD_FAST(func, self.debuginfo)
         b.addArg(self.loop_var)
         b.loc = incr_loc
+        func.replaceLocation(b)
         last.insert_before(b)
 
         b = LOAD_CONST(func, self.debuginfo)

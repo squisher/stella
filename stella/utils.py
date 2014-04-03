@@ -137,6 +137,19 @@ def linkedlist(klass):
         self._block_parent = new_parent
     klass.blockEnd = blockEnd
 
+    def linearNext(self):
+        """Move to the previous bytecode, transparently handling blocks"""
+        # TODO should this be its own iterator?
+        if self.next == None:
+            if self._block_parent:
+                return self._block_parent.next
+            else:
+                return None
+        if isinstance(self.next, Block):
+            return self.next.blockContent()
+        return self.next
+    klass.linearNext = linearNext
+
     def linearPrev(self):
         """Move to the previous bytecode, transparently handling blocks"""
         # TODO should this be its own iterator?

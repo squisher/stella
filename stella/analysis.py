@@ -59,6 +59,10 @@ class Function(object):
         else:
             self.incoming_jumps[target_bc] = [source_bc]
 
+    def replaceLocation(self, bc):
+        """Assume that bc.loc points to the new location already."""
+        self.labels[bc.loc] = bc
+
     def rewrite(self):
         self.bytecodes.printAll()
         logging.debug("Rewriting (peephole optimizations) ------------------------------")
@@ -115,7 +119,7 @@ class Function(object):
         for bc in self.bytecodes:
             if isinstance(bc, Jump):
                 if bc.processFallThrough():
-                    self.add_incoming_jump(bc.next, bc)
+                    self.add_incoming_jump(bc.linearNext(), bc)
                 target_bc = self.labels[bc.target_label]
                 bc.setTargetBytecode(target_bc)
                 self.add_incoming_jump(target_bc, bc)
@@ -154,6 +158,7 @@ class Function(object):
         logging.debug("Stack->Register Conversion ------------------------------")
         stack = Stack()
         self.todo.push((self.bytecodes, stack))
+        evaled = set()
 
         while not self.todo.empty():
             (bc, stack) = self.todo.pop()
@@ -162,6 +167,7 @@ class Function(object):
                 bc = bc.blockContent()
 
             r = bc.stack_eval(self, stack)
+            evaled.add(bc)
             if r == None:
                 # default case: no control flow diversion, just continue with the next
                 # instruction in the list
@@ -171,8 +177,8 @@ class Function(object):
                 #       TODO is this the proper way to handle those returns? Any side effects?
                 #            NEEDS REVIEW
                 #       See also codegen.Program.__init__
-                if bc.next and not isinstance(bc, BlockTerminal):
-                    self.todo.push((bc.next, stack))
+                if bc.linearNext() and not isinstance(bc, BlockTerminal):
+                    self.todo.push((bc.linearNext(), stack))
                     if isinstance(bc, Block):
                         # the next instruction after the block is now already on the todo list,
                         # but first lets work inside the block
@@ -184,6 +190,10 @@ class Function(object):
                 # there is (one or more) control flow changes, add them all to the todo list
                 assert isinstance(r, list)
                 for (bc_, stack_) in r:
+                    # don't go back to a bytecode that we already evaluated
+                    # if there are no changes on the stack
+                    if stack_.empty() and bc_ in evaled:
+                        continue
                     self.todo.push((bc_, stack_))
 
     def type_analysis(self):
@@ -201,8 +211,8 @@ class Function(object):
                 logging.debug("TYPE'D " + str(bc))
                 if isinstance(bc, RETURN_VALUE):
                     self.retype(self.result.unify_type(bc.result.type, bc.debuginfo))
-                if isinstance(bc, BlockTerminal) and bc.next != None and bc.next not in self.incoming_jumps:
-                    logging.debug("Unreachable {0}, aborting".format(bc.next))
+                if isinstance(bc, BlockTerminal) and bc.linearNext() != None and bc.linearNext() not in self.incoming_jumps:
+                    logging.debug("Unreachable {0}, aborting".format(bc.linearNext()))
                     break
 
             if self.analyze_again:
@@ -218,6 +228,8 @@ class Function(object):
 
     def remove(self, bc):
         #import pdb; pdb.set_trace()
+
+        # TODO: should any of these .next become .linearNext()?
         if bc == self.bytecodes:
             self.bytecodes = bc.next
 
