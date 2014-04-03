@@ -29,6 +29,7 @@ class Register(Typable):
     def __init__(self, func, name = None):
         super().__init__()
         if name:
+            assert type(name) == str
             self.name = name
         else:
             self.name = func.newRegisterName()
@@ -36,7 +37,7 @@ class Register(Typable):
     def __str__(self):
         return "{0}<{1}>".format(self.name, self.type.__name__)
     def __repr__(self):
-        return 'Reg|'+self.__str__()
+        return self.name
 
 class StackVariable(Register):
     def __init__(self, func, name):
@@ -734,54 +735,70 @@ class ForLoop(IR):
         self.limit = limit
     def setEndLoc(self, end_loc):
         self.end_loc = end_loc
+    def setTestLoc(self, loc):
+        self.test_loc = loc
 
     def rewrite(self, func):
         last = self
 
+        # init
         b = LOAD_CONST(func, self.debuginfo)
         b.addArg(Const(0))
-        self.insert_after(last)
+        last.insert_after(b)
         last = b
 
         b = STORE_FAST(func, self.debuginfo)
-        b.addArg(func.getOrNewRegister(self.loop_var))
-        self.insert_after(last)
+        b.addArg(self.loop_var)
+        last.insert_after(b)
+        last = b
+
+        # test
+        b = LOAD_FAST(func, self.debuginfo)
+        b.addArg(self.loop_var)
+        b.loc = self.test_loc
+        last.insert_after(b)
         last = b
 
         b = LOAD_FAST(func, self.debuginfo)
-        b.addArg(func.getRegister(self.loop_var))
-        self.insert_after(last)
+        b.addArg(self.limit)
+        last.insert_after(b)
         last = b
 
         b = COMPARE_OP(func, self.debuginfo)
         b.addCmp('>=')
-        self.insert_after(last)
+        last.insert_after(b)
         last = b
 
         b = JUMP_IF_FALSE_OR_POP(func, self.debuginfo)
         b.setTarget(self.end_loc)
-        self.insert_after(last)
+        last.insert_after(b)
         last = b
+
 
         # $body, keep, find the end of it
         while b.next != None:
             b = b.next
         assert isinstance(b, BlockEnd)
-        # go back to the JUMP
+        jump_loc = b.loc
         last = b.prev
+        b.remove()
+        # go back to the JUMP and switch locations
+        incr_loc = b.loc
+        b.loc = jump_loc
 
+        # increment
         b = LOAD_FAST(func, self.debuginfo)
-        b.addArg(func.getRegister(self.loop_var))
+        b.addArg(self.loop_var)
+        b.loc = incr_loc
         last.insert_before(b)
 
-        b = LOAD_CONST(Const(1))
+        b = LOAD_CONST(func, Const(1))
         last.insert_before(b)
 
-        b = ADD_INPLACE(func, self.debuginfo)
+        b = INPLACE_ADD(func, self.debuginfo)
         last.insert_before(b)
 
         # JUMP to COMPARE_OP is already part of the bytecodes
-
         
 
     def stack_eval(self, func, stack):

@@ -28,9 +28,7 @@ class Function(object):
 
         self.f = f
         argspec = inspect.getargspec(f)
-        self.args = [Register(self, n) for n in argspec.args]
-        for arg in self.args:
-            self.registers[arg.name] = arg
+        self.args = [self.getOrNewRegister(n) for n in argspec.args]
 
     def getName(self):
         return self.f.__name__
@@ -88,23 +86,25 @@ class Function(object):
                     raise UnimplementedError('unsupported for loop')
                 end_loc = cur.target_label
                 #import pdb; pdb.set_trace()
+
+                for_loop = ForLoop(self, bc.debuginfo)
+                for_loop.loc = cur.loc
+                # TODO set location for for_loop and transfer jumps!
+                for_loop.setLimit(limit)
+                for_loop.setEndLoc(end_loc)
+                for_loop.setTestLoc(bc.loc)
+
+                cur.insert_after(for_loop)
                 cur.remove()
 
                 cur = bc.next
                 if not isinstance(cur, STORE_FAST):
                     raise UnimplementedError('unsupported for loop')
                 loop_var = cur.args[0]
+                for_loop.setLoopVar(loop_var)
                 cur.remove()
 
-                for_loop = ForLoop(self, bc.debuginfo)
-                # TODO set location for for_loop and transfer jumps!
-                for_loop.setLoopVar(loop_var)
-                for_loop.setLimit(limit)
-                for_loop.setEndLoc(end_loc)
-
-                bc.insert_after(for_loop)
-                self.remove(bc)
-
+                bc.remove()
                 for_loop.rewrite(self)
 
         self.bytecodes.printAll()
@@ -325,8 +325,6 @@ class Function(object):
                 block = Block(bc)
                 self.blocks.push(block)
                 bc = block
-            elif isinstance(bc, BlockEnd):
-                self.last_bc = self.blocks.pop()
 
             if self.last_bc == None:
                 self.bytecodes = bc
@@ -334,7 +332,9 @@ class Function(object):
                 self.last_bc.insert_after(bc)
             self.last_bc = bc
 
-            if isinstance(bc, Block):
+            if isinstance(bc, BlockEnd):
+                self.last_bc = self.blocks.pop()
+            elif isinstance(bc, Block):
                 self.last_bc = bc.blockContent()
 
 def main(f, *args):
