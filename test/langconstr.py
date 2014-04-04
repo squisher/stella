@@ -8,6 +8,13 @@ def simple_assignment(x,y):
     a = x + y
     return a
 
+def return_const():
+    return 41
+
+def assign_const():
+    r = 42
+    return r
+
 def double_assignment(x,y):
     a = x
     b = 5 + y
@@ -66,8 +73,12 @@ def test3(f,arg):
 def test4(f,args):
     make_eq_test(f, args)
 
+@mark.parametrize('f', [return_const, assign_const])
+def test5(f):
+    make_eq_test(f, ())
+
 @mark.parametrize('arg', single_args([0, 1, 42]))
 @mark.parametrize('f', [for1])
-def test3(f,arg):
+def test6(f,arg):
     make_eq_test(f, arg)
 

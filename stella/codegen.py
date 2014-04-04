@@ -75,6 +75,7 @@ class Program(object):
         af.bytecodes.printAll()
 
         logging.debug("Emitting code:")
+        #import pdb; pdb.set_trace()
         bb = None
         for bc in af.bytecodes:
             if bb != bc.block:
