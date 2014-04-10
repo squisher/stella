@@ -240,7 +240,9 @@ class STORE_FAST(Bytecode):
 
     def addArgByName(self, func, name):
         # Python does not allocate new names, it just refers to them
-        self.args.append(func.getOrNewRegister(name))
+        (var, self.allocate) = func.getOrNewRegister(name)
+
+        self.args.append(var)
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
@@ -258,8 +260,13 @@ class STORE_FAST(Bytecode):
                 self.args[1] = Cast(arg, self.result.type)
 
     def translate(self, module, builder):
-        self.cast(builder)
-        self.result.llvm = self.args[1].llvm
+        if not self.allocate:
+            self.cast(builder)
+            self.result.llvm = self.args[1].llvm
+        else:
+            # TODO: cast?
+            self.result.llvm = builder.alloca(py_type_to_llvm(self.args[1].type), self.args[1].name)
+            # TODO: Actually load shit later!
 
 class LOAD_CONST(Bytecode):
     discard = True

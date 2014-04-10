@@ -28,7 +28,7 @@ class Function(object):
 
         self.f = f
         argspec = inspect.getargspec(f)
-        self.args = [self.getOrNewRegister(n) for n in argspec.args]
+        self.args = [self.getOrNewRegister(n)[0] for n in argspec.args]
 
     def getName(self):
         return self.f.__name__
@@ -39,9 +39,11 @@ class Function(object):
         return n
 
     def getOrNewRegister(self, name):
+        isnew = False
         if name not in self.registers:
             self.registers[name] = Register(self, name)
-        return self.registers[name]
+            isnew = True
+        return (self.registers[name], isnew)
 
     def getRegister(self, name):
         if name not in self.registers:
