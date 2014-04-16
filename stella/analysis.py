@@ -15,23 +15,14 @@ class DebugInfo(object):
     def __str__(self):
         return self.filename + ':' + str(self.line)
 
-class Function(object):
-    def __init__(self, f):
-        self.registers= dict()
-        self.result = Register(self, '__return__') # TODO possible name conflicts?
-        self.bytecodes = None # pointer to the first bytecode
-        self.labels = {}
-        self.todo = Stack("Todo")
-        self.incoming_jumps = {}
-        self.fellthrough = False
+class Scope(object):
+    """
+    Used to add scope functionality to an object
+    """
+    def __init__(self, parent):
+        self.parent = parent
         self.register_n = 0
-
-        self.f = f
-        argspec = inspect.getargspec(f)
-        self.args = [self.getOrNewRegister(n)[0] for n in argspec.args]
-
-    def getName(self):
-        return self.f.__name__
+        self.registers= dict()
 
     def newRegisterName(self):
         n = str(self.register_n)
@@ -49,6 +40,23 @@ class Function(object):
         if name not in self.registers:
             raise UndefinedError(name)
         return self.registers[name]
+
+class Function(Scope):
+    def __init__(self, f):
+        self.result = Register(self, '__return__')
+        self.bytecodes = None # pointer to the first bytecode
+        self.labels = {}
+        self.todo = Stack("Todo")
+        self.incoming_jumps = {}
+        self.fellthrough = False
+        super(Scope, self).__init__()
+
+        self.f = f
+        argspec = inspect.getargspec(f)
+        self.args = [self.getOrNewRegister(n)[0] for n in argspec.args]
+
+    def getName(self):
+        return self.f.__name__
 
     def retype(self, go = True):
         if go:
