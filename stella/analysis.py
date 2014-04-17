@@ -262,10 +262,14 @@ class Function(Scope):
             self.bytecodes = bc.next
 
         if bc in self.incoming_jumps:
-            assert bc.next
-            self.incoming_jumps[bc.next] = self.incoming_jumps[bc]
-            for bc_ in self.incoming_jumps[bc.next]:
-                bc_.updateTargetBytecode(bc, bc.next)
+            bc_next = bc.next
+            if not bc_next and bc._block_parent:
+                bc_next = bc._block_parent.next
+                # _block_parent will be move with bc.remove() below
+            assert bc_next
+            self.incoming_jumps[bc_next] = self.incoming_jumps[bc]
+            for bc_ in self.incoming_jumps[bc_next]:
+                bc_.updateTargetBytecode(bc, bc_next)
             del self.incoming_jumps[bc]
         bc.remove()
 
