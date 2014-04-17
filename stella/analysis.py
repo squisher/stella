@@ -15,6 +15,10 @@ class DebugInfo(object):
     def __str__(self):
         return self.filename + ':' + str(self.line)
 
+appGlobals = {}
+def getGlobals():
+    return appGlobals
+
 class Scope(object):
     """
     Used to add scope functionality to an object
@@ -69,8 +73,14 @@ class Function(Scope):
         self.arg_names = [n for n in argspec.args]
         self.args = [self.getOrNewRegister('__param_'+n) for n in argspec.args]
 
+        getGlobals()[self.getName()] = self
+
     def getName(self):
         return self.f.__name__
+    def __str__(self):
+        return self.getName()
+    def getGlobals(self):
+        return getGlobals()
 
     def retype(self, go = True):
         if go:

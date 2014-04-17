@@ -702,7 +702,6 @@ class POP_BLOCK(BlockEnd, Bytecode):
         pass
 
 class LOAD_GLOBAL(Poison, Bytecode):
-    discard = True
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
@@ -711,17 +710,20 @@ class LOAD_GLOBAL(Poison, Bytecode):
         self.args.append(name)
 
     def stack_eval(self, func, stack):
-        pass
+        name = self.popFirstArg()
+        self.result = func.getGlobals()[name]
+        stack.push(self.result)
 
     def translate(self, module, builder):
-        pass
+        if type(result) == Function:
+            pass
+        else:
+            raise UnimplementedError("Unknown global type {0}".format(type(self.result)))
 
     def type_eval(self, func):
         pass
 
 class CALL_FUNCTION(Poison, Bytecode):
-    """WIP"""
-    discard = True
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
