@@ -701,7 +701,7 @@ class POP_BLOCK(BlockEnd, Bytecode):
     def type_eval(self, func):
         pass
 
-class LOAD_GLOBAL(Bytecode):
+class LOAD_GLOBAL(Poison, Bytecode):
     discard = True
 
     def __init__(self, func, debuginfo):
@@ -719,53 +719,35 @@ class LOAD_GLOBAL(Bytecode):
     def type_eval(self, func):
         pass
 
-class CALL_FUNCTION(Bytecode):
+class CALL_FUNCTION(Poison, Bytecode):
     """WIP"""
     discard = True
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
-    def stack_eval(self, func, stack):
-        pass
+#    def stack_eval(self, func, stack):
+#        pass
+#
+#    def translate(self, module, builder):
+#        pass
+#
+#    def type_eval(self, func):
+#        pass
 
-    def translate(self, module, builder):
-        pass
-
-    def type_eval(self, func):
-        pass
-
-class GET_ITER(Bytecode):
+class GET_ITER(Poison, Bytecode):
     """WIP"""
     discard = True
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
-    def stack_eval(self, func, stack):
-        pass
-
-    def translate(self, module, builder):
-        pass
-
-    def type_eval(self, func):
-        pass
-
-class FOR_ITER(HasTarget, Bytecode):
+class FOR_ITER(Poison, HasTarget, Bytecode):
     """WIP"""
     discard = True
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
-
-    def stack_eval(self, func, stack):
-        pass
-
-    def translate(self, module, builder):
-        pass
-
-    def type_eval(self, func):
-        pass
 
 class JUMP_ABSOLUTE(Jump, Bytecode):
     """WIP"""
