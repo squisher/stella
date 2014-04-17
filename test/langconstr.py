@@ -50,6 +50,21 @@ def for1(x):
         r += i
     return r
 
+def for2(x):
+    r = 0
+    s = 1
+    for i in range(x):
+        r += i
+        s *= 2
+    return r+s
+
+def while1(x):
+    r = 0
+    while x>0:
+        r += x
+        x -= 1
+    return r
+
 def and_(a,b): return a and b
 def or_(a,b):  return a or b
 
@@ -77,8 +92,8 @@ def test4(f,args):
 def test5(f):
     make_eq_test(f, ())
 
-@mark.parametrize('arg', single_args([0, 1, 42]))
-@mark.parametrize('f', [for1])
+@mark.parametrize('arg', single_args([0, 1, 42, -1, -42]))
+@mark.parametrize('f', [for1, for2, while1])
 def test6(f,arg):
     make_eq_test(f, arg)
 

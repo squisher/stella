@@ -151,6 +151,11 @@ class IR(metaclass=ABCMeta):
         #self.args.append(func.getRegister(name))
         self.args.append(func.getStackLoc(name))
 
+    def popFirstArg(self):
+        first = self.args[0]
+        self.args = self.args[1:]
+        return first
+
     def cast(self, builder):
         #import pdb; pdb.set_trace()
         for arg in self.args:
@@ -170,10 +175,18 @@ class IR(metaclass=ABCMeta):
         pass
 
     def __str__(self):
-        return "{0} {1} {2}".format(
+        if self.discard:
+            b = '('
+            e = ')'
+        else:
+            b = e = ''
+
+        return "{0}{1} {2} {3}{4}".format(
+                    b,
                     self.__class__.__name__,
                     self.result,
-                    ", ".join([str(v) for v in self.args]))
+                    ", ".join([str(v) for v in self.args]),
+                    e)
     def __repr__(self):
         # TODO: are there reasons not to do this?
         return self.__str__()
@@ -185,6 +198,21 @@ class BlockTerminal(object):
     Marker class for instructions which terminate a block.
     """
     pass
+
+class Poison(object):
+    """
+    Require that this bytecode is rewritten by bailing out
+    if it is ever evaluated.
+    """
+    def stack_eval(self, func, stack):
+        raise UnimplementedError("{0} must be rewritten".format(self.__class__.__name__))
+
+    def translate(self, module, builder):
+        raise UnimplementedError("{0} must be rewritten".format(self.__class__.__name__))
+
+    def type_eval(self, func):
+        raise UnimplementedError("{0} must be rewritten".format(self.__class__.__name__))
+
 
 class PhiNode(IR):
     def __init__(self, func, debuginfo):
@@ -238,9 +266,6 @@ class LOAD_FAST(Bytecode):
         #tp = py_type_to_llvm(self.loc.type)
         self.result.llvm = builder.load(self.args[0].llvm)
 
-    #def __str__(self):
-    #    return "(LOAD_FAST {0})".format(self.args[0])
-
 class STORE_FAST(Bytecode):
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
@@ -255,25 +280,25 @@ class STORE_FAST(Bytecode):
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
-        self.result = self.args[0]
+        self.result = self.popFirstArg()
 
     def type_eval(self, func):
         #func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
-        arg = self.args[1]
+        arg = self.args[0]
         #import pdb; pdb.set_trace()
         tp_changed = self.result.unify_type(arg.type, self.debuginfo)
         if tp_changed:
             # TODO: can I avoid a retype in some cases?
             func.retype()
             if self.result.type != arg.type:
-                self.args[1] = Cast(arg, self.result.type)
+                self.args[0] = Cast(arg, self.result.type)
 
     def translate(self, module, builder):
         self.cast(builder)
         if self.new_allocate:
-            tp = py_type_to_llvm(self.args[1].type)
-            self.result.llvm = builder.alloca(tp, name=self.args[0].name)
-        builder.store(self.args[1].llvm, self.result.llvm)
+            tp = py_type_to_llvm(self.args[0].type)
+            self.result.llvm = builder.alloca(tp, name=self.result.name)
+        builder.store(self.args[0].llvm, self.result.llvm)
 
 class LOAD_CONST(Bytecode):
     discard = True
@@ -281,16 +306,13 @@ class LOAD_CONST(Bytecode):
         super().__init__(func, debuginfo)
 
     def stack_eval(self, func, stack):
-        self.result = self.args[0]
+        self.result = self.popFirstArg()
         stack.push(self.result)
 
     def type_eval(self, func):
         pass
     def translate(self, module, builder):
         pass
-
-    def __str__(self):
-        return "(LOAD_CONST {0})".format(self.args[0])
 
 class BinaryOp(Bytecode):
     def __init__(self, func, debuginfo):
@@ -508,15 +530,14 @@ class RETURN_VALUE(BlockTerminal, Bytecode):
     @pop_stack(1)
     def stack_eval(self, func, stack):
         #import pdb; pdb.set_trace()
-        self.result = self.args[0]
-        pass
+        self.result = self.popFirstArg()
 
     def type_eval(self, func):
         for arg in self.args:
             func.retype(self.result.unify_type(arg.type, self.debuginfo))
 
     def translate(self, module, builder):
-        builder.ret(self.args[0].llvm)
+        builder.ret(self.result.llvm)
 
 class HasTarget(object):
     target_label = None
@@ -647,6 +668,10 @@ class POP_JUMP_IF_TRUE(Pop_jump_if_X, Bytecode):
         builder.cbranch(self.args[0].llvm, self.target_bc.block, self.next.block)
 
 class SETUP_LOOP(BlockStart, HasTarget, Bytecode):
+    """
+    Will either be rewritten (for loop) or has no effect other than mark the
+    start of a block (while loop).
+    """
     discard = True
 
     def __init__(self, func, debuginfo):
