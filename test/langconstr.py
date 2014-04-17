@@ -65,6 +65,12 @@ def while1(x):
         x -= 1
     return r
 
+def recursive(x):
+    if x <= 0:
+        return 1
+    else:
+        return x+recursive(x-1)
+
 def and_(a,b): return a and b
 def or_(a,b):  return a or b
 
@@ -93,7 +99,7 @@ def test5(f):
     make_eq_test(f, ())
 
 @mark.parametrize('arg', single_args([0, 1, 42, -1, -42]))
-@mark.parametrize('f', [for1, for2, while1])
+@mark.parametrize('f', [for1, for2, while1, recursive])
 def test6(f,arg):
     make_eq_test(f, arg)
 
