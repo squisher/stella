@@ -185,7 +185,7 @@ class Function(Scope):
         evaled = set()
 
         # For the STORE_FAST of the argument(s)
-        for arg in self.arg_names:
+        for arg in reversed(self.arg_names):
             stack.push(self.getRegister('__param_'+arg))
 
         while not self.todo.empty():
