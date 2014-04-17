@@ -9,5 +9,3 @@ try:
     from wip import *
 except ImportError:
     pass
-
-print ("TEST")

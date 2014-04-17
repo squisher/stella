@@ -39,9 +39,17 @@ class Register(Typable):
     def __repr__(self):
         return self.name
 
-class StackVariable(Register):
+class StackLoc(Typable):
+    name = None
+
     def __init__(self, func, name):
-        super().__init__(func, name)
+        super().__init__()
+        self.name = name
+
+    def __str__(self):
+        return "*{0}<{1}>".format(self.name, self.type.__name__)
+    def __repr__(self):
+        return self.name
 
 class Const(Typable):
     value = None
@@ -140,7 +148,8 @@ class IR(metaclass=ABCMeta):
         self.args.append(arg)
 
     def addArgByName(self, func, name):
-        self.args.append(func.getRegister(name))
+        #self.args.append(func.getRegister(name))
+        self.args.append(func.getStackLoc(name))
 
     def cast(self, builder):
         #import pdb; pdb.set_trace()
@@ -214,33 +223,33 @@ class Bytecode(IR):
     pass
 
 class LOAD_FAST(Bytecode):
-    discard = True
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
     def stack_eval(self, func, stack):
-        # don't use func.getLocal() here because the semantics of
-        # LOAD_FAST require the variable to exist
-        self.result = func.getRegister(self.args[0].name)
+        assert type(self.args[0]) == StackLoc
+        self.result = Register(func)
         stack.push(self.result)
 
     def type_eval(self, func):
-        pass
+        self.result.type = self.args[0].type
 
     def translate(self, module, builder):
-        #self.result = builder.alloca(py_type_to_llvm(self.args[0].type), name='@{0}'.format(self.loc))
-        pass
+        #tp = py_type_to_llvm(self.loc.type)
+        self.result.llvm = builder.load(self.args[0].llvm)
 
-    def __str__(self):
-        return "(LOAD_FAST {0})".format(self.args[0])
+    #def __str__(self):
+    #    return "(LOAD_FAST {0})".format(self.args[0])
 
 class STORE_FAST(Bytecode):
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
+        self.new_allocate = False
 
     def addArgByName(self, func, name):
         # Python does not allocate new names, it just refers to them
-        (var, self.allocate) = func.getOrNewRegister(name)
+        #import pdb; pdb.set_trace()
+        (var, self.new_allocate) = func.getOrNewStackLoc(name)
 
         self.args.append(var)
 
@@ -260,13 +269,11 @@ class STORE_FAST(Bytecode):
                 self.args[1] = Cast(arg, self.result.type)
 
     def translate(self, module, builder):
-        if not self.allocate:
-            self.cast(builder)
-            self.result.llvm = self.args[1].llvm
-        else:
-            # TODO: cast?
-            self.result.llvm = builder.alloca(py_type_to_llvm(self.args[1].type), self.args[1].name)
-            # TODO: Actually load shit later!
+        self.cast(builder)
+        if self.new_allocate:
+            tp = py_type_to_llvm(self.args[1].type)
+            self.result.llvm = builder.alloca(tp, name=self.args[0].name)
+        builder.store(self.args[1].llvm, self.result.llvm)
 
 class LOAD_CONST(Bytecode):
     discard = True
@@ -764,7 +771,9 @@ class ForLoop(IR):
         last = b
 
         b = STORE_FAST(func, self.debuginfo)
+        #import pdb; pdb.set_trace()
         b.addArg(self.loop_var)
+        b.new_allocate = True
         last.insert_after(b)
         last = b
 
@@ -786,7 +795,7 @@ class ForLoop(IR):
         last.insert_after(b)
         last = b
 
-        b = POP_JUMP_IF_FALSE(func, self.debuginfo)
+        b = POP_JUMP_IF_TRUE(func, self.debuginfo)
         b.setTarget(self.end_loc)
         last.insert_after(b)
         last = b

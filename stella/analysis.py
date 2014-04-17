@@ -20,9 +20,11 @@ class Scope(object):
     Used to add scope functionality to an object
     """
     def __init__(self, parent):
+        #import pdb; pdb.set_trace()
         self.parent = parent
         self.register_n = 0
-        self.registers= dict()
+        self.registers = dict()
+        self.stacklocs = dict()
 
     def newRegisterName(self):
         n = str(self.register_n)
@@ -30,30 +32,42 @@ class Scope(object):
         return n
 
     def getOrNewRegister(self, name):
-        isnew = False
         if name not in self.registers:
             self.registers[name] = Register(self, name)
-            isnew = True
-        return (self.registers[name], isnew)
+        return self.registers[name]
 
     def getRegister(self, name):
         if name not in self.registers:
             raise UndefinedError(name)
         return self.registers[name]
 
+    def getOrNewStackLoc(self, name):
+        isnew = False
+        if name not in self.stacklocs:
+            self.stacklocs[name] = StackLoc(self, name)
+            isnew = True
+        return (self.stacklocs[name], isnew)
+
+    def getStackLoc(self, name):
+        if name not in self.stacklocs:
+            raise UndefinedError(name)
+        return self.stacklocs[name]
+
 class Function(Scope):
     def __init__(self, f):
+        # TODO: pass the module as the parent for scope
+        super().__init__(None)
         self.result = Register(self, '__return__')
         self.bytecodes = None # pointer to the first bytecode
         self.labels = {}
         self.todo = Stack("Todo")
         self.incoming_jumps = {}
         self.fellthrough = False
-        super(Scope, self).__init__()
 
         self.f = f
         argspec = inspect.getargspec(f)
-        self.args = [self.getOrNewRegister(n)[0] for n in argspec.args]
+        self.arg_names = [n for n in argspec.args]
+        self.args = [self.getOrNewRegister('__param_'+n) for n in argspec.args]
 
     def getName(self):
         return self.f.__name__
@@ -170,6 +184,10 @@ class Function(Scope):
         self.todo.push((self.bytecodes, stack))
         evaled = set()
 
+        # For the STORE_FAST of the argument(s)
+        for arg in self.arg_names:
+            stack.push(self.getRegister('__param_'+arg))
+
         while not self.todo.empty():
             (bc, stack) = self.todo.pop()
 
@@ -277,6 +295,21 @@ class Function(Scope):
         """Disassemble a code object."""
         logging.debug("Disassembling ------------------------------")
 
+        self.last_bc = None
+
+        # Store arguments in memory locations for uniformity
+        for arg in self.arg_names:
+            # TODO Patch up di?
+            di = None
+            bc = STORE_FAST(self, di)
+            bc.addArgByName(self, arg)
+            if self.last_bc == None:
+                self.bytecodes = self.last_bc = bc
+            else:
+                self.last_bc.insert_after(bc)
+                self.last_bc = bc
+            logging.debug("DIS'D {0}".format(bc.locStr()))
+
         lasti=-1
         co = self.f.__code__
         code = co.co_code
@@ -288,7 +321,6 @@ class Function(Scope):
         free = None
         line = 0
         self.blocks = Stack('blocks')
-        self.last_bc = None
         while i < n:
             op = code[i]
             if i in linestarts:
