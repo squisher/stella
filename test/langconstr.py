@@ -77,6 +77,9 @@ def fib(x):
     return fib(x-1) + fib (x-2)
 
 def fib_harness(n, x):
+    """
+    Test calling an external function.
+    """
     r = 0
     for i in range(n):
         r += fib(x)

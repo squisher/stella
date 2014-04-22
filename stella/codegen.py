@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-from llvm import *
-from llvm.core import *
-from llvm.ee import *
+import llvm
+import llvm.core
+import llvm.ee
 
 import logging
 
@@ -15,7 +15,7 @@ class Program(object):
     def __init__(self, af):
         self.af = af
         self.func = af.impl
-        self.module = Module.new('__stella__')
+        self.module = llvm.core.Module.new('__stella__')
         self.func.translate(self.module)
         self.createBlocks()
 
@@ -49,7 +49,7 @@ class Program(object):
         for bc in self.af.bytecodes:
             if bb != bc.block:
                 # new basic block, use a new builder
-                builder = Builder.new(bc.block)
+                builder = llvm.core.Builder.new(bc.block)
 
             bc.translate(self.module, builder)
             logging.debug("TRANS'D {0}".format(bc))
@@ -68,10 +68,10 @@ class Program(object):
 
     def makeStub(self):
         args = [llvm_constant(arg) for arg in self.func.arg_values]
-        func_tp = Type.function(py_type_to_llvm(self.func.result.type), [])
+        func_tp = llvm.core.Type.function(py_type_to_llvm(self.func.result.type), [])
         func = self.module.add_function(func_tp, self.af.getName()+'__stub__')
         bb = func.append_basic_block("entry")
-        builder = Builder.new(bb)
+        builder = llvm.core.Builder.new(bb)
         call = builder.call(self.func.llvm, args)
         builder.ret(call)
         return func
@@ -103,10 +103,10 @@ class Program(object):
 
         logging.debug(str(f))
 
-        dylib_add_symbol('__powidf2', ctypes.cast(f, ctypes.c_void_p).value)
+        llvm.ee.dylib_add_symbol('__powidf2', ctypes.cast(f, ctypes.c_void_p).value)
 
         #ee = ExecutionEngine.new(self.module)
-        eb = EngineBuilder.new(self.module)
+        eb = llvm.ee.EngineBuilder.new(self.module)
 
         logging.debug("Enabling mcjit...")
         eb.mcjit(True)

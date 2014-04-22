@@ -282,8 +282,26 @@ class Scope(object):
             raise UndefinedError(name)
         return self.stacklocs[name]
 
+class Globals(object):
+    def __init__(self):
+        self.store = dict()
+
+    def __setitem__(self, key, value):
+        # TODO: should uniqueness be enforced here?
+        assert key not in self.store
+        self.store[key] = value
+
+    def __getitem__(self, key):
+        if key not in self.store:
+            raise UndefinedGlobalError(key)
+        return self.store[key]
+
+class Module(Globals):
+    def __init__(self):
+        super().__init__()
+
 class Function(Scope):
-    def __init__(self, name, argspec):
+    def __init__(self, name, argspec, module):
         # TODO: pass the module as the parent for scope
         super().__init__(None)
         self.name = name
@@ -292,17 +310,14 @@ class Function(Scope):
         self.arg_names = [n for n in argspec.args]
         self.args = [self.getOrNewRegister('__param_'+n) for n in argspec.args]
 
-        # TODO, temporary only!!! Add a module scope object
-        self.globals = dict()
-        self.globals[self.name] = self
+        self.module = module
+        self.module[self.name] = self
 
     def __str__(self):
         return self.name + "(" + str(self.args) + ")"
 
     def getReturnType(self):
         return self.result.type
-    def getGlobals(self):
-        return self.globals
 
     def analyze(self, args):
         for i in range(len(args)):
@@ -787,7 +802,7 @@ class LOAD_GLOBAL(Poison, Bytecode):
 
     def stack_eval(self, func, stack):
         name = self.popFirstArg()
-        self.result = func.getGlobals()[name]
+        self.result = func.module[name]
         stack.push(self.result)
 
     def translate(self, module, builder):

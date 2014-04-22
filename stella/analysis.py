@@ -17,14 +17,15 @@ class DebugInfo(object):
         return self.filename + ':' + str(self.line)
 
 class Function(object):
-    def __init__(self, f):
+    def __init__(self, f, module):
         self.bytecodes = None # pointer to the first bytecode
         self.labels = {}
         self.todo = Stack("Todo")
         self.incoming_jumps = {}
 
         self.f = f
-        self.impl = bytecode.Function(self.getName(), inspect.getargspec(f))
+        self.impl = bytecode.Function(self.getName(), inspect.getargspec(f), module)
+        self.module = module
 
     def getName(self):
         return self.f.__name__
@@ -368,6 +369,7 @@ class Function(object):
                 bc.blockEnd(self.last_bc)
 
 def main(f, *args):
-    f = Function(f)
+    module = bytecode.Module()
+    f = Function(f, module)
     f.analyze(*args)
     return f

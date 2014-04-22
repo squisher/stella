@@ -27,3 +27,5 @@ class UnimplementedError(StellaException):
     pass
 class UndefinedError(StellaException):
     pass
+class UndefinedGlobalError(StellaException):
+    pass
