@@ -5,6 +5,7 @@ import logging
 
 from .bytecode import *
 from .exc import *
+from . import bytecode
 
 class DebugInfo(object):
     line = None
@@ -15,74 +16,20 @@ class DebugInfo(object):
     def __str__(self):
         return self.filename + ':' + str(self.line)
 
-appGlobals = {}
-def getGlobals():
-    return appGlobals
-
-class Scope(object):
-    """
-    Used to add scope functionality to an object
-    """
-    def __init__(self, parent):
-        #import pdb; pdb.set_trace()
-        self.parent = parent
-        self.register_n = 0
-        self.registers = dict()
-        self.stacklocs = dict()
-
-    def newRegisterName(self):
-        n = str(self.register_n)
-        self.register_n += 1
-        return n
-
-    def getOrNewRegister(self, name):
-        if name not in self.registers:
-            self.registers[name] = Register(self, name)
-        return self.registers[name]
-
-    def getRegister(self, name):
-        if name not in self.registers:
-            raise UndefinedError(name)
-        return self.registers[name]
-
-    def getOrNewStackLoc(self, name):
-        isnew = False
-        if name not in self.stacklocs:
-            self.stacklocs[name] = StackLoc(self, name)
-            isnew = True
-        return (self.stacklocs[name], isnew)
-
-    def getStackLoc(self, name):
-        if name not in self.stacklocs:
-            raise UndefinedError(name)
-        return self.stacklocs[name]
-
-class Function(Scope):
+class Function(object):
     def __init__(self, f):
-        # TODO: pass the module as the parent for scope
-        super().__init__(None)
-        self.result = Register(self, '__return__')
         self.bytecodes = None # pointer to the first bytecode
         self.labels = {}
         self.todo = Stack("Todo")
         self.incoming_jumps = {}
-        self.fellthrough = False
 
         self.f = f
-        argspec = inspect.getargspec(f)
-        self.arg_names = [n for n in argspec.args]
-        self.args = [self.getOrNewRegister('__param_'+n) for n in argspec.args]
-
-        getGlobals()[self.getName()] = self
+        self.impl = bytecode.Function(self.getName(), inspect.getargspec(f))
 
     def getName(self):
         return self.f.__name__
     def __str__(self):
         return self.getName()
-    def getGlobals(self):
-        return getGlobals()
-    def getReturnType(self):
-        return self.result.type
 
     def retype(self, go = True):
         if go:
@@ -175,7 +122,7 @@ class Function(Scope):
                     logging.debug("IF ADD  " + bc_.locStr())
 
                 if len(self.incoming_jumps[bc]) > 1:
-                    bc_ = PhiNode(self, bc.debuginfo)
+                    bc_ = PhiNode(self.impl, bc.debuginfo)
                     bc_.loc = bc.loc # for printing purposes only
 
                     bc.insert_before(bc_)
@@ -197,8 +144,8 @@ class Function(Scope):
         evaled = set()
 
         # For the STORE_FAST of the argument(s)
-        for arg in reversed(self.arg_names):
-            stack.push(self.getRegister('__param_'+arg))
+        for arg in reversed(self.impl.arg_names):
+            stack.push(self.impl.getRegister('__param_'+arg))
 
         while not self.todo.empty():
             (bc, stack) = self.todo.pop()
@@ -206,7 +153,7 @@ class Function(Scope):
             if isinstance(bc, Block):
                 bc = bc.blockContent()
 
-            r = bc.stack_eval(self, stack)
+            r = bc.stack_eval(self.impl, stack)
             evaled.add(bc)
             if r == None:
                 # default case: no control flow diversion, just continue with the next
@@ -250,7 +197,7 @@ class Function(Scope):
                 bc.type_eval(self)
                 logging.debug("TYPE'D " + str(bc))
                 if isinstance(bc, RETURN_VALUE):
-                    self.retype(self.result.unify_type(bc.result.type, bc.debuginfo))
+                    self.retype(self.impl.result.unify_type(bc.result.type, bc.debuginfo))
                 if isinstance(bc, BlockTerminal) and bc.linearNext() != None and bc.linearNext() not in self.incoming_jumps:
                     logging.debug("Unreachable {0}, aborting".format(bc.linearNext()))
                     break
@@ -263,7 +210,7 @@ class Function(Scope):
             i += 1
 
         #logging.debug("last bytecode: " + str(self.bytecodes[-1]))
-        logging.debug("returning type " + str(self.result.type))
+        logging.debug("returning type " + str(self.impl.result.type))
 
 
     def remove(self, bc):
@@ -286,9 +233,9 @@ class Function(Scope):
         bc.remove()
 
     def analyze(self, *args):
-        for i in range(len(args)):
-            self.args[i].type = type(args[i])
-        logging.debug("Analysis of " + str(self.f) + "(" + str(self.args) + ")")
+        self.impl.analyze(args)
+
+        logging.debug("Analysis of " + str(self.impl))
 
         self.disassemble()
 
@@ -314,11 +261,11 @@ class Function(Scope):
         self.last_bc = None
 
         # Store arguments in memory locations for uniformity
-        for arg in self.arg_names:
+        for arg in self.impl.arg_names:
             # TODO Patch up di?
             di = None
-            bc = STORE_FAST(self, di)
-            bc.addArgByName(self, arg)
+            bc = STORE_FAST(self.impl, di)
+            bc.addArgByName(self.impl, arg)
             if self.last_bc == None:
                 self.bytecodes = self.last_bc = bc
             else:
@@ -345,7 +292,7 @@ class Function(Scope):
             di = DebugInfo(co.co_filename, line)
 
             if extended_arg == 0 and op in opconst:
-                bc = opconst[op](self, di)
+                bc = opconst[op](self.impl, di)
             else:
                 raise UnsupportedOpcode(op, di)
             #import pdb; pdb.set_trace()
@@ -379,7 +326,7 @@ class Function(Scope):
                         bc.setTarget(oparg)
                     elif op in dis.haslocal:
                         #print('(' + co.co_varnames[oparg] + ')', end=' ')
-                        bc.addArgByName(self, co.co_varnames[oparg])
+                        bc.addArgByName(self.impl, co.co_varnames[oparg])
                     elif op in dis.hascompare:
                         #print('(' + dis.cmp_op[oparg] + ')', end=' ')
                         bc.addCmp(dis.cmp_op[oparg])

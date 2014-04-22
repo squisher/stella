@@ -1,6 +1,6 @@
-from llvm import *
-from llvm.core import *
-from llvm.ee import *
+import llvm
+import llvm.core
+import llvm.ee
 
 import logging
 
@@ -12,11 +12,11 @@ class NoType:
     def __str__(klass):
         return '<?>'
 
-tp_int = Type.int(64)
-tp_int32 = Type.int(32)
-#tp_float = Type.float() # Python always works with double precision
-tp_double = Type.double()
-tp_bool = Type.int(1)
+tp_int = llvm.core.Type.int(64)
+tp_int32 = llvm.core.Type.int(32)
+#tp_float = llvm.core.Type.float() # Python always works with double precision
+tp_double = llvm.core.Type.double()
+tp_bool = llvm.core.Type.int(1)
 
 def py_type_to_llvm(tp):
     """Map from Python types to LLVM types."""
@@ -52,14 +52,14 @@ def llvm_to_py(tp, val):
 def llvm_constant(val):
     tp = type(val)
     if tp == int:
-        return Constant.int(tp_int, val)
+        return llvm.core.Constant.int(tp_int, val)
     elif tp == float:
-        return Constant.real(tp_double, val)
+        return llvm.core.Constant.real(tp_double, val)
     elif tp == bool:
-        return Constant.int(tp_bool, val)
+        return llvm.core.Constant.int(tp_bool, val)
     # HACK {
     elif tp == None.__class__:
-        return Constant.int(tp_int, 0)
+        return llvm.core.Constant.int(tp_int, 0)
     # } HACK
     else:
         raise UnimplementedError("Unknown constant type {0}".format(tp))

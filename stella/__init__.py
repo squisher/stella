@@ -14,7 +14,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 def stella(f, debug=False):
     def run(*args):
         af = analysis.main(f, *args)
-        prog = codegen.Program(af, *args)
+        prog = codegen.Program(af)
         if not debug:
             return prog.run()
         elif debug == 'print':

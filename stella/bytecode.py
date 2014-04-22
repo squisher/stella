@@ -7,7 +7,6 @@ from .exc import *
 from .utils import *
 from abc import ABCMeta, abstractmethod, abstractproperty
 from llvm.core import INTR_FLOOR
-from . import analysis
 
 class Typable(object):
     type = NoType
@@ -246,18 +245,80 @@ class PhiNode(IR):
         self.result.llvm = phi
         #import pdb; pdb.set_trace()
 
-class Function(object):
-    def __init__(self, af, *args):
-        self.arg_types = [py_type_to_llvm(arg.type) for arg in af.args]
-        self.args = args
+class Scope(object):
+    """
+    Used to add scope functionality to an object
+    """
+    def __init__(self, parent):
+        #import pdb; pdb.set_trace()
+        self.parent = parent
+        self.register_n = 0
+        self.registers = dict()
+        self.stacklocs = dict()
 
-    def translate(self, module, builder):
-        func_tp = Type.function(py_type_to_llvm(af.result.type), self.arg_types)
-        self.llvm = module.add_function(func_tp, af.getName())
+    def newRegisterName(self):
+        n = str(self.register_n)
+        self.register_n += 1
+        return n
 
-        for i in range(len(af.args)):
-            self.llvm.args[i].name = af.args[i].name
-            af.args[i].llvm = self.func.args[i]
+    def getOrNewRegister(self, name):
+        if name not in self.registers:
+            self.registers[name] = Register(self, name)
+        return self.registers[name]
+
+    def getRegister(self, name):
+        if name not in self.registers:
+            raise UndefinedError(name)
+        return self.registers[name]
+
+    def getOrNewStackLoc(self, name):
+        isnew = False
+        if name not in self.stacklocs:
+            self.stacklocs[name] = StackLoc(self, name)
+            isnew = True
+        return (self.stacklocs[name], isnew)
+
+    def getStackLoc(self, name):
+        if name not in self.stacklocs:
+            raise UndefinedError(name)
+        return self.stacklocs[name]
+
+class Function(Scope):
+    def __init__(self, name, argspec):
+        # TODO: pass the module as the parent for scope
+        super().__init__(None)
+        self.name = name
+        self.result = Register(self, '__return__')
+
+        self.arg_names = [n for n in argspec.args]
+        self.args = [self.getOrNewRegister('__param_'+n) for n in argspec.args]
+
+        # TODO, temporary only!!!
+        self.globals = dict()
+        #getGlobals()[self.getName()] = self
+
+    def __str__(self):
+        return self.name + "(" + str(self.args) + ")"
+
+    def getReturnType(self):
+        return self.result.type
+    def getGlobals(self):
+        return self.globals
+
+    def analyze(self, args):
+        for i in range(len(args)):
+            self.args[i].type = type(args[i])
+        self.arg_values = args
+
+    def translate(self, module):
+        self.arg_types = [py_type_to_llvm(arg.type) for arg in self.args]
+
+        func_tp = llvm.core.Type.function(py_type_to_llvm(self.result.type), self.arg_types)
+        self.llvm = module.add_function(func_tp, self.name)
+
+        for i in range(len(self.args)):
+            self.llvm.args[i].name = self.args[i].name
+            self.args[i].llvm = self.llvm.args[i]
 
 
 class Bytecode(IR):
@@ -377,7 +438,7 @@ class BINARY_MODULO(BinaryOp):
     b_func = {float: 'frem', int: 'srem'}
 
 class BINARY_POWER(BinaryOp):
-    b_func = {float: INTR_POW, int: INTR_POWI}
+    b_func = {float: llvm.core.INTR_POW, int: llvm.core.INTR_POWI}
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
@@ -446,7 +507,7 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
         self.cast(builder)
 
         tmp = builder.fdiv(self.args[0].llvm, self.args[1].llvm, self.result.name)
-        llvm_floor = Function.intrinsic(module, INTR_FLOOR, [py_type_to_llvm(float)])
+        llvm_floor = llvm.core.Function.intrinsic(module, INTR_FLOOR, [py_type_to_llvm(float)])
         self.result.llvm = builder.call(llvm_floor, [tmp])
 
         #import pdb; pdb.set_trace()
@@ -495,20 +556,20 @@ class COMPARE_OP(Bytecode):
     b_func = {float: 'fcmp', int: 'icmp', bool: 'icmp'}
     op = None
 
-    icmp = {'==': ICMP_EQ,
-            '!=': ICMP_NE,
-            '>':  ICMP_SGT,
-            '>=': ICMP_SGE,
-            '<':  ICMP_SLT,
-            '<=': ICMP_SLE,
+    icmp = {'==': llvm.core.ICMP_EQ,
+            '!=': llvm.core.ICMP_NE,
+            '>':  llvm.core.ICMP_SGT,
+            '>=': llvm.core.ICMP_SGE,
+            '<':  llvm.core.ICMP_SLT,
+            '<=': llvm.core.ICMP_SLE,
             }
 
-    fcmp = {'==': FCMP_OEQ,
-            '!=': FCMP_ONE,
-            '>':  FCMP_OGT,
-            '>=': FCMP_OGE,
-            '<':  FCMP_OLT,
-            '<=': FCMP_OLE,
+    fcmp = {'==': llvm.core.FCMP_OEQ,
+            '!=': llvm.core.FCMP_ONE,
+            '>':  llvm.core.FCMP_OGT,
+            '>=': llvm.core.FCMP_OGE,
+            '<':  llvm.core.FCMP_OLT,
+            '<=': llvm.core.FCMP_OLE,
             }
 
     def __init__(self, func, debuginfo):
@@ -800,12 +861,12 @@ class ForLoop(IR):
         last = self
 
         # init
-        b = LOAD_CONST(func, self.debuginfo)
+        b = LOAD_CONST(func.impl, self.debuginfo)
         b.addArg(Const(0))
         last.insert_after(b)
         last = b
 
-        b = STORE_FAST(func, self.debuginfo)
+        b = STORE_FAST(func.impl, self.debuginfo)
         #import pdb; pdb.set_trace()
         b.addArg(self.loop_var)
         b.new_allocate = True
@@ -813,24 +874,24 @@ class ForLoop(IR):
         last = b
 
         # test
-        b = LOAD_FAST(func, self.debuginfo)
+        b = LOAD_FAST(func.impl, self.debuginfo)
         b.addArg(self.loop_var)
         b.loc = self.test_loc
         func.replaceLocation(b)
         last.insert_after(b)
         last = b
 
-        b = LOAD_FAST(func, self.debuginfo)
+        b = LOAD_FAST(func.impl, self.debuginfo)
         b.addArg(self.limit)
         last.insert_after(b)
         last = b
 
-        b = COMPARE_OP(func, self.debuginfo)
+        b = COMPARE_OP(func.impl, self.debuginfo)
         b.addCmp('>=')
         last.insert_after(b)
         last = b
 
-        b = POP_JUMP_IF_TRUE(func, self.debuginfo)
+        b = POP_JUMP_IF_TRUE(func.impl, self.debuginfo)
         b.setTarget(self.end_loc)
         last.insert_after(b)
         last = b
@@ -851,20 +912,20 @@ class ForLoop(IR):
         func.replaceLocation(last)
 
         # increment
-        b = LOAD_FAST(func, self.debuginfo)
+        b = LOAD_FAST(func.impl, self.debuginfo)
         b.addArg(self.loop_var)
         b.loc = incr_loc
         func.replaceLocation(b)
         last.insert_before(b)
 
-        b = LOAD_CONST(func, self.debuginfo)
+        b = LOAD_CONST(func.impl, self.debuginfo)
         b.addArg(Const(1))
         last.insert_before(b)
 
-        b = INPLACE_ADD(func, self.debuginfo)
+        b = INPLACE_ADD(func.impl, self.debuginfo)
         last.insert_before(b)
 
-        b = STORE_FAST(func, self.debuginfo)
+        b = STORE_FAST(func.impl, self.debuginfo)
         b.addArg(self.loop_var)
         last.insert_before(b)
 

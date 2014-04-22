@@ -12,25 +12,26 @@ from .bytecode import *
 from .exc import *
 
 class Program(object):
-    def __init__(self, af, *args):
+    def __init__(self, af):
         self.af = af
-        self.args = args
+        self.func = af.impl
         self.module = Module.new('__stella__')
-        self.func = Function(af, args)
+        self.func.translate(self.module)
+        self.createBlocks()
 
     def createBlocks(self):
         func = self.func.llvm
         # create blocks
         bb = func.append_basic_block("entry")
 
-        for bc in af.bytecodes:
+        for bc in self.af.bytecodes:
             if bc.discard:
-                af.remove(bc)
+                self.af.remove(bc)
                 logging.debug("BLOCK skipped {0}".format(bc))
                 continue
 
             newblock = ''
-            if bc in af.incoming_jumps:
+            if bc in self.af.incoming_jumps:
                 assert not bc.block
                 bc.block = func.append_basic_block(str(bc.loc))
                 bb = bc.block
@@ -40,12 +41,12 @@ class Program(object):
             logging.debug("BLOCK'D {0}{1}".format(bc, newblock))
 
         logging.debug("Printing all bytecodes:")
-        af.bytecodes.printAll()
+        self.af.bytecodes.printAll()
 
         logging.debug("Emitting code:")
         #import pdb; pdb.set_trace()
         bb = None
-        for bc in af.bytecodes:
+        for bc in self.af.bytecodes:
             if bb != bc.block:
                 # new basic block, use a new builder
                 builder = Builder.new(bc.block)
@@ -58,7 +59,7 @@ class Program(object):
             #       TODO is this the proper way to handle those returns? Any side effects?
             #            NEEDS REVIEW
             #       See also analysis.Function.analyze
-            if isinstance(bc, BlockTerminal) and bc.next and bc.next not in af.incoming_jumps:
+            if isinstance(bc, BlockTerminal) and bc.next and bc.next not in self.af.incoming_jumps:
                 logging.debug("TRANS stopping")
                 #import pdb; pdb.set_trace()
                 break
@@ -66,12 +67,12 @@ class Program(object):
         self.llvm = self.makeStub()
 
     def makeStub(self):
-        args = [llvm_constant(arg) for arg in self.args]
-        func_tp = Type.function(py_type_to_llvm(self.af.result.type), [])
+        args = [llvm_constant(arg) for arg in self.func.arg_values]
+        func_tp = Type.function(py_type_to_llvm(self.func.result.type), [])
         func = self.module.add_function(func_tp, self.af.getName()+'__stub__')
         bb = func.append_basic_block("entry")
         builder = Builder.new(bb)
-        call = builder.call(self.func, args)
+        call = builder.call(self.func.llvm, args)
         builder.ret(call)
         return func
 
@@ -112,7 +113,7 @@ class Program(object):
 
         ee = eb.create()
 
-        logging.debug("Arguments: {0}".format(list(zip(self.arg_types, self.args))))
+        logging.debug("Arguments: {0}".format(list(zip(self.func.arg_types, self.func.arg_values))))
 
         # Now let's compile and run!
         logging.debug("Running...")
@@ -120,4 +121,4 @@ class Program(object):
 
         # The return value is also GenericValue. Let's print it.
         logging.debug("Returning...")
-        return llvm_to_py(self.af.result.type, retval)
+        return llvm_to_py(self.func.result.type, retval)
