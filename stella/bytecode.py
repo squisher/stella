@@ -7,6 +7,7 @@ from .exc import *
 from .utils import *
 from abc import ABCMeta, abstractmethod, abstractproperty
 from llvm.core import INTR_FLOOR
+from . import analysis
 
 class Typable(object):
     type = NoType
@@ -118,6 +119,7 @@ def pop_stack(n):
             for i in range(n):
                 args.append(stack.pop())
             args.reverse()
+
             if self.args == None:
                 self.args = args
             else:
@@ -243,6 +245,20 @@ class PhiNode(IR):
 
         self.result.llvm = phi
         #import pdb; pdb.set_trace()
+
+class Function(object):
+    def __init__(self, af, *args):
+        self.arg_types = [py_type_to_llvm(arg.type) for arg in af.args]
+        self.args = args
+
+    def translate(self, module, builder):
+        func_tp = Type.function(py_type_to_llvm(af.result.type), self.arg_types)
+        self.llvm = module.add_function(func_tp, af.getName())
+
+        for i in range(len(af.args)):
+            self.llvm.args[i].name = af.args[i].name
+            af.args[i].llvm = self.func.args[i]
+
 
 class Bytecode(IR):
     """
@@ -723,19 +739,29 @@ class LOAD_GLOBAL(Poison, Bytecode):
     def type_eval(self, func):
         pass
 
-class CALL_FUNCTION(Poison, Bytecode):
+class CALL_FUNCTION(Bytecode):
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
-#    def stack_eval(self, func, stack):
-#        pass
-#
-#    def translate(self, module, builder):
-#        pass
-#
-#    def type_eval(self, func):
-#        pass
+    def stack_eval(self, func, stack):
+        #import pdb; pdb.set_trace()
+        while True:
+            arg = stack.pop()
+            self.args.append(arg)
+            if isinstance(arg, analysis.Function):
+                break
+        self.args.reverse()
+        self.result = Register(func)
+        pass
+
+    def type_eval(self, func):
+        #if not isinstance(self.args[0].type, Function):
+        #    raise TypingError("Tried to call an object of type {0}".format(self.args[0].type))
+        self.result.unify_type(self.args[0].getReturnType())
+
+    def translate(self, module, builder):
+        pass
 
 class GET_ITER(Poison, Bytecode):
     """WIP"""

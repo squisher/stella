@@ -81,6 +81,8 @@ class Function(Scope):
         return self.getName()
     def getGlobals(self):
         return getGlobals()
+    def getReturnType(self):
+        return self.result.type
 
     def retype(self, go = True):
         if go:

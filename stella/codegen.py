@@ -16,16 +16,12 @@ class Program(object):
         self.af = af
         self.args = args
         self.module = Module.new('__stella__')
-        self.arg_types = [py_type_to_llvm(arg.type) for arg in af.args]
-        func_tp = Type.function(py_type_to_llvm(af.result.type), self.arg_types)
-        self.func = self.module.add_function(func_tp, af.getName())
+        self.func = Function(af, args)
 
-        for i in range(len(af.args)):
-            self.func.args[i].name = af.args[i].name
-            af.args[i].llvm = self.func.args[i]
-
+    def createBlocks(self):
+        func = self.func.llvm
         # create blocks
-        bb = self.func.append_basic_block("entry")
+        bb = func.append_basic_block("entry")
 
         for bc in af.bytecodes:
             if bc.discard:
@@ -36,7 +32,7 @@ class Program(object):
             newblock = ''
             if bc in af.incoming_jumps:
                 assert not bc.block
-                bc.block = self.func.append_basic_block(str(bc.loc))
+                bc.block = func.append_basic_block(str(bc.loc))
                 bb = bc.block
                 newblock = ' NEW BLOCK (' + str(bc.loc) + ')'
             else:
@@ -67,7 +63,7 @@ class Program(object):
                 #import pdb; pdb.set_trace()
                 break
 
-        self.func = self.makeStub()
+        self.llvm = self.makeStub()
 
     def makeStub(self):
         args = [llvm_constant(arg) for arg in self.args]
@@ -120,7 +116,7 @@ class Program(object):
 
         # Now let's compile and run!
         logging.debug("Running...")
-        retval = ee.run_function(self.func, [])
+        retval = ee.run_function(self.llvm, [])
 
         # The return value is also GenericValue. Let's print it.
         logging.debug("Returning...")
