@@ -6,7 +6,6 @@ from .llvm import *
 from .exc import *
 from .utils import *
 from abc import ABCMeta, abstractmethod, abstractproperty
-from llvm.core import INTR_FLOOR
 
 class Typable(object):
     type = NoType
@@ -293,9 +292,9 @@ class Function(Scope):
         self.arg_names = [n for n in argspec.args]
         self.args = [self.getOrNewRegister('__param_'+n) for n in argspec.args]
 
-        # TODO, temporary only!!!
+        # TODO, temporary only!!! Add a module scope object
         self.globals = dict()
-        #getGlobals()[self.getName()] = self
+        self.globals[self.name] = self
 
     def __str__(self):
         return self.name + "(" + str(self.args) + ")"
@@ -470,7 +469,7 @@ class BINARY_POWER(BinaryOp):
         else:
             power = self.args[1].llvm
 
-        llvm_pow = Function.intrinsic(module, self.b_func[self.args[1].type], [py_type_to_llvm(self.args[0].type)])
+        llvm_pow = llvm.core.Function.intrinsic(module, self.b_func[self.args[1].type], [py_type_to_llvm(self.args[0].type)])
         pow_result = builder.call(llvm_pow, [self.args[0].llvm, power])
 
         if isinstance(self.args[0], Cast) and self.args[0].obj.type == int and self.args[1].type == int:
@@ -507,7 +506,7 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
         self.cast(builder)
 
         tmp = builder.fdiv(self.args[0].llvm, self.args[1].llvm, self.result.name)
-        llvm_floor = llvm.core.Function.intrinsic(module, INTR_FLOOR, [py_type_to_llvm(float)])
+        llvm_floor = llvm.core.Function.intrinsic(module, llvm.core.INTR_FLOOR, [py_type_to_llvm(float)])
         self.result.llvm = builder.call(llvm_floor, [tmp])
 
         #import pdb; pdb.set_trace()
@@ -810,7 +809,7 @@ class CALL_FUNCTION(Bytecode):
         while True:
             arg = stack.pop()
             self.args.append(arg)
-            if isinstance(arg, analysis.Function):
+            if isinstance(arg, Function):
                 break
         self.args.reverse()
         self.result = Register(func)
