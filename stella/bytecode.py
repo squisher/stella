@@ -1,6 +1,7 @@
 import dis
 import logging
 import sys
+import inspect
 
 from .llvm import *
 from .exc import *
@@ -299,14 +300,33 @@ class Globals(object):
 class Module(Globals):
     def __init__(self):
         super().__init__()
+        self.funcs = []
+        self.todo = []
+
+    def addFunc(self, f):
+        self.funcs.append(f)
+
+    def __getitem__(self, key):
+        try:
+            return super().__getitem__(key)
+        except UndefinedGlobalError as e:
+            # TODO: only search the current function instead of all of them?
+            # That would be required for multi-module support!
+            for f in self.funcs:
+                if key in f.__globals__:
+                    func = Function(f.__globals__[key], self)
+                    self.todo.append(func)
+                    return func
+            raise e
 
 class Function(Scope):
-    def __init__(self, name, argspec, module):
+    def __init__(self, f, module):
         # TODO: pass the module as the parent for scope
         super().__init__(None)
-        self.name = name
+        self.name = f.__name__
         self.result = Register(self, '__return__')
 
+        argspec = inspect.getargspec(f)
         self.arg_names = [n for n in argspec.args]
         self.args = [self.getOrNewRegister('__param_'+n) for n in argspec.args]
 

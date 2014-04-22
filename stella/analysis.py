@@ -1,5 +1,4 @@
 import dis
-import inspect
 
 import logging
 
@@ -24,8 +23,9 @@ class Function(object):
         self.incoming_jumps = {}
 
         self.f = f
-        self.impl = bytecode.Function(self.getName(), inspect.getargspec(f), module)
+        self.impl = bytecode.Function(f, module)
         self.module = module
+        self.module.addFunc(f)
 
     def getName(self):
         return self.f.__name__
@@ -372,4 +372,8 @@ def main(f, *args):
     module = bytecode.Module()
     f = Function(f, module)
     f.analyze(*args)
+    while len(module.todo) > 0:
+        bc_f = module.todo.pop()
+        f = Function(bc_f.f, module)
+        f.analyze(*ARGS?) # TODO remember call!
     return f
