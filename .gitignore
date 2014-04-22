@@ -5,9 +5,10 @@ ve/
 stella.egg-info/
 Session.vim
 .*.swp
+*.o
 ctest
-ctest.o
 ctest*.s
 core.*
 faulthandler.err
 faulthandler.err
+fib

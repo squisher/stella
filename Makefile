@@ -18,3 +18,6 @@ CC=clang
 ctest: ctest.o
 ctest.o: ctest.c
 ctest.s: ctest.c
+
+fib: fib.o
+fib.o: fib.c

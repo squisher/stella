@@ -76,6 +76,12 @@ def fib(x):
         return 1
     return fib(x-1) + fib (x-2)
 
+def fib_harness(n, x):
+    r = 0
+    for i in range(n):
+        r += fib(x)
+    return r
+
 def and_(a,b): return a and b
 def or_(a,b):  return a or b
 
@@ -113,3 +119,6 @@ def test6(f,arg):
 def test7(f,arg):
     make_eq_test(f, arg)
 
+@mark.bench('stella', iterations=1)
+def test8():
+    make_eq_test(fib_harness, (2,20))
