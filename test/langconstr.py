@@ -71,6 +71,11 @@ def recursive(x):
     else:
         return x+recursive(x-1)
 
+def fib(x):
+    if x <= 2:
+        return 1
+    return fib(x-1) + fib (x-2)
+
 def and_(a,b): return a and b
 def or_(a,b):  return a or b
 
@@ -101,5 +106,10 @@ def test5(f):
 @mark.parametrize('arg', single_args([0, 1, 42, -1, -42]))
 @mark.parametrize('f', [for1, for2, while1, recursive])
 def test6(f,arg):
+    make_eq_test(f, arg)
+
+@mark.parametrize('arg', single_args([0, 1, 2, 5, 8, -1, -3]))
+@mark.parametrize('f', [fib])
+def test7(f,arg):
     make_eq_test(f, arg)
 
