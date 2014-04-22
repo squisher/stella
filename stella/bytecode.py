@@ -791,7 +791,7 @@ class LOAD_GLOBAL(Poison, Bytecode):
         stack.push(self.result)
 
     def translate(self, module, builder):
-        if type(result) == Function:
+        if isinstance(self.result, Function):
             pass
         else:
             raise UnimplementedError("Unknown global type {0}".format(type(self.result)))
@@ -813,15 +813,15 @@ class CALL_FUNCTION(Bytecode):
                 break
         self.args.reverse()
         self.result = Register(func)
-        pass
+        stack.push(self.result)
 
     def type_eval(self, func):
         #if not isinstance(self.args[0].type, Function):
         #    raise TypingError("Tried to call an object of type {0}".format(self.args[0].type))
-        self.result.unify_type(self.args[0].getReturnType())
+        self.result.unify_type(self.args[0].getReturnType(), self.debuginfo)
 
     def translate(self, module, builder):
-        pass
+        self.result.llvm = builder.call(self.args[0].llvm, [arg.llvm for arg in self.args[1:]])
 
 class GET_ITER(Poison, Bytecode):
     """WIP"""
