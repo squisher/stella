@@ -311,12 +311,13 @@ class Module(Globals):
         try:
             return super().__getitem__(key)
         except UndefinedGlobalError as e:
+            #import pdb; pdb.set_trace()
             # TODO: only search the current function instead of all of them?
             # That would be required for multi-module support!
             for impl in self.funcs:
                 if key in impl.f.__globals__:
-                    func = Function(f.__globals__[key], self)
-                    self.funcs.add(func)
+                    func = Function(impl.f.__globals__[key], self)
+                    self.addFunc(func)
                     return func
             raise e
 
@@ -338,12 +339,18 @@ class Function(Scope):
         self.analyzed = False
 
     def __str__(self):
+        return self.name
+
+    def nameAndType(self):
         return self.name + "(" + str(self.args) + ")"
 
     def getReturnType(self):
         return self.result.type
 
     def analyze(self, args):
+        if len(args) != len(self.args):
+            raise WrongNumberOfArgsError("Function takes {0} args, but {1} were given".format(len(self.args), len(args)))
+
         for i in range(len(args)):
             self.args[i].type = type(args[i])
         self.arg_values = args

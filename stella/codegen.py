@@ -119,6 +119,5 @@ class Program(object):
         logging.debug("Running...")
         retval = ee.run_function(self.llvm, [])
 
-        # The return value is also GenericValue. Let's print it.
         logging.debug("Returning...")
         return llvm_to_py(self.func.result.type, retval)

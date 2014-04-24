@@ -235,7 +235,7 @@ class Function(object):
     def analyze(self, *args):
         self.impl.analyze(args)
 
-        logging.debug("Analysis of " + str(self.impl))
+        logging.debug("Analysis of " + self.impl.nameAndType())
 
         self.disassemble()
 
@@ -370,10 +370,12 @@ class Function(object):
 def main(f, *args):
     module = bytecode.Module()
     impl = bytecode.Function(f, module)
+    module.addFunc(impl)
     f = Function(impl, module)
     f.analyze(*args)
+    logging.debug("called functions: " + str(len(module.todo)))
     while len(module.todo) > 0:
-        (call_f, call_args) = module.todo.pop()
-        f = Function(call_f, module)
-        f.analyze(*call_args)
+        (call_impl, call_args) = module.todo.pop()
+        call_f = Function(call_impl, module)
+        call_f.analyze(*call_args)
     return f

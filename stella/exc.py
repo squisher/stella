@@ -29,3 +29,5 @@ class UndefinedError(StellaException):
     pass
 class UndefinedGlobalError(StellaException):
     pass
+class WrongNumberOfArgsError(StellaException):
+    pass
