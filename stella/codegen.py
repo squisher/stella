@@ -12,26 +12,27 @@ from .bytecode import *
 from .exc import *
 
 class Program(object):
-    def __init__(self, af):
-        self.af = af
-        self.func = af.impl
-        self.module = llvm.core.Module.new('__stella__')
-        self.func.translate(self.module)
-        self.createBlocks()
+    def __init__(self, module):
+        self.module = module
+        self.module.translate()
+        for func in self.module.funcs:
+            self.blockAndCode(func)
 
-    def createBlocks(self):
-        func = self.func.llvm
+        self.llvm = self.makeStub()
+
+    def blockAndCode(self, impl):
+        func = impl.llvm
         # create blocks
         bb = func.append_basic_block("entry")
 
-        for bc in self.af.bytecodes:
+        for bc in impl.bytecodes:
             if bc.discard:
-                self.af.remove(bc)
+                impl.remove(bc)
                 logging.debug("BLOCK skipped {0}".format(bc))
                 continue
 
             newblock = ''
-            if bc in self.af.incoming_jumps:
+            if bc in impl.incoming_jumps:
                 assert not bc.block
                 bc.block = func.append_basic_block(str(bc.loc))
                 bb = bc.block
@@ -41,17 +42,17 @@ class Program(object):
             logging.debug("BLOCK'D {0}{1}".format(bc, newblock))
 
         logging.debug("Printing all bytecodes:")
-        self.af.bytecodes.printAll()
+        impl.bytecodes.printAll()
 
         logging.debug("Emitting code:")
         #import pdb; pdb.set_trace()
         bb = None
-        for bc in self.af.bytecodes:
+        for bc in impl.bytecodes:
             if bb != bc.block:
                 # new basic block, use a new builder
                 builder = llvm.core.Builder.new(bc.block)
 
-            bc.translate(self.module, builder)
+            bc.translate(self.module.llvm, builder)
             logging.debug("TRANS'D {0}".format(bc))
             # Note: the `and not' part is a basic form of dead code elimination
             #       This is used to drop unreachable "return None" which are implicitly added
@@ -59,26 +60,25 @@ class Program(object):
             #       TODO is this the proper way to handle those returns? Any side effects?
             #            NEEDS REVIEW
             #       See also analysis.Function.analyze
-            if isinstance(bc, BlockTerminal) and bc.next and bc.next not in self.af.incoming_jumps:
+            if isinstance(bc, BlockTerminal) and bc.next and bc.next not in impl.incoming_jumps:
                 logging.debug("TRANS stopping")
                 #import pdb; pdb.set_trace()
                 break
 
-        self.llvm = self.makeStub()
-
     def makeStub(self):
-        args = [llvm_constant(arg) for arg in self.func.arg_values]
-        func_tp = llvm.core.Type.function(py_type_to_llvm(self.func.result.type), [])
-        func = self.module.add_function(func_tp, self.af.getName()+'__stub__')
+        impl = self.module.entry
+        args = [llvm_constant(arg) for arg in impl.arg_values]
+        func_tp = llvm.core.Type.function(py_type_to_llvm(impl.result.type), [])
+        func = self.module.llvm.add_function(func_tp, str(impl)+'__stub__')
         bb = func.append_basic_block("entry")
         builder = llvm.core.Builder.new(bb)
-        call = builder.call(self.func.llvm, args)
+        call = builder.call(impl.llvm, args)
         builder.ret(call)
         return func
 
     def run(self):
         logging.debug("Verifying...")
-        self.module.verify()
+        self.module.llvm.verify()
 
         logging.debug("Preparing execution...")
 
@@ -106,18 +106,20 @@ class Program(object):
         llvm.ee.dylib_add_symbol('__powidf2', ctypes.cast(f, ctypes.c_void_p).value)
 
         #ee = ExecutionEngine.new(self.module)
-        eb = llvm.ee.EngineBuilder.new(self.module)
+        eb = llvm.ee.EngineBuilder.new(self.module.llvm)
 
         logging.debug("Enabling mcjit...")
         eb.mcjit(True)
 
         ee = eb.create()
 
-        logging.debug("Arguments: {0}".format(list(zip(self.func.arg_types, self.func.arg_values))))
+        entry = self.module.entry
+
+        logging.debug("Arguments: {0}".format(list(zip(entry.arg_types, entry.arg_values))))
 
         # Now let's compile and run!
         logging.debug("Running...")
         retval = ee.run_function(self.llvm, [])
 
         logging.debug("Returning...")
-        return llvm_to_py(self.func.result.type, retval)
+        return llvm_to_py(entry.result.type, retval)

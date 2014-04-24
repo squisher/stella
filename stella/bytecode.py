@@ -298,13 +298,19 @@ class Globals(object):
         return self.store[key]
 
 class Module(Globals):
+    i=0
     def __init__(self):
         super().__init__()
         self.funcs = set()
         self.todo = []
+        self.entry = None
 
     def addFunc(self, f):
         self.funcs.add(f)
+
+    def makeEntry(self, f):
+        assert self.entry == None
+        self.entry = f
 
     def __getitem__(self, key):
         # TODO: only tested for functions, not for variables so far!
@@ -321,6 +327,12 @@ class Module(Globals):
                     return func
             raise e
 
+    def translate(self):
+        self.llvm = llvm.core.Module.new('__stella__'+str(self.__class__.i))
+        self.__class__.i += 1
+        for impl in self.funcs:
+            impl.translate(self.llvm)
+
 class Function(Scope):
     def __init__(self, f, module):
         # TODO: pass the module as the parent for scope
@@ -332,6 +344,7 @@ class Function(Scope):
         argspec = inspect.getargspec(f)
         self.arg_names = [n for n in argspec.args]
         self.args = [self.getOrNewRegister('__param_'+n) for n in argspec.args]
+        self.arg_values = None
 
         self.module = module
         self.module[self.name] = self
@@ -347,13 +360,16 @@ class Function(Scope):
     def getReturnType(self):
         return self.result.type
 
-    def analyze(self, args):
-        if len(args) != len(self.args):
-            raise WrongNumberOfArgsError("Function takes {0} args, but {1} were given".format(len(self.args), len(args)))
-
-        for i in range(len(args)):
-            self.args[i].type = type(args[i])
+    def makeEntry(self, args):
+        self.module.makeEntry(self)
         self.arg_values = args
+
+    def analyze(self, arg_types):
+        if len(arg_types) != len(self.args):
+            raise WrongNumberOfArgsError("Function takes {0} args, but {1} were given".format(len(self.args), len(arg_types)))
+
+        for i in range(len(arg_types)):
+            self.args[i].type = arg_types[i]
         self.analyzed = True
 
     def translate(self, module):
@@ -365,6 +381,25 @@ class Function(Scope):
         for i in range(len(self.args)):
             self.llvm.args[i].name = self.args[i].name
             self.args[i].llvm = self.llvm.args[i]
+
+    def remove(self, bc):
+        #import pdb; pdb.set_trace()
+
+        # TODO: should any of these .next become .linearNext()?
+        if bc == self.bytecodes:
+            self.bytecodes = bc.next
+
+        if bc in self.incoming_jumps:
+            bc_next = bc.next
+            if not bc_next and bc._block_parent:
+                bc_next = bc._block_parent.next
+                # _block_parent will be move with bc.remove() below
+            assert bc_next
+            self.incoming_jumps[bc_next] = self.incoming_jumps[bc]
+            for bc_ in self.incoming_jumps[bc_next]:
+                bc_.updateTargetBytecode(bc, bc_next)
+            del self.incoming_jumps[bc]
+        bc.remove()
 
 
 class Bytecode(IR):

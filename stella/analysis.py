@@ -213,27 +213,8 @@ class Function(object):
         logging.debug("returning type " + str(self.impl.result.type))
 
 
-    def remove(self, bc):
-        #import pdb; pdb.set_trace()
-
-        # TODO: should any of these .next become .linearNext()?
-        if bc == self.bytecodes:
-            self.bytecodes = bc.next
-
-        if bc in self.incoming_jumps:
-            bc_next = bc.next
-            if not bc_next and bc._block_parent:
-                bc_next = bc._block_parent.next
-                # _block_parent will be move with bc.remove() below
-            assert bc_next
-            self.incoming_jumps[bc_next] = self.incoming_jumps[bc]
-            for bc_ in self.incoming_jumps[bc_next]:
-                bc_.updateTargetBytecode(bc, bc_next)
-            del self.incoming_jumps[bc]
-        bc.remove()
-
-    def analyze(self, *args):
-        self.impl.analyze(args)
+    def analyze(self, arg_types):
+        self.impl.analyze(arg_types)
 
         logging.debug("Analysis of " + self.impl.nameAndType())
 
@@ -248,6 +229,9 @@ class Function(object):
         self.stack_to_register()
 
         self.type_analysis()
+
+        self.impl.bytecodes = self.bytecodes
+        self.impl.incoming_jumps = self.incoming_jumps
 
         #logging.debug("PyStack bytecode:")
         #import pdb; pdb.set_trace()
@@ -370,12 +354,13 @@ class Function(object):
 def main(f, *args):
     module = bytecode.Module()
     impl = bytecode.Function(f, module)
+    impl.makeEntry(args)
     module.addFunc(impl)
     f = Function(impl, module)
-    f.analyze(*args)
+    f.analyze([type(x) for x in args])
     logging.debug("called functions: " + str(len(module.todo)))
     while len(module.todo) > 0:
         (call_impl, call_args) = module.todo.pop()
         call_f = Function(call_impl, module)
-        call_f.analyze(*call_args)
-    return f
+        call_f.analyze([x.type for x in call_args])
+    return module
