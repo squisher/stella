@@ -300,22 +300,23 @@ class Globals(object):
 class Module(Globals):
     def __init__(self):
         super().__init__()
-        self.funcs = []
+        self.funcs = set()
         self.todo = []
 
     def addFunc(self, f):
-        self.funcs.append(f)
+        self.funcs.add(f)
 
     def __getitem__(self, key):
+        # TODO: only tested for functions, not for variables so far!
         try:
             return super().__getitem__(key)
         except UndefinedGlobalError as e:
             # TODO: only search the current function instead of all of them?
             # That would be required for multi-module support!
-            for f in self.funcs:
-                if key in f.__globals__:
+            for impl in self.funcs:
+                if key in impl.f.__globals__:
                     func = Function(f.__globals__[key], self)
-                    self.todo.append(func)
+                    self.funcs.add(func)
                     return func
             raise e
 
@@ -323,6 +324,7 @@ class Function(Scope):
     def __init__(self, f, module):
         # TODO: pass the module as the parent for scope
         super().__init__(None)
+        self.f = f
         self.name = f.__name__
         self.result = Register(self, '__return__')
 
@@ -332,6 +334,8 @@ class Function(Scope):
 
         self.module = module
         self.module[self.name] = self
+
+        self.analyzed = False
 
     def __str__(self):
         return self.name + "(" + str(self.args) + ")"
@@ -343,6 +347,7 @@ class Function(Scope):
         for i in range(len(args)):
             self.args[i].type = type(args[i])
         self.arg_values = args
+        self.analyzed = True
 
     def translate(self, module):
         self.arg_types = [py_type_to_llvm(arg.type) for arg in self.args]
@@ -849,6 +854,9 @@ class CALL_FUNCTION(Bytecode):
         self.args.reverse()
         self.result = Register(func)
         stack.push(self.result)
+
+        if not self.args[0].analyzed:
+            func.module.todo.append((self.args[0], self.args[1:]))
 
     def type_eval(self, func):
         #if not isinstance(self.args[0].type, Function):
