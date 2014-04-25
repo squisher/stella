@@ -77,7 +77,7 @@ class Program(object):
         return func
 
     def run(self):
-        logging.debug("Verifying...")
+        logging.debug("Verifying... ")
         self.module.llvm.verify()
 
         logging.debug("Preparing execution...")
@@ -122,4 +122,5 @@ class Program(object):
         retval = ee.run_function(self.llvm, [])
 
         logging.debug("Returning...")
+        del (self.module)
         return llvm_to_py(entry.result.type, retval)

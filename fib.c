@@ -13,8 +13,8 @@ int main(int argc, char ** argv) {
     int i;
     long long r = 0;
 
-    for (i=0; i<100; i++) {
-        r += fib(30);
+    for (i=0; i<4; i++) {
+        r += fib(42);
     }
 
     printf ("%lld\n", r);

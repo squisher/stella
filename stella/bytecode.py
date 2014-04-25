@@ -2,6 +2,7 @@ import dis
 import logging
 import sys
 import inspect
+import weakref
 
 from .llvm import *
 from .exc import *
@@ -329,9 +330,14 @@ class Module(Globals):
 
     def translate(self):
         self.llvm = llvm.core.Module.new('__stella__'+str(self.__class__.i))
+#        logging.debug("TEST {0} {1}, {2}, {3}".format(repr(self), '__stella__'+str(self.__class__.i),
+#            repr(self.llvm), repr(self.llvm._ptr)))
         self.__class__.i += 1
         for impl in self.funcs:
             impl.translate(self.llvm)
+
+#    def __del__(self):
+#        logging.debug("DEL  " + repr(self))
 
 class Function(Scope):
     def __init__(self, f, module):
@@ -346,7 +352,9 @@ class Function(Scope):
         self.args = [self.getOrNewRegister('__param_'+n) for n in argspec.args]
         self.arg_values = None
 
-        self.module = module
+        # weak reference is necessary so that Python will start garbage
+        # collection for Module.
+        self.module = weakref.proxy(module)
         self.module[self.name] = self
 
         self.analyzed = False

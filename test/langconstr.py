@@ -122,6 +122,5 @@ def test6(f,arg):
 def test7(f,arg):
     make_eq_test(f, arg)
 
-@mark.bench('stella', iterations=1)
 def test8():
-    make_eq_test(fib_harness, (2,20))
+    make_eq_test(fib_harness, (1,30))

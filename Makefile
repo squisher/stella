@@ -1,4 +1,4 @@
-CFLAGS:=-Wall
+CFLAGS:=-Wall -O0
 #CC=gcc
 CC=clang
 
