@@ -11,12 +11,20 @@ faulthandler.enable(_f)
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-def stella(f, debug=False):
+def stella(f, debug=False, opt=None, stats = None):
     def run(*args):
+        if stats == None:
+            pass_stats = {}
+        else:
+            pass_stats = stats
+
         module = analysis.main(f, *args)
         prog = codegen.Program(module)
+
+        prog.optimize(opt)
+
         if not debug:
-            return prog.run()
+            return prog.run(pass_stats)
         elif debug == 'print':
             print(prog.module)
         else:

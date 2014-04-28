@@ -3,8 +3,10 @@
 import llvm
 import llvm.core
 import llvm.ee
+import llvm.passes
 
 import logging
+import time
 
 from . import analysis
 from .llvm import *
@@ -76,7 +78,22 @@ class Program(object):
         builder.ret(call)
         return func
 
-    def run(self):
+    def elapsed(self):
+        if self.start == None or self.end == None:
+            return None
+        return self.end - self.start
+
+    def optimize(self, opt):
+        if (opt!=None):
+            logging.debug("Running optimizations level {0}... ".format(opt))
+            self.module.llvm.verify()
+
+            tm = llvm.ee.TargetMachine.new(opt=opt)
+            pm = llvm.passes.build_pass_managers(tm, opt=opt, loop_vectorize=True, fpm=False).pm
+            pm.run(self.module.llvm)
+
+
+    def run(self, stats):
         logging.debug("Verifying... ")
         self.module.llvm.verify()
 
@@ -119,7 +136,10 @@ class Program(object):
 
         # Now let's compile and run!
         logging.debug("Running...")
+
+        time_start = time.time()
         retval = ee.run_function(self.llvm, [])
+        stats['elapsed'] = time.time() - time_start
 
         logging.debug("Returning...")
         del (self.module)

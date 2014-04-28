@@ -305,6 +305,7 @@ class Module(Globals):
         self.funcs = set()
         self.todo = []
         self.entry = None
+        self.llvm = None
 
     def addFunc(self, f):
         self.funcs.add(f)
@@ -338,6 +339,11 @@ class Module(Globals):
 
 #    def __del__(self):
 #        logging.debug("DEL  " + repr(self))
+    def __str__(self):
+        if self.llvm:
+            return str(self.llvm)
+        else:
+            super().__str__()
 
 class Function(Scope):
     def __init__(self, f, module):
