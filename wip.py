@@ -1,6 +1,6 @@
 from test.langconstr import *
+import stella
 #args_mod = list(filter(lambda e: e[0] >= 0, arglist2))
 
 def current_work():
-    #stella(simple_assignment, debug='print')(40, 2)
-    stella(hof_m, debug='print')(12.0)
+    stella.wrap(hof_m, ir=True)(12.0)

@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 from stella.exc import *
-from stella import stella
 from test import *
 
 def undefined1():

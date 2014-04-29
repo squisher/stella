@@ -1,6 +1,6 @@
 from dis import dis
-from stella import stella
-import llvm, llvm.core, llvm.ee
+import stella
+import llvm, llvm.core, llvm.ee, llvm.passes
 import pdb
 from pdb import pm
 

@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from stella import stella
 from random import randint
 import sys
 from test import *
@@ -66,15 +65,3 @@ def test_semantics_power(args):
     4**2 returns an integer, but 4**-2 returns a float.
     """
     make_delta_test(power, args)
-
-if __name__ == '__main__':
-    print(stella(addition)(41, 1))
-    print(stella(addition)(43, -1))
-    print(stella(subtraction)(44,2))
-    print(stella(multiplication)(21,2))
-    print(stella(division)(42,10))
-    print(stella(floor_division)(85,2.0))
-    print(stella(floor_division)(85,-2.0))
-    x = chained(5,2)
-    y = stella(chained)(5,2)
-    print("chained difference: {0:.10f}".format(x-y))

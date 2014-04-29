@@ -2,7 +2,7 @@
 
 import os, os.path
 from subprocess import call
-from stella import stella
+import stella
 from time import time
 
 def ccompile(fn, src, opt=0):
@@ -66,7 +66,7 @@ int main(int argc, char ** argv) {{
     print ("Running Stella")
     stats = {}
     time_start = time()
-    print(stella(fib_harness, debug=False, opt=opt, stats=stats)(n,x))
+    print(stella.wrap(fib_harness, debug=False, opt=opt, stats=stats)(n,x))
     elapsed_stella  = time() - time_start
     return (elapsed_c, stats['elapsed'], elapsed_stella)
 

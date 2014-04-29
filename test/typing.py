@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from stella import stella
 from random import randint
 from test import *
 
@@ -23,6 +22,3 @@ def test3(args):
 @mark.xfail()
 def test3fail(args):
     make_eq_test(equality, args)
-
-if __name__ == '__main__':
-    print(stella(return_bool)())
