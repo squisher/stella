@@ -364,6 +364,7 @@ class Function(Scope):
         self.module[self.name] = self
 
         self.analyzed = False
+        self.log = logging.getLogger(str(self))
 
     def __str__(self):
         return self.name

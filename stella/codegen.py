@@ -30,7 +30,7 @@ class Program(object):
         for bc in impl.bytecodes:
             if bc.discard:
                 impl.remove(bc)
-                logging.debug("BLOCK skipped {0}".format(bc))
+                impl.log.debug("BLOCK skipped {0}".format(bc))
                 continue
 
             newblock = ''
@@ -41,12 +41,12 @@ class Program(object):
                 newblock = ' NEW BLOCK (' + str(bc.loc) + ')'
             else:
                 bc.block = bb
-            logging.debug("BLOCK'D {0}{1}".format(bc, newblock))
+            impl.log.debug("BLOCK'D {0}{1}".format(bc, newblock))
 
-        logging.debug("Printing all bytecodes:")
-        impl.bytecodes.printAll()
+        impl.log.debug("Printing all bytecodes:")
+        impl.bytecodes.printAll(impl.log)
 
-        logging.debug("Emitting code:")
+        impl.log.debug("Emitting code:")
         #import pdb; pdb.set_trace()
         bb = None
         for bc in impl.bytecodes:
@@ -55,7 +55,7 @@ class Program(object):
                 builder = llvm.core.Builder.new(bc.block)
 
             bc.translate(self.module.llvm, builder)
-            logging.debug("TRANS'D {0}".format(bc))
+            impl.log.debug("TRANS'D {0}".format(bc))
             # Note: the `and not' part is a basic form of dead code elimination
             #       This is used to drop unreachable "return None" which are implicitly added
             #       by Python to the end of functions.
@@ -63,7 +63,7 @@ class Program(object):
             #            NEEDS REVIEW
             #       See also analysis.Function.analyze
             if isinstance(bc, BlockTerminal) and bc.next and bc.next not in impl.incoming_jumps:
-                logging.debug("TRANS stopping")
+                impl.log.debug("TRANS stopping")
                 #import pdb; pdb.set_trace()
                 break
 

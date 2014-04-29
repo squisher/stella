@@ -19,12 +19,14 @@ class Function(object):
     def __init__(self, impl, module):
         self.bytecodes = None # pointer to the first bytecode
         self.labels = {}
-        self.todo = Stack("Todo")
         self.incoming_jumps = {}
 
         self.f = impl.f
         self.impl = impl
         self.module = module
+
+        self.log = logging.getLogger(str(self))
+        self.todo = Stack("Todo", log=self.log)
 
     def getName(self):
         return str(self.impl)
@@ -47,8 +49,8 @@ class Function(object):
         self.labels[bc.loc] = bc
 
     def rewrite(self):
-        self.bytecodes.printAll()
-        logging.debug("Rewriting (peephole optimizations) ------------------------------")
+        self.bytecodes.printAll(self.log)
+        self.log.debug("Rewriting (peephole optimizations) ------------------------------")
         for bc in self.bytecodes:
             if isinstance(bc, FOR_ITER):
                 cur = bc.prev
@@ -94,11 +96,11 @@ class Function(object):
                 bc.remove()
                 for_loop.rewrite(self)
 
-        self.bytecodes.printAll()
+        self.bytecodes.printAll(self.log)
 
 
     def intraflow(self):
-        logging.debug("Building Intra-Flowgraph ------------------------------")
+        self.log.debug("Building Intra-Flowgraph ------------------------------")
         for bc in self.bytecodes:
             if isinstance(bc, Jump):
                 if bc.processFallThrough():
@@ -111,7 +113,7 @@ class Function(object):
             if bc in self.incoming_jumps:
                 if not isinstance(bc.linearPrev(), BlockTerminal):
                     #import pdb; pdb.set_trace()
-                    #logging.debug("PREV_TYPE " + str(type(bc.prev)))
+                    #self.log.debug("PREV_TYPE " + str(type(bc.prev)))
                     bc_ = Jump(self, bc.debuginfo)
                     bc_.loc = ''
                     bc_.setTargetBytecode(bc)
@@ -119,7 +121,7 @@ class Function(object):
                     bc.insert_before(bc_)
                     self.add_incoming_jump(bc, bc_)
 
-                    logging.debug("IF ADD  " + bc_.locStr())
+                    self.log.debug("IF ADD  " + bc_.locStr())
 
                 if len(self.incoming_jumps[bc]) > 1:
                     bc_ = PhiNode(self.impl, bc.debuginfo)
@@ -134,12 +136,12 @@ class Function(object):
                             bc__.setTargetBytecode(bc_)
                         del self.incoming_jumps[bc]
 
-                    logging.debug("IF ADD  " + bc_.locStr())
+                    self.log.debug("IF ADD  " + bc_.locStr())
                     #import pdb; pdb.set_trace()
 
     def stack_to_register(self):
-        logging.debug("Stack->Register Conversion ------------------------------")
-        stack = Stack()
+        self.log.debug("Stack->Register Conversion ------------------------------")
+        stack = Stack(log=self.log)
         self.todo.push((self.bytecodes, stack))
         evaled = set()
 
@@ -171,7 +173,7 @@ class Function(object):
                         # but first lets work inside the block
                         self.todo.push((bc.blockContent(), stack))
                 else:
-                    logging.debug("Reached EOP.")
+                    self.log.debug("Reached EOP.")
                     assert stack.empty()
             else:
                 # there is (one or more) control flow changes, add them all to the todo list
@@ -184,22 +186,22 @@ class Function(object):
                     self.todo.push((bc_, stack_))
 
     def type_analysis(self):
-        logging.debug("Type Analysis ------------------------------")
+        self.log.debug("Type Analysis ------------------------------")
         self.todo.push(self.bytecodes)
 
         i = 0
         while not self.todo.empty():
-            logging.debug("Type analysis iteration {0}".format(i))
+            self.log.debug("Type analysis iteration {0}".format(i))
             self.analyze_again = False
             bc_list = self.todo.pop()
 
             for bc in bc_list:
                 bc.type_eval(self)
-                logging.debug("TYPE'D " + str(bc))
+                self.log.debug("TYPE'D " + str(bc))
                 if isinstance(bc, RETURN_VALUE):
                     self.retype(self.impl.result.unify_type(bc.result.type, bc.debuginfo))
                 if isinstance(bc, BlockTerminal) and bc.linearNext() != None and bc.linearNext() not in self.incoming_jumps:
-                    logging.debug("Unreachable {0}, aborting".format(bc.linearNext()))
+                    self.log.debug("Unreachable {0}, aborting".format(bc.linearNext()))
                     break
 
             if self.analyze_again:
@@ -209,14 +211,14 @@ class Function(object):
                 raise Exception("Stopping after {0} type analysis iterations (failsafe)".format(i))
             i += 1
 
-        #logging.debug("last bytecode: " + str(self.bytecodes[-1]))
-        logging.debug("returning type " + str(self.impl.result.type))
+        #self.log.debug("last bytecode: " + str(self.bytecodes[-1]))
+        self.log.debug("returning type " + str(self.impl.result.type))
 
 
     def analyze(self, arg_types):
         self.impl.analyze(arg_types)
 
-        logging.debug("Analysis of " + self.impl.nameAndType())
+        self.log.debug("Analysis of " + self.impl.nameAndType())
 
         self.disassemble()
 
@@ -224,7 +226,7 @@ class Function(object):
 
         self.intraflow()
 
-        self.bytecodes.printAll()
+        self.bytecodes.printAll(self.log)
 
         self.stack_to_register()
 
@@ -233,14 +235,14 @@ class Function(object):
         self.impl.bytecodes = self.bytecodes
         self.impl.incoming_jumps = self.incoming_jumps
 
-        #logging.debug("PyStack bytecode:")
+        #self.log.debug("PyStack bytecode:")
         #import pdb; pdb.set_trace()
         #for bc in self.bytecodes:
-        #    logging.debug(str(bc))
+        #    self.log.debug(str(bc))
 
     def disassemble(self):
         """Disassemble a code object."""
-        logging.debug("Disassembling ------------------------------")
+        self.log.debug("Disassembling ------------------------------")
 
         self.last_bc = None
 
@@ -255,7 +257,7 @@ class Function(object):
             else:
                 self.last_bc.insert_after(bc)
                 self.last_bc = bc
-            logging.debug("DIS'D {0}".format(bc.locStr()))
+            self.log.debug("DIS'D {0}".format(bc.locStr()))
 
         lasti=-1
         co = self.f.__code__
@@ -320,7 +322,7 @@ class Function(object):
                         #print('(' + free[oparg] + ')', end=' ')
                         raise UnimplementedError('hasfree')
 
-                logging.debug("DIS'D {0}".format(bc.locStr()))
+                self.log.debug("DIS'D {0}".format(bc.locStr()))
             except StellaException as e:
                 e.addDebug(di)
                 raise
@@ -358,7 +360,7 @@ def main(f, *args):
     module.addFunc(impl)
     f = Function(impl, module)
     f.analyze([type(x) for x in args])
-    logging.debug("called functions: " + str(len(module.todo)))
+    f.log.debug("called functions: " + str(len(module.todo)))
     while len(module.todo) > 0:
         (call_impl, call_args) = module.todo.pop()
         call_f = Function(call_impl, module)

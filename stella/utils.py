@@ -2,19 +2,23 @@ import logging
 
 class Stack(object):
     backend = None
-    def __init__(self, name="Stack"):
+    def __init__(self, name="Stack", log=None):
         self.backend = []
         self.name = name
+        if log == None:
+            self.log = logging
+        else:
+            self.log = log
     def __str__(self):
         return "["+self.name+"("+str(len(self.backend))+")]"
     def __repr__(self):
         return "["+self.name+"="+", ".join([str(x) for x in self.backend])+"]"
     def push(self, item):
-        logging.debug("["+self.name+"] Pushing " + str(item))
+        self.log.debug("["+self.name+"] Pushing " + str(item))
         self.backend.append(item)
     def pop(self):
         item = self.backend.pop()
-        logging.debug("["+self.name+"] Popping " + str(item))
+        self.log.debug("["+self.name+"] Popping " + str(item))
         return item
     def peek(self):
         if len(self.backend) > 0:
@@ -62,8 +66,11 @@ def linkedlist(klass):
         return LinkedListIter(self)
     klass.__iter__ = __iter__
 
-    def printAll(self):
+    def printAll(self, log=None):
         """Debugging: print all IRs in this list"""
+
+        if log == None:
+            log = logger
 
         # find the first bytecode
         bc_start = self
@@ -77,7 +84,7 @@ def linkedlist(klass):
 
         for bc in bc_start:
             #logging.debug(str(bc))
-            logging.debug(bc.locStr())
+            log.debug(bc.locStr())
     klass.printAll = printAll
     
     def insert_after(self, bc):
