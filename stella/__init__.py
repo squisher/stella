@@ -9,9 +9,12 @@ import faulthandler
 _f = open('faulthandler.err', 'w')
 faulthandler.enable(_f)
 
-logging.getLogger().setLevel(logging.DEBUG)
+def stella(f, debug=True, ir=False, lazy=False, opt=None, stats=None):
+    if debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+    else:
+        logging.getLogger().setLevel(logging.INFO)
 
-def stella(f, debug=False, opt=None, stats = None):
     def run(*args):
         if stats == None:
             pass_stats = {}
@@ -23,10 +26,10 @@ def stella(f, debug=False, opt=None, stats = None):
 
         prog.optimize(opt)
 
-        if not debug:
-            return prog.run(pass_stats)
-        elif debug == 'print':
-            print(prog.module)
+        if lazy:
+            return prog
+        elif ir:
+            return str(prog.module)
         else:
-            return prog.module
+            return prog.run(pass_stats)
     return run

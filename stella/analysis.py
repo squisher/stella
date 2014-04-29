@@ -27,6 +27,7 @@ class Function(object):
 
         self.log = logging.getLogger(str(self))
         self.todo = Stack("Todo", log=self.log)
+        logging.info("Analyzing {0}".format(self))
 
     def getName(self):
         return str(self.impl)

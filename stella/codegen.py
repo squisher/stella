@@ -132,10 +132,9 @@ class Program(object):
 
         entry = self.module.entry
 
-        logging.debug("Arguments: {0}".format(list(zip(entry.arg_types, entry.arg_values))))
+        logging.info("running {0}{1}".format(entry, list(zip(entry.arg_types, entry.arg_values))))
 
         # Now let's compile and run!
-        logging.debug("Running...")
 
         time_start = time.time()
         retval = ee.run_function(self.llvm, [])
