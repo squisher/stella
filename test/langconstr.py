@@ -85,6 +85,14 @@ def fib_harness(n, x):
         r += fib(x)
     return r
 
+def hof_f(n):
+    if n == 0: return 1
+    else:      return n - hof_m(hof_f(n-1))
+
+def hof_m(n):
+    if n == 0: return 0
+    else:      return n - hof_f(hof_m(n-1))
+
 def and_(a,b): return a and b
 def or_(a,b):  return a or b
 
@@ -124,3 +132,8 @@ def test7(f,arg):
 
 def test8():
     make_eq_test(fib_harness, (1,30))
+
+@mark.parametrize('arg', single_args([0, 1, 2, 5, 8, 12]))
+@mark.parametrize('f', [hof_f])
+def test9(f,arg):
+    make_eq_test(f, arg)
