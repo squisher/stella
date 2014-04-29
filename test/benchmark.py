@@ -19,7 +19,7 @@ def ccompile(fn, src, opt=0):
     obj = root + ".o"
     if os.path.exists(obj):
         os.unlink(obj)
-    cmd = ['gcc','-Wall', '-O'+str(opt), '-o', root, fn]
+    cmd = ['clang','-Wall', '-O'+str(opt), '-o', root, fn]
     print ("Compiling: {0}".format(" ".join(cmd)))
     call(cmd)
     return root
@@ -66,7 +66,7 @@ int main(int argc, char ** argv) {{
     print ("Running Stella")
     stats = {}
     time_start = time()
-    print(stella(fib_harness, opt=opt, stats=stats)(n,x))
+    print(stella(fib_harness, debug=False, opt=opt, stats=stats)(n,x))
     elapsed_stella  = time() - time_start
     return (elapsed_c, stats['elapsed'], elapsed_stella)
 
