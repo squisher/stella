@@ -2,7 +2,7 @@ import dis
 
 class StellaException(Exception):
     def __init__(self, msg, debuginfo=None):
-        super().__init__(self, msg)
+        super().__init__(msg)
 
         self.addDebug(debuginfo)
 

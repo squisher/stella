@@ -52,49 +52,53 @@ class Function(object):
         self.bytecodes.printAll(self.log)
         self.log.debug("Rewriting (peephole optimizations) ------------------------------")
         for bc in self.bytecodes:
-            if isinstance(bc, FOR_ITER):
-                cur = bc.prev
-                if not isinstance(cur, GET_ITER):
-                    raise UnimplementedError('unsupported for loop')
-                cur.remove()
-                cur = bc.prev
-                if not isinstance(cur, CALL_FUNCTION):
-                    raise UnimplementedError('unsupported for loop')
-                cur.remove()
-                cur = bc.prev
-                if not isinstance(cur, LOAD_FAST):
-                    raise UnimplementedError('unsupported for loop')
-                limit = cur.args[0]
-                cur.remove()
-                cur = bc.prev
-                if not isinstance(cur, LOAD_GLOBAL):
-                    raise UnimplementedError('unsupported for loop')
-                cur.remove()
-                cur = bc.prev
-                if not isinstance(cur, SETUP_LOOP):
-                    raise UnimplementedError('unsupported for loop')
-                end_loc = cur.target_label
-                #import pdb; pdb.set_trace()
+            try:
+                if isinstance(bc, FOR_ITER):
+                    cur = bc.prev
+                    if not isinstance(cur, GET_ITER):
+                        raise UnimplementedError('unsupported for loop')
+                    cur.remove()
+                    cur = bc.prev
+                    if not isinstance(cur, CALL_FUNCTION):
+                        raise UnimplementedError('unsupported for loop')
+                    cur.remove()
+                    cur = bc.prev
+                    if not isinstance(cur, LOAD_FAST):
+                        raise UnimplementedError('unsupported for loop')
+                    limit = cur.args[0]
+                    cur.remove()
+                    cur = bc.prev
+                    if not isinstance(cur, LOAD_GLOBAL):
+                        raise UnimplementedError('unsupported for loop')
+                    cur.remove()
+                    cur = bc.prev
+                    if not isinstance(cur, SETUP_LOOP):
+                        raise UnimplementedError('unsupported for loop')
+                    end_loc = cur.target_label
+                    #import pdb; pdb.set_trace()
 
-                for_loop = ForLoop(self, bc.debuginfo)
-                for_loop.loc = cur.loc
-                # TODO set location for for_loop and transfer jumps!
-                for_loop.setLimit(limit)
-                for_loop.setEndLoc(end_loc)
-                for_loop.setTestLoc(bc.loc)
+                    for_loop = ForLoop(self, bc.debuginfo)
+                    for_loop.loc = cur.loc
+                    # TODO set location for for_loop and transfer jumps!
+                    for_loop.setLimit(limit)
+                    for_loop.setEndLoc(end_loc)
+                    for_loop.setTestLoc(bc.loc)
 
-                cur.insert_after(for_loop)
-                cur.remove()
+                    cur.insert_after(for_loop)
+                    cur.remove()
 
-                cur = bc.next
-                if not isinstance(cur, STORE_FAST):
-                    raise UnimplementedError('unsupported for loop')
-                loop_var = cur.args[0]
-                for_loop.setLoopVar(loop_var)
-                cur.remove()
+                    cur = bc.next
+                    if not isinstance(cur, STORE_FAST):
+                        raise UnimplementedError('unsupported for loop')
+                    loop_var = cur.args[0]
+                    for_loop.setLoopVar(loop_var)
+                    cur.remove()
 
-                bc.remove()
-                for_loop.rewrite(self)
+                    bc.remove()
+                    for_loop.rewrite(self)
+            except StellaException as e:
+                e.addDebug(bc.debuginfo)
+                raise
 
         self.bytecodes.printAll(self.log)
 
@@ -102,42 +106,50 @@ class Function(object):
     def intraflow(self):
         self.log.debug("Building Intra-Flowgraph ------------------------------")
         for bc in self.bytecodes:
-            if isinstance(bc, Jump):
-                if bc.processFallThrough():
-                    self.add_incoming_jump(bc.linearNext(), bc)
-                target_bc = self.labels[bc.target_label]
-                bc.setTargetBytecode(target_bc)
-                self.add_incoming_jump(target_bc, bc)
+            try:
+                if isinstance(bc, Jump):
+                    if bc.processFallThrough():
+                        self.add_incoming_jump(bc.linearNext(), bc)
+                    target_bc = self.labels[bc.target_label]
+                    bc.setTargetBytecode(target_bc)
+                    self.add_incoming_jump(target_bc, bc)
+            except StellaException as e:
+                e.addDebug(bc.debuginfo)
+                raise
 
         for bc in self.bytecodes:
-            if bc in self.incoming_jumps:
-                if not isinstance(bc.linearPrev(), BlockTerminal):
-                    #import pdb; pdb.set_trace()
-                    #self.log.debug("PREV_TYPE " + str(type(bc.prev)))
-                    bc_ = Jump(self, bc.debuginfo)
-                    bc_.loc = ''
-                    bc_.setTargetBytecode(bc)
-                    bc_.setTarget(bc.loc) # for printing purposes only
-                    bc.insert_before(bc_)
-                    self.add_incoming_jump(bc, bc_)
+            try:
+                if bc in self.incoming_jumps:
+                    if not isinstance(bc.linearPrev(), BlockTerminal):
+                        #import pdb; pdb.set_trace()
+                        #self.log.debug("PREV_TYPE " + str(type(bc.prev)))
+                        bc_ = Jump(self, bc.debuginfo)
+                        bc_.loc = ''
+                        bc_.setTargetBytecode(bc)
+                        bc_.setTarget(bc.loc) # for printing purposes only
+                        bc.insert_before(bc_)
+                        self.add_incoming_jump(bc, bc_)
 
-                    self.log.debug("IF ADD  " + bc_.locStr())
+                        self.log.debug("IF ADD  " + bc_.locStr())
 
-                if len(self.incoming_jumps[bc]) > 1:
-                    bc_ = PhiNode(self.impl, bc.debuginfo)
-                    bc_.loc = bc.loc # for printing purposes only
+                    if len(self.incoming_jumps[bc]) > 1:
+                        bc_ = PhiNode(self.impl, bc.debuginfo)
+                        bc_.loc = bc.loc # for printing purposes only
 
-                    bc.insert_before(bc_)
+                        bc.insert_before(bc_)
 
-                    # Move jumps over to the PhiNode
-                    if bc in self.incoming_jumps:
-                        self.incoming_jumps[bc_] = self.incoming_jumps[bc]
-                        for bc__ in self.incoming_jumps[bc_]:
-                            bc__.setTargetBytecode(bc_)
-                        del self.incoming_jumps[bc]
+                        # Move jumps over to the PhiNode
+                        if bc in self.incoming_jumps:
+                            self.incoming_jumps[bc_] = self.incoming_jumps[bc]
+                            for bc__ in self.incoming_jumps[bc_]:
+                                bc__.setTargetBytecode(bc_)
+                            del self.incoming_jumps[bc]
 
-                    self.log.debug("IF ADD  " + bc_.locStr())
-                    #import pdb; pdb.set_trace()
+                        self.log.debug("IF ADD  " + bc_.locStr())
+                        #import pdb; pdb.set_trace()
+            except StellaException as e:
+                e.addDebug(bc.debuginfo)
+                raise
 
     def stack_to_register(self):
         self.log.debug("Stack->Register Conversion ------------------------------")
@@ -196,13 +208,17 @@ class Function(object):
             bc_list = self.todo.pop()
 
             for bc in bc_list:
-                bc.type_eval(self)
-                self.log.debug("TYPE'D " + str(bc))
-                if isinstance(bc, RETURN_VALUE):
-                    self.retype(self.impl.result.unify_type(bc.result.type, bc.debuginfo))
-                if isinstance(bc, BlockTerminal) and bc.linearNext() != None and bc.linearNext() not in self.incoming_jumps:
-                    self.log.debug("Unreachable {0}, aborting".format(bc.linearNext()))
-                    break
+                try:
+                    bc.type_eval(self)
+                    self.log.debug("TYPE'D " + str(bc))
+                    if isinstance(bc, RETURN_VALUE):
+                        self.retype(self.impl.result.unify_type(bc.result.type, bc.debuginfo))
+                    if isinstance(bc, BlockTerminal) and bc.linearNext() != None and bc.linearNext() not in self.incoming_jumps:
+                        self.log.debug("Unreachable {0}, aborting".format(bc.linearNext()))
+                        break
+                except StellaException as e:
+                    e.addDebug(bc.debuginfo)
+                    raise
 
             if self.analyze_again:
                 self.todo.push(bc_list)
