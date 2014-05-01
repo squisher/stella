@@ -96,6 +96,42 @@ def hof_m(n):
 def and_(a,b): return a and b
 def or_(a,b):  return a or b
 
+some_global = 0
+def test_global():
+    x = 5
+    while some_global == 0:
+        x = global_test_worker(x)
+    return x
+
+def global_test_worker(x):
+    if x < 0:
+        some_global = 1
+    return x-1
+
+#def array_allocation():
+#    a = zeros(5)
+#
+#def array_alloc_assignment():
+#    a = zeros(5)
+#    for i in range(5):
+#        a[i] = i
+#    return i
+#
+#def array_alloc_use():
+#    a = zeros(5)
+#    for i in range(5):
+#        a[i] = i**2
+#    r = 0
+#    for i in range(5):
+#        r += a[i]
+#    return r
+#
+#def array_len():
+#    """ TODO: is there a reason not to support len? """
+#    a = zeros(5)
+#    return len(a)
+
+
 @mark.parametrize('args', [(40,2), (43.0, -1), (41, 1.0)])
 @mark.parametrize('f', [direct_assignment, simple_assignment, double_assignment, double_cast])
 def test1(f,args):
@@ -117,6 +153,7 @@ def test4(f,args):
     make_eq_test(f, args)
 
 @mark.parametrize('f', [return_const, assign_const])
+#@mark.parametrize('f', [return_const, assign_const, array_allocation, array_alloc_assignment, array_alloc_use, array_len])
 def test5(f):
     make_eq_test(f, ())
 
@@ -137,3 +174,5 @@ def test8():
 @mark.parametrize('f', [hof_f])
 def test9(f,arg):
     make_eq_test(f, arg)
+
+

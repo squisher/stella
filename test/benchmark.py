@@ -13,13 +13,18 @@ def ccompile(fn, src, opt=0):
     with open(fn, 'w') as f:
         f.write(src)
 
+    if 'CC' in os.environ:
+        CC=os.environ['CC']
+    else:
+        CC='clang'
+
     (root, ext) = os.path.splitext(fn)
     if os.path.exists(root):
         os.unlink(root)
     obj = root + ".o"
     if os.path.exists(obj):
         os.unlink(obj)
-    cmd = ['clang','-Wall', '-O'+str(opt), '-o', root, fn]
+    cmd = [CC,'-Wall', '-O'+str(opt), '-o', root, fn]
     print ("Compiling: {0}".format(" ".join(cmd)))
     call(cmd)
     return root

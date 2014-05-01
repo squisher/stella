@@ -11,7 +11,7 @@ faulthandler.enable(_f)
 def zeros(shape=1, dtype=None):
     """Emulate certain features of `numpy.zeros`
 
-    Note that `dtype` is ignored.
+    Note that `dtype` is ignored in Python, but will be interpreted in Stella.
     """
     try:
         dim = len(shape)
