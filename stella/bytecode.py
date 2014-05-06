@@ -53,7 +53,11 @@ class StackLoc(Typable):
     def __repr__(self):
         return self.name
 
-class GlobalVariable(Typable):
+class Global(object):
+    def translate_load(self, module, builder):
+        raise UnimplementedError("Unknown global type {0}".format(type(self)))
+
+class GlobalVariable(Typable, Global):
     name = None
     initial_value = None
 
@@ -61,15 +65,19 @@ class GlobalVariable(Typable):
         super().__init__()
         self.name = name
         self.initial_value = initial_value
+        self.type = type(initial_value)
 
     def __str__(self):
         return "+{0}<{1}>".format(self.name, self.type.__name__)
     def __repr__(self):
         return self.name
 
+    def translate_load(self, module, builder):
+        return builder.load(self.llvm)
+
     def translate(self, module, builder):
-        llvm = module.add_global_variable(llvm.py_type_to_llvm(self.type), self.name)
-        llvm.initializer = llvm.llvm_constant(self.initial_value) #Constant.undef(tp)
+        self.llvm = module.add_global_variable(llvm.py_type_to_llvm(self.type), self.name)
+        self.llvm.initializer = llvm.llvm_constant(self.initial_value) #Constant.undef(tp)
 
 class Const(Typable):
     value = None
@@ -379,7 +387,7 @@ class Module(Globals):
         else:
             super().__str__()
 
-class Function(Scope):
+class Function(Scope, Global):
     def __init__(self, f, module):
         # TODO: pass the module as the parent for scope
         super().__init__(None)
@@ -395,7 +403,6 @@ class Function(Scope):
         # weak reference is necessary so that Python will start garbage
         # collection for Module.
         self.module = weakref.proxy(module)
-        self.module[self.name] = self
 
         self.analyzed = False
         self.log = logging.getLogger(str(self))
@@ -420,6 +427,9 @@ class Function(Scope):
         for i in range(len(arg_types)):
             self.args[i].type = arg_types[i]
         self.analyzed = True
+
+    def translate_load(self, module, builder):
+        pass
 
     def translate(self, module):
         self.arg_types = [py_type_to_llvm(arg.type) for arg in self.args]
@@ -513,7 +523,8 @@ class LOAD_CONST(Bytecode):
         super().__init__(func, debuginfo)
 
     def stack_eval(self, func, stack):
-        self.result = self.popFirstArg()
+        if self.result == None:
+            self.result = self.popFirstArg()
         stack.push(self.result)
 
     def type_eval(self, func):
@@ -909,6 +920,7 @@ class POP_BLOCK(BlockEnd, Bytecode):
         pass
 
 class LOAD_GLOBAL(Poison, Bytecode):
+    name = None
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
@@ -917,15 +929,13 @@ class LOAD_GLOBAL(Poison, Bytecode):
         self.args.append(name)
 
     def stack_eval(self, func, stack):
-        name = self.popFirstArg()
-        self.result = func.module[name]
+        if self.name == None:
+            self.name = self.popFirstArg()
+        self.result = func.module[self.name]
         stack.push(self.result)
 
     def translate(self, module, builder):
-        if isinstance(self.result, Function):
-            pass
-        else:
-            raise UnimplementedError("Unknown global type {0}".format(type(self.result)))
+        self.result.translate_load(module, builder)
 
     def type_eval(self, func):
         pass
@@ -972,6 +982,11 @@ class FOR_ITER(Poison, HasTarget, Bytecode):
         super().__init__(func, debuginfo)
 
 class JUMP_ABSOLUTE(Jump, Bytecode):
+    """WIP"""
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+class JUMP_FORWARD(Jump, Bytecode):
     """WIP"""
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
