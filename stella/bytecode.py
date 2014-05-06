@@ -3,7 +3,7 @@ import logging
 import sys
 import inspect
 import weakref
-import builtins
+import types
 
 from .llvm import *
 from .exc import *
@@ -55,15 +55,21 @@ class StackLoc(Typable):
 
 class GlobalVariable(Typable):
     name = None
+    initial_value = None
 
-    def __init__(self, func, name):
+    def __init__(self, initial_value, name):
         super().__init__()
         self.name = name
+        self.initial_value = initial_value
 
     def __str__(self):
         return "+{0}<{1}>".format(self.name, self.type.__name__)
     def __repr__(self):
         return self.name
+
+    def translate(self, module, builder):
+        llvm = module.add_global_variable(llvm.py_type_to_llvm(self.type), self.name)
+        llvm.initializer = llvm.llvm_constant(self.initial_value) #Constant.undef(tp)
 
 class Const(Typable):
     value = None
@@ -311,10 +317,17 @@ class Globals(object):
             raise UndefinedGlobalError(key)
         return self.store[key]
 
+    def all(tp=None):
+        if tp == None:
+            return self.store.iteritems()
+        else:
+            return [(k,v) for k,v in self.store.iteritems() if isinstance(v, tp)]
+
 class Module(Globals):
     i=0
     def __init__(self):
         super().__init__()
+        """funcs is the set of python functions which are compiled by Stella"""
         self.funcs = set()
         self.todo = []
         self.entry = None
@@ -338,16 +351,16 @@ class Module(Globals):
             for impl in self.funcs:
                 if key in impl.f.__globals__:
                     item = impl.f.__globals__[key]
-                    if type(item) == builtins.function:
-                        func = Function(item, self)
-                        self.addFunc(func)
-                        return func
+                    if type(item) == types.FunctionType:
+                        wrapped = Function(item, self)
+                        self.addFunc(wrapped)
                     else:
                         # Assume it is a global variable
                         # TODO: is this safe? How do I catch types that aren't supported
                         # without listing all valid types?
-                        var = GlobalVariable(item, self)
-                        return var
+                        wrapped = GlobalVariable(item, key)
+                    self[key] = wrapped
+                    return wrapped
             raise e
 
     def translate(self):
