@@ -74,6 +74,10 @@ class Program(object):
         func = self.module.llvm.add_function(func_tp, str(impl)+'__stub__')
         bb = func.append_basic_block("entry")
         builder = llvm.core.Builder.new(bb)
+
+        for item in self.module.store:
+            if type(item) == GlobalVariable
+
         call = builder.call(impl.llvm, args)
         builder.ret(call)
         return func

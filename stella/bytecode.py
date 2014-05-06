@@ -3,6 +3,7 @@ import logging
 import sys
 import inspect
 import weakref
+import builtins
 
 from .llvm import *
 from .exc import *
@@ -49,6 +50,18 @@ class StackLoc(Typable):
 
     def __str__(self):
         return "*{0}<{1}>".format(self.name, self.type.__name__)
+    def __repr__(self):
+        return self.name
+
+class GlobalVariable(Typable):
+    name = None
+
+    def __init__(self, func, name):
+        super().__init__()
+        self.name = name
+
+    def __str__(self):
+        return "+{0}<{1}>".format(self.name, self.type.__name__)
     def __repr__(self):
         return self.name
 
@@ -324,9 +337,17 @@ class Module(Globals):
             # That would be required for multi-module support!
             for impl in self.funcs:
                 if key in impl.f.__globals__:
-                    func = Function(impl.f.__globals__[key], self)
-                    self.addFunc(func)
-                    return func
+                    item = impl.f.__globals__[key]
+                    if type(item) == builtins.function:
+                        func = Function(item, self)
+                        self.addFunc(func)
+                        return func
+                    else:
+                        # Assume it is a global variable
+                        # TODO: is this safe? How do I catch types that aren't supported
+                        # without listing all valid types?
+                        var = GlobalVariable(item, self)
+                        return var
             raise e
 
     def translate(self):
