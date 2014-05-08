@@ -98,12 +98,15 @@ def or_(a,b):  return a or b
 
 some_global = 0
 def test_global():
+    global some_global
+    some_global = 0
     x = 5
     while some_global == 0:
         x = global_test_worker(x)
     return x
 
 def global_test_worker(x):
+    global some_global
     if x < 0:
         some_global = 1
     return x-1

@@ -3,4 +3,4 @@ import stella
 #args_mod = list(filter(lambda e: e[0] >= 0, arglist2))
 
 def current_work():
-    stella.wrap(test_global, ir=True)()
+    print(stella.wrap(test_global, ir=True)())
