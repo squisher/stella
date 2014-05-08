@@ -1,4 +1,5 @@
 from test import *
+from stella import zeros
 
 def direct_assignment(x,y):
     a = x
@@ -97,7 +98,7 @@ def and_(a,b): return a and b
 def or_(a,b):  return a or b
 
 some_global = 0
-def test_global():
+def use_global():
     global some_global
     some_global = 0
     x = 5
@@ -111,8 +112,11 @@ def global_test_worker(x):
         some_global = 1
     return x-1
 
+def kwargs(a=0, b=1):
+    return a+b
+
 #def array_allocation():
-#    a = zeros(5)
+#    a = zeros(5, dtype=int)
 #
 #def array_alloc_assignment():
 #    a = zeros(5)
@@ -155,7 +159,7 @@ def test3(f,arg):
 def test4(f,args):
     make_eq_test(f, args)
 
-@mark.parametrize('f', [return_const, assign_const])
+@mark.parametrize('f', [return_const, assign_const, use_global])
 #@mark.parametrize('f', [return_const, assign_const, array_allocation, array_alloc_assignment, array_alloc_use, array_len])
 def test5(f):
     make_eq_test(f, ())
@@ -170,12 +174,20 @@ def test6(f,arg):
 def test7(f,arg):
     make_eq_test(f, arg)
 
-def test8():
-    make_eq_test(fib_harness, (1,30))
+@mark.parametrize('f', [fib_harness, kwargs])
+def test8(f):
+    make_eq_test(f, (1,30))
 
 @mark.parametrize('arg', single_args([0, 1, 2, 5, 8, 12]))
 @mark.parametrize('f', [hof_f])
 def test9(f,arg):
     make_eq_test(f, arg)
 
+@mark.parametrize('args', [{'a':1}, {'b':2}, {'a':1, 'b':0}, {}])
+def test10(args):
+    make_eq_kw_test(kwargs, args)
 
+@mark.parametrize('args', [{'c': 5}])
+@mark.xfail()
+def test11(args):
+    make_eq_kw_test(kwargs, args)
