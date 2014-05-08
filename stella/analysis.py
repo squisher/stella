@@ -271,7 +271,7 @@ class Function(object):
             # TODO Patch up di?
             di = None
             bc = STORE_FAST(self.impl, di)
-            bc.addArgByName(self.impl, arg)
+            bc.addLocalName(self.impl, arg)
             if self.last_bc == None:
                 self.bytecodes = self.last_bc = bc
             else:
@@ -323,7 +323,7 @@ class Function(object):
                         bc.addConst(co.co_consts[oparg])
                     elif op in dis.hasname:
                         #print('(' + co.co_names[oparg] + ')', end=' ')
-                        bc.addName(co.co_names[oparg])
+                        bc.addName(self.impl, co.co_names[oparg])
                     elif op in dis.hasjrel:
                         #print('(to ' + repr(i + oparg) + ')', end=' ')
                         bc.setTarget(i+oparg)
@@ -332,7 +332,7 @@ class Function(object):
                         bc.setTarget(oparg)
                     elif op in dis.haslocal:
                         #print('(' + co.co_varnames[oparg] + ')', end=' ')
-                        bc.addArgByName(self.impl, co.co_varnames[oparg])
+                        bc.addLocalName(self.impl, co.co_varnames[oparg])
                     elif op in dis.hascompare:
                         #print('(' + dis.cmp_op[oparg] + ')', end=' ')
                         bc.addCmp(dis.cmp_op[oparg])

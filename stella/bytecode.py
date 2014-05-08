@@ -170,9 +170,10 @@ class IR(metaclass=ABCMeta):
     def addArg(self, arg):
         self.args.append(arg)
 
-    def addArgByName(self, func, name):
+    def addLocalName(self, func, name):
         #self.args.append(func.getRegister(name))
         self.args.append(func.getStackLoc(name))
+        # TODO: is a base implementation needed??
 
     def popFirstArg(self):
         first = self.args[0]
@@ -491,7 +492,7 @@ class STORE_FAST(Bytecode):
         super().__init__(func, debuginfo)
         self.new_allocate = False
 
-    def addArgByName(self, func, name):
+    def addLocalName(self, func, name):
         # Python does not allocate new names, it just refers to them
         #import pdb; pdb.set_trace()
         (var, self.new_allocate) = func.getOrNewStackLoc(name)
@@ -518,6 +519,37 @@ class STORE_FAST(Bytecode):
         if self.new_allocate:
             tp = py_type_to_llvm(self.args[0].type)
             self.result.llvm = builder.alloca(tp, name=self.result.name)
+        builder.store(self.args[0].llvm, self.result.llvm)
+
+class STORE_GLOBAL(Bytecode):
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    def addName(self, func, name):
+        # Python does not allocate new names, it just refers to them
+        #import pdb; pdb.set_trace()
+        var = func.module[name]
+
+        self.args.append(var)
+
+    @pop_stack(1)
+    def stack_eval(self, func, stack):
+        self.result = self.popFirstArg()
+
+    def type_eval(self, func):
+        #func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
+        arg = self.args[0]
+        #import pdb; pdb.set_trace()
+        tp_changed = self.result.unify_type(arg.type, self.debuginfo)
+        if tp_changed:
+            # TODO: can I avoid a retype in some cases?
+            func.retype()
+            if self.result.type != arg.type:
+                self.args[0] = Cast(arg, self.result.type)
+
+    def translate(self, module, builder):
+        # Assume that the global has been allocated already.
+        self.cast(builder)
         builder.store(self.args[0].llvm, self.result.llvm)
 
 class LOAD_CONST(Bytecode):
@@ -928,7 +960,7 @@ class LOAD_GLOBAL(Poison, Bytecode):
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
-    def addName(self, name):
+    def addName(self, func, name):
         self.args.append(name)
 
     def stack_eval(self, func, stack):
