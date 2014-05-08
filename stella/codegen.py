@@ -17,10 +17,11 @@ class Program(object):
     def __init__(self, module):
         self.module = module
         self.module.translate()
-        for func in self.module.funcs:
-            self.blockAndCode(func)
 
         self.llvm = self.makeStub()
+
+        for func in self.module.funcs:
+            self.blockAndCode(func)
 
     def blockAndCode(self, impl):
         func = impl.llvm

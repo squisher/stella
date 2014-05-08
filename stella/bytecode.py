@@ -53,11 +53,7 @@ class StackLoc(Typable):
     def __repr__(self):
         return self.name
 
-class Global(object):
-    def translate_load(self, module, builder):
-        raise UnimplementedError("Unknown global type {0}".format(type(self)))
-
-class GlobalVariable(Typable, Global):
+class GlobalVariable(Typable):
     name = None
     initial_value = None
 
@@ -72,12 +68,10 @@ class GlobalVariable(Typable, Global):
     def __repr__(self):
         return self.name
 
-    def translate_load(self, module, builder):
-        return builder.load(self.llvm)
 
     def translate(self, module, builder):
-        self.llvm = module.add_global_variable(llvm.py_type_to_llvm(self.type), self.name)
-        self.llvm.initializer = llvm.llvm_constant(self.initial_value) #Constant.undef(tp)
+        self.llvm = module.add_global_variable(py_type_to_llvm(self.type), self.name)
+        self.llvm.initializer = llvm_constant(self.initial_value) #Constant.undef(tp)
 
 class Const(Typable):
     value = None
@@ -325,11 +319,11 @@ class Globals(object):
             raise UndefinedGlobalError(key)
         return self.store[key]
 
-    def all(tp=None):
+    def all(self, tp=None):
         if tp == None:
-            return self.store.iteritems()
+            return self.store.items()
         else:
-            return [(k,v) for k,v in self.store.iteritems() if isinstance(v, tp)]
+            return [(k,v) for k,v in self.store.items() if isinstance(v, tp)]
 
 class Module(Globals):
     i=0
@@ -387,7 +381,7 @@ class Module(Globals):
         else:
             super().__str__()
 
-class Function(Scope, Global):
+class Function(Scope):
     def __init__(self, f, module):
         # TODO: pass the module as the parent for scope
         super().__init__(None)
@@ -427,9 +421,6 @@ class Function(Scope, Global):
         for i in range(len(arg_types)):
             self.args[i].type = arg_types[i]
         self.analyzed = True
-
-    def translate_load(self, module, builder):
-        pass
 
     def translate(self, module):
         self.arg_types = [py_type_to_llvm(arg.type) for arg in self.args]
@@ -920,7 +911,7 @@ class POP_BLOCK(BlockEnd, Bytecode):
         pass
 
 class LOAD_GLOBAL(Poison, Bytecode):
-    name = None
+    var = None
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
@@ -929,16 +920,24 @@ class LOAD_GLOBAL(Poison, Bytecode):
         self.args.append(name)
 
     def stack_eval(self, func, stack):
-        if self.name == None:
-            self.name = self.popFirstArg()
-        self.result = func.module[self.name]
+        self.var = func.module[self.args[0]]
+        if isinstance(self.var, Function):
+            self.result = self.var
+        elif isinstance(self.var, GlobalVariable):
+            self.result = Register(func)
+        else:
+            raise UnimplementedError("Unknown global type {0}".format(type(self.result)))
         stack.push(self.result)
 
     def translate(self, module, builder):
-        self.result.translate_load(module, builder)
+        if isinstance(self.var, Function):
+            pass
+        elif isinstance(self.var, GlobalVariable):
+            self.result.llvm = builder.load(self.var.llvm)
 
     def type_eval(self, func):
-        pass
+        if isinstance(self.var, GlobalVariable):
+            self.result.unify_type(self.var.type, self.debuginfo)
 
 class CALL_FUNCTION(Bytecode):
 
