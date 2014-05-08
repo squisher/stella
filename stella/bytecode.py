@@ -241,15 +241,27 @@ class PhiNode(IR):
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
-        self.result = Register(func)
         self.blocks = []
+        self.stacked = False
 
     def stack_eval(self, func, stack):
         tos = stack.peek()
+
+        # sanity check: either there is always a tos or never
+        if self.stacked:
+            if tos and not self.result:
+                raise StellaException("Invalid bytecode sequence: unexpected tos")
+            if not tos and self.result:
+                raise StellaException("Invalid bytecode sequence: expected tos")
+
         if tos:
+            if not self.result:
+                self.result = Register(func)
             self.args.append(stack.pop())
             self.blocks.append(self.args[-1].bc)
             stack.push(self.result)
+
+        self.stacked = True
 
     def type_eval(self, func):
         if len(self.args) == 0:

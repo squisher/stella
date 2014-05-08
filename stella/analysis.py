@@ -180,7 +180,10 @@ class Function(object):
                 #            NEEDS REVIEW
                 #       See also codegen.Program.__init__
                 if bc.linearNext() and not isinstance(bc, BlockTerminal):
-                    self.todo.push((bc.linearNext(), stack))
+                    # the PhiNode swallows different control flow paths, therefore do not evaluate beyond more than once
+                    if not (isinstance(bc, PhiNode) and bc.linearNext() in evaled):
+                        self.todo.push((bc.linearNext(), stack))
+
                     if isinstance(bc, Block):
                         # the next instruction after the block is now already on the todo list,
                         # but first lets work inside the block
