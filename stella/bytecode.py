@@ -354,6 +354,7 @@ class Module(Globals):
     def makeEntry(self, f):
         assert self.entry == None
         self.entry = f
+        self[f.name] = f
 
     def __getitem__(self, key):
         # TODO: only tested for functions, not for variables so far!
@@ -377,6 +378,10 @@ class Module(Globals):
                     self[key] = wrapped
                     return wrapped
             raise e
+
+    def functionCall(self, func, args):
+        if not func.analyzed:
+            self.todo.append((func, args))
 
     def translate(self):
         self.llvm = llvm.core.Module.new('__stella__'+str(self.__class__.i))
@@ -999,8 +1004,7 @@ class CALL_FUNCTION(Bytecode):
         self.result = Register(func)
         stack.push(self.result)
 
-        if not self.args[0].analyzed:
-            func.module.todo.append((self.args[0], self.args[1:]))
+        func.module.functionCall(self.args[0], self.args[1:])
 
     def type_eval(self, func):
         #if not isinstance(self.args[0].type, Function):
