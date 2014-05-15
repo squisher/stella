@@ -30,3 +30,5 @@ def make_exc_test(f, args, py_exc, stella_exc):
 
     assert True
 
+unimplemented = mark.xfail(reason="Unimplemented", run=False)
+

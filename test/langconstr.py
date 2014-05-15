@@ -115,28 +115,28 @@ def global_test_worker(x):
 def kwargs(a=0, b=1):
     return a+b
 
-#def array_allocation():
-#    a = zeros(5, dtype=int)
-#
-#def array_alloc_assignment():
-#    a = zeros(5)
-#    for i in range(5):
-#        a[i] = i
-#    return i
-#
-#def array_alloc_use():
-#    a = zeros(5)
-#    for i in range(5):
-#        a[i] = i**2
-#    r = 0
-#    for i in range(5):
-#        r += a[i]
-#    return r
-#
-#def array_len():
-#    """ TODO: is there a reason not to support len? """
-#    a = zeros(5)
-#    return len(a)
+def array_allocation():
+    a = zeros(5, dtype=int)
+
+def array_alloc_assignment():
+    a = zeros(5)
+    for i in range(5):
+        a[i] = i
+    return i
+
+def array_alloc_use():
+    a = zeros(5)
+    for i in range(5):
+        a[i] = i**2
+    r = 0
+    for i in range(5):
+        r += a[i]
+    return r
+
+def array_len():
+    """ TODO: is there a reason not to support len? """
+    a = zeros(5)
+    return len(a)
 
 
 @mark.parametrize('args', [(40,2), (43.0, -1), (41, 1.0)])
@@ -160,8 +160,12 @@ def test4(f,args):
     make_eq_test(f, args)
 
 @mark.parametrize('f', [return_const, assign_const, use_global])
-#@mark.parametrize('f', [return_const, assign_const, array_allocation, array_alloc_assignment, array_alloc_use, array_len])
 def test5(f):
+    make_eq_test(f, ())
+
+@mark.parametrize('f', [array_allocation, array_alloc_assignment, array_alloc_use, array_len])
+@unimplemented
+def test5b(f):
     make_eq_test(f, ())
 
 @mark.parametrize('arg', single_args([0, 1, 42, -1, -42]))
@@ -183,7 +187,7 @@ def test8(f):
 def test9(f,arg):
     make_eq_test(f, arg)
 
-@mark.parametrize('args', [{'a':1}, {'b':2}, {'a':1, 'b':0}, {'b':1, 'a':0}, {}])
+@mark.parametrize('args', [{'a':1}, {'b':2}, {'a':1, 'b':0}, {'b':1, 'a':0}, {'a':1.2}, {'b':-3}, {}])
 def test10(args):
     make_eq_kw_test(kwargs, args)
 
