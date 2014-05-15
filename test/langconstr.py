@@ -183,11 +183,11 @@ def test8(f):
 def test9(f,arg):
     make_eq_test(f, arg)
 
-@mark.parametrize('args', [{'a':1}, {'b':2}, {'a':1, 'b':0}, {}])
+@mark.parametrize('args', [{'a':1}, {'b':2}, {'a':1, 'b':0}, {'b':1, 'a':0}, {}])
 def test10(args):
     make_eq_kw_test(kwargs, args)
 
-@mark.parametrize('args', [{'c': 5}])
+@mark.parametrize('args', [{'c': 5}, {'b': -1, 'c': 5}])
 @mark.xfail()
 def test11(args):
     make_eq_kw_test(kwargs, args)

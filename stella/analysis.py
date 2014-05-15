@@ -235,8 +235,8 @@ class Function(object):
         self.log.debug("returning type " + str(self.impl.result.type))
 
 
-    def analyze(self, arg_types):
-        self.impl.analyze(arg_types)
+    def analyzeCall(self, args, kwargs):
+        self.impl.analyzeCall(args, kwargs)
 
         self.log.debug("Analysis of " + self.impl.nameAndType())
 
@@ -373,16 +373,17 @@ class Function(object):
                 # mark the instruction as being the last of the block
                 bc.blockEnd(self.last_bc)
 
-def main(f, *args):
+def main(f, args, kwargs):
     module = bytecode.Module()
     impl = bytecode.Function(f, module)
-    impl.makeEntry(args)
+    impl.makeEntry(args, kwargs)
     module.addFunc(impl)
     f = Function(impl, module)
-    f.analyze([type(x) for x in args])
+    f.analyzeCall(args, kwargs)
     f.log.debug("called functions: " + str(len(module.todo)))
     while len(module.todo) > 0:
+        # TODO add kwargs support!
         (call_impl, call_args) = module.todo.pop()
         call_f = Function(call_impl, module)
-        call_f.analyze([x.type for x in call_args])
+        call_f.analyzeCall(call_args, {})
     return module

@@ -5,6 +5,8 @@ import inspect
 import weakref
 import types
 
+import pdb
+
 from .llvm import *
 from .exc import *
 from .utils import *
@@ -410,6 +412,8 @@ class Function(Scope):
         argspec = inspect.getargspec(f)
         self.arg_names = [n for n in argspec.args]
         self.args = [self.getOrNewRegister('__param_'+n) for n in argspec.args]
+        self.arg_names = argspec.args
+        self.arg_defaults = argspec.defaults or []
         self.arg_values = None
 
         # weak reference is necessary so that Python will start garbage
@@ -428,17 +432,62 @@ class Function(Scope):
     def getReturnType(self):
         return self.result.type
 
-    def makeEntry(self, args):
+    def combineArgs(self, args, kwargs):
+        def_start = len(args)
+        # TODO: is this the right place to check number of arguments?
+        if def_start+len(kwargs) < len(self.args)-len(self.arg_defaults):
+            raise TypingError("takes at least {0} argument(s) ({1} given)".format(
+                len(self.args)-len(self.arg_defaults), len(args)+len(kwargs)))
+        if def_start+len(kwargs) > len(self.args):
+            raise TypingError("takes at most {0} argument(s) ({1} given)".format(
+                len(self.args), len(args)))
+
+        # just initialize r to a list of the correct length
+        # TODO: I could initialize this smarter
+        r = list(self.arg_names)
+
+        # copy supplied regular arguments
+        for i in range(len(args)):
+            r[i] = args[i]
+
+        # set default values
+        for i in range(def_start,len(self.args)):
+            r[i] = self.arg_defaults[i-def_start]
+
+        # insert kwargs
+        for k,v in kwargs.items():
+            try:
+                idx = self.arg_names.index(k)
+                if idx < def_start:
+                    raise TypingError("got multiple values for keyword argument '{0}'".format(self.arg_names[idx]))
+                r[idx] = v
+            except ValueError:
+                raise TypingError("Function does not take an {0} argument".format(k))
+
+        return r
+
+
+    def makeEntry(self, args, kwargs):
         self.module.makeEntry(self)
-        self.arg_values = args
+        self.arg_values = self.combineArgs(args, kwargs)
 
-    def analyze(self, arg_types):
-        if len(arg_types) != len(self.args):
-            raise WrongNumberOfArgsError("Function takes {0} args, but {1} were given".format(len(self.args), len(arg_types)))
+    def analyzeCall(self, args, kwargs):
+        combined = self.combineArgs(args, kwargs)
 
-        for i in range(len(arg_types)):
-            self.args[i].type = arg_types[i]
+        for i in range(len(combined)):
+            # TODO: I don't particularly like this isinstance check here but it seems the easiest
+            #       way to also handle the initial entry function
+            if isinstance(combined[i], Typable):
+                self.args[i].type = combined[i].type
+            else:
+                self.args[i].type = type(combined[i])
         self.analyzed = True
+
+    def checkArgs (self, args):
+        if not (len(args)+len(self.arg_defaults) >= len(self.args)
+                and len(args) <= len(self.args)):
+            raise WrongNumberOfArgsError("Function takes {0} args, has {1} defaults, but {2} were given".format(len(self.args), len(self.arg_defauts), len(args)))
+
 
     def translate(self, module):
         self.arg_types = [py_type_to_llvm(arg.type) for arg in self.args]
@@ -1003,6 +1052,8 @@ class CALL_FUNCTION(Bytecode):
         self.args.reverse()
         self.result = Register(func)
         stack.push(self.result)
+
+        self.args[0].checkArgs(self.args[1:])
 
         func.module.functionCall(self.args[0], self.args[1:])
 

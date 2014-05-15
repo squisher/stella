@@ -34,13 +34,13 @@ def wrap(f, debug=True, ir=False, lazy=False, opt=None, stats=None):
     else:
         logging.getLogger().setLevel(logging.INFO)
 
-    def run(*args):
+    def run(*args, **kwargs):
         if stats == None:
             pass_stats = {}
         else:
             pass_stats = stats
 
-        module = analysis.main(f, *args)
+        module = analysis.main(f, args, kwargs)
         prog = codegen.Program(module)
 
         prog.optimize(opt)
