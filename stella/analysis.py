@@ -246,7 +246,8 @@ class Function(object):
 
 
     def analyzeCall(self, args, kwargs):
-        self.impl.analyzeCall(args, kwargs)
+        if not self.impl.analyzed:
+            self.impl.setParamTypes(args, kwargs)
 
         self.log.debug("Analysis of " + self.impl.nameAndType())
 
@@ -390,11 +391,11 @@ def main(f, args, kwargs):
     module.addFunc(impl)
     f = Function(impl, module)
     f.analyzeCall(args, kwargs)
-    f.log.debug("called functions: " + str(len(module.todo)))
-    while len(module.todo) > 0:
+    f.log.debug("called functions: " + str(module.todoCount()))
+    while module.todoCount() > 0:
         # TODO add kwargs support!
         #pdb.set_trace()
-        (call_impl, call_args) = module.todoNext()
+        (call_impl, call_args, call_kwargs) = module.todoNext()
         call_f = Function.get(call_impl, module)
-        call_f.analyzeCall(call_args, {})
+        call_f.analyzeCall(call_args, call_kwargs)
     return module

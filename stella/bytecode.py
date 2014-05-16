@@ -346,7 +346,7 @@ class Module(Globals):
         super().__init__()
         """funcs is the set of python functions which are compiled by Stella"""
         self.funcs = set()
-        self.todo = []
+        self._todo = []
         self.entry = None
         self.llvm = None
 
@@ -381,15 +381,31 @@ class Module(Globals):
                     return wrapped
             raise e
 
-    def functionCall(self, func, args):
-        pdb.set_trace()
+    # TODO: remove kwargs default + None case below!
+    def functionCall(self, func, args, kwargs=None):
+        #pdb.set_trace()
+        if kwargs == None:
+            kwargs = {}
         if not func.analyzed:
-            self.todo.append((func, args))
+            self.todoAdd(func, args, kwargs)
+
+    def todoAdd(self, func, args, kwargs):
+        self._todo.append((func, args, kwargs))
+
+    def todoLastFunc(self, func):
+        if len(self._todo) > 0:
+            (f, _, _) = self._todo[-1]
+            if f == func:
+                return True
+        return False
 
     def todoNext(self):
-        n = self.todo[0]
-        self.todo = self.todo[1:]
+        n = self._todo[0]
+        self._todo = self._todo[1:]
         return n
+
+    def todoCount(self):
+        return len(self._todo)
 
     def translate(self):
         self.llvm = llvm.core.Module.new('__stella__'+str(self.__class__.i))
@@ -439,11 +455,8 @@ class Function(Scope):
         return self.result.type
 
     def analyzeAgain(self):
-        if len(self.module.todo) > 0:
-            (f, _) = self.module.todo[-1]
-            if f == self:
-                return
-        self.module.todo.append((self, self.arg_values))
+        if not self.module.todoLastFunc(self):
+            self.module.todoAdd(self, self.arg_values, {})
 
     def combineArgs(self, args, kwargs):
         def_start = len(args)
@@ -484,7 +497,7 @@ class Function(Scope):
         self.module.makeEntry(self)
         self.arg_values = self.combineArgs(args, kwargs)
 
-    def analyzeCall(self, args, kwargs):
+    def setParamTypes(self, args, kwargs):
         combined = self.combineArgs(args, kwargs)
 
         for i in range(len(combined)):
