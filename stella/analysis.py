@@ -16,6 +16,16 @@ class DebugInfo(object):
         return self.filename + ':' + str(self.line)
 
 class Function(object):
+    funcs = {}
+    @classmethod
+    def get(klass, impl, module):
+        try:
+            return klass.funcs[(impl, module)]
+        except KeyError:
+            self = klass(impl, module)
+            klass.funcs[(impl, module)] = self
+            return self
+
     def __init__(self, impl, module):
         self.bytecodes = None # pointer to the first bytecode
         self.labels = {}
@@ -383,7 +393,8 @@ def main(f, args, kwargs):
     f.log.debug("called functions: " + str(len(module.todo)))
     while len(module.todo) > 0:
         # TODO add kwargs support!
-        (call_impl, call_args) = module.todo.pop()
-        call_f = Function(call_impl, module)
+        #pdb.set_trace()
+        (call_impl, call_args) = module.todoNext()
+        call_f = Function.get(call_impl, module)
         call_f.analyzeCall(call_args, {})
     return module

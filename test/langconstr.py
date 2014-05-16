@@ -1,5 +1,6 @@
 from test import *
 from stella import zeros
+from .basicmath import addition, subtraction
 
 def direct_assignment(x,y):
     a = x
@@ -115,6 +116,12 @@ def global_test_worker(x):
 def kwargs(a=0, b=1):
     return a+b
 
+def call_return(x,y):
+    if y > 0:
+        return addition(x,y)
+    else:
+        return subtraction(x,y)
+
 def array_allocation():
     a = zeros(5, dtype=int)
 
@@ -139,8 +146,8 @@ def array_len():
     return len(a)
 
 
-@mark.parametrize('args', [(40,2), (43.0, -1), (41, 1.0)])
-@mark.parametrize('f', [direct_assignment, simple_assignment, double_assignment, double_cast])
+@mark.parametrize('args', [(40,2), (43, -1), (41, 1)])
+@mark.parametrize('f', [direct_assignment, simple_assignment, double_assignment, double_cast, call_return])
 def test1(f,args):
     make_eq_test(f, args)
 
