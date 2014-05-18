@@ -48,7 +48,7 @@ def wrap(f, debug=True, ir=False, lazy=False, opt=None, stats=None):
         if lazy:
             return prog
         elif ir:
-            return str(prog.module)
+            return prog.module.getLlvmIR()
         else:
             return prog.run(pass_stats)
     return run

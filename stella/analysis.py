@@ -20,6 +20,7 @@ class Function(object):
     funcs = weakref.WeakValueDictionary()
     @classmethod
     def get(klass, impl, module):
+        logging.debug("Function.get({0}|{1}, {2}|{3})".format(impl, id(impl), module, id(module)))
         try:
             return klass.funcs[(impl, module)]
         except KeyError:
@@ -247,30 +248,35 @@ class Function(object):
 
 
     def analyzeCall(self, args, kwargs):
+        self.log.debug("analysis.Function id " + str(id(self)))
         if not self.impl.analyzed:
             self.impl.setParamTypes(args, kwargs)
 
-        self.log.debug("Analysis of " + self.impl.nameAndType())
+            self.log.debug("Analysis of " + self.impl.nameAndType())
 
-        self.disassemble()
+            self.disassemble()
 
-        self.rewrite()
+            self.rewrite()
 
-        self.intraflow()
+            self.intraflow()
 
-        self.bytecodes.printAll(self.log)
+            self.bytecodes.printAll(self.log)
 
-        self.stack_to_register()
+            self.stack_to_register()
 
-        self.type_analysis()
+            self.type_analysis()
 
-        self.impl.bytecodes = self.bytecodes
-        self.impl.incoming_jumps = self.incoming_jumps
+            self.impl.bytecodes = self.bytecodes
+            self.impl.incoming_jumps = self.incoming_jumps
 
-        #self.log.debug("PyStack bytecode:")
-        #import pdb; pdb.set_trace()
-        #for bc in self.bytecodes:
-        #    self.log.debug(str(bc))
+            #self.log.debug("PyStack bytecode:")
+            #import pdb; pdb.set_trace()
+            #for bc in self.bytecodes:
+            #    self.log.debug(str(bc))
+        else:
+            self.log.debug("Re-typing " + self.impl.nameAndType())
+
+            self.type_analysis()
 
     def disassemble(self):
         """Disassemble a code object."""
@@ -390,7 +396,7 @@ def main(f, args, kwargs):
     impl = bytecode.Function(f, module)
     impl.makeEntry(args, kwargs)
     module.addFunc(impl)
-    f = Function(impl, module)
+    f = Function.get(impl, module)
     f.analyzeCall(args, kwargs)
     f.log.debug("called functions: " + str(module.todoCount()))
     while module.todoCount() > 0:
