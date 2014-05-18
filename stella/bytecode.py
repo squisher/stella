@@ -1086,11 +1086,12 @@ class CALL_FUNCTION(Bytecode):
     def type_eval(self, func):
         #if not isinstance(self.args[0].type, Function):
         #    raise TypingError("Tried to call an object of type {0}".format(self.args[0].type))
-        tp_change = self.result.unify_type(self.args[0].getReturnType(), self.debuginfo)
-        if self.result.type == NoType:
-            func.impl.analyzeAgain() # redo analysis, right now return type is not known
-        else:
-            func.retype(tp_change)
+        self.result.unify_type(self.args[0].getReturnType(), self.debuginfo)
+#        tp_change = self.result.unify_type(self.args[0].getReturnType(), self.debuginfo)
+#        if self.result.type == NoType:
+#            func.impl.analyzeAgain() # redo analysis, right now return type is not known
+#        else:
+#            func.retype(tp_change)
 
     def translate(self, module, builder):
         self.result.llvm = builder.call(self.args[0].llvm, [arg.llvm for arg in self.args[1:]])

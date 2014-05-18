@@ -1,4 +1,5 @@
 import dis
+import weakref
 
 import logging
 
@@ -16,7 +17,7 @@ class DebugInfo(object):
         return self.filename + ':' + str(self.line)
 
 class Function(object):
-    funcs = {}
+    funcs = weakref.WeakValueDictionary()
     @classmethod
     def get(klass, impl, module):
         try:
