@@ -117,6 +117,9 @@ def global_test_worker(x):
 def kwargs(a=0, b=1):
     return a+b
 
+def kwargs_call(x):
+    return kwargs(a=x)
+
 def return_without_init(x,y):
     if y > 0:
         return addition(x,y)
@@ -180,7 +183,7 @@ def test5b(f):
     make_eq_test(f, ())
 
 @mark.parametrize('arg', single_args([0, 1, 42, -1, -42]))
-@mark.parametrize('f', [for1, for2, while1, recursive, ext_call])
+@mark.parametrize('f', [for1, for2, while1, recursive, ext_call, kwargs_call])
 def test6(f,arg):
     make_eq_test(f, arg)
 

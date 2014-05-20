@@ -394,7 +394,7 @@ class Module(Globals):
                     if type(item) == types.FunctionType:
                         wrapped = Function(item, self)
                         self.addFunc(wrapped)
-                    if type(item) == types.ModuleType:
+                    elif type(item) == types.ModuleType:
                         # no need to wrap it, it will be used with self.loadExt()
                         wrapped = item
                     else:
@@ -1072,6 +1072,7 @@ class LOAD_GLOBAL(Bytecode):
         self.args.append(name)
 
     def stack_eval(self, func, stack):
+        #pdb.set_trace()
         self.var = func.module[self.args[0]]
         if isinstance(self.var, Function):
             self.result = self.var
