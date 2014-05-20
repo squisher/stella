@@ -329,6 +329,8 @@ class Function(object):
             #print(dis.opname[op].ljust(20), end=' ')
             i = i+1
             try:
+                #if isinstance(bc, CALL_FUNCTION):
+                #    pdb.set_trace()
                 if op >= dis.HAVE_ARGUMENT:
                     oparg = code[i] + code[i+1]*256 + extended_arg
                     extended_arg = 0
@@ -359,6 +361,8 @@ class Function(object):
                             free = co.co_cellvars + co.co_freevars
                         #print('(' + free[oparg] + ')', end=' ')
                         raise UnimplementedError('hasfree')
+                    else:
+                        bc.addRawArg(oparg)
 
                 self.log.debug("DIS'D {0}".format(bc.locStr()))
             except StellaException as e:

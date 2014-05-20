@@ -95,6 +95,8 @@ class Const(Typable):
 
     def __str__(self):
         return str(self.value)
+    def __repr__(self):
+        return self.__str__()
 
 class Cast(object):
     def __init__(self, obj, tp):
@@ -171,6 +173,9 @@ class IR(metaclass=ABCMeta):
 
     def addArg(self, arg):
         self.args.append(arg)
+
+    def addRawArg(self, arg):
+        raise UnimplementedError("{0}.addRawArg() is not implemented".format(self.__class__.__name__))
 
     def addLocalName(self, func, name):
         #self.args.append(func.getRegister(name))
@@ -406,8 +411,7 @@ class Module(Globals):
                     return wrapped
             raise e
 
-    # TODO: remove kwargs default + None case below!
-    def functionCall(self, func, args, kwargs=None):
+    def functionCall(self, func, args, kwargs):
         #pdb.set_trace()
         if kwargs == None:
             kwargs = {}
@@ -486,7 +490,7 @@ class Function(Scope):
         if not self.module.todoLastFunc(self):
             self.module.todoAdd(self, self.arg_values, {})
 
-    def combineArgs(self, args, kwargs):
+    def combineAndCheckArgs(self, args, kwargs):
         def_start = len(args)
         # TODO: is this the right place to check number of arguments?
         if def_start+len(kwargs) < len(self.args)-len(self.arg_defaults):
@@ -523,10 +527,10 @@ class Function(Scope):
 
     def makeEntry(self, args, kwargs):
         self.module.makeEntry(self)
-        self.arg_values = self.combineArgs(args, kwargs)
+        self.arg_values = self.combineAndCheckArgs(args, kwargs)
 
     def setParamTypes(self, args, kwargs):
-        combined = self.combineArgs(args, kwargs)
+        combined = self.combineAndCheckArgs(args, kwargs)
 
         for i in range(len(combined)):
             # TODO: I don't particularly like this isinstance check here but it seems the easiest
@@ -536,12 +540,6 @@ class Function(Scope):
             else:
                 self.args[i].type = type(combined[i])
         self.analyzed = True
-
-    def checkArgs (self, args):
-        if not (len(args)+len(self.arg_defaults) >= len(self.args)
-                and len(args) <= len(self.args)):
-            raise WrongNumberOfArgsError("Function takes {0} args, has {1} defaults, but {2} were given".format(len(self.args), len(self.arg_defauts), len(args)))
-
 
     def translate(self, module):
         self.arg_types = [py_type_to_llvm(arg.type) for arg in self.args]
@@ -1123,33 +1121,70 @@ class CALL_FUNCTION(Bytecode):
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
+    def addRawArg(self, arg):
+        self.num_pos_args = arg & 0xFF
+        self.num_kw_args = (arg >> 8) & 0xFF
+
+    def separateArgs(self):
+        self.func = self.args[0]
+        args = self.args[1:]
+
+        #pdb.set_trace()
+        assert len(args) == self.num_pos_args + self.num_kw_args*2
+
+        self.kw_args = {}
+        for i in range(self.num_kw_args):
+            # the list is reversed, so the value comes first
+            value = args.pop()
+            key = args.pop()
+            # key is a Const object, unwrap it
+            self.kw_args[key.value] = value
+
+        # remainder is positional
+        self.args = args
+
     def stack_eval(self, func, stack):
-        #import pdb; pdb.set_trace()
         while True:
             arg = stack.pop()
             self.args.append(arg)
             if isinstance(arg, Function):
                 break
         self.args.reverse()
+        self.separateArgs()
+
         self.result = Register(func)
         stack.push(self.result)
 
-        self.args[0].checkArgs(self.args[1:])
+        self.func.combineAndCheckArgs(self.args, self.kw_args)
 
-        func.module.functionCall(self.args[0], self.args[1:])
+        func.module.functionCall(self.func, self.args, self.kw_args)
 
     def type_eval(self, func):
-        #if not isinstance(self.args[0].type, Function):
-        #    raise TypingError("Tried to call an object of type {0}".format(self.args[0].type))
-#        self.result.unify_type(self.args[0].getReturnType(), self.debuginfo)
-        tp_change = self.result.unify_type(self.args[0].getReturnType(), self.debuginfo)
+        #if not isinstance(self.func.type, Function):
+        #    raise TypingError("Tried to call an object of type {0}".format(self.func.type))
+#        self.result.unify_type(self.func.getReturnType(), self.debuginfo)
+        tp_change = self.result.unify_type(self.func.getReturnType(), self.debuginfo)
         if self.result.type == NoType:
             func.impl.analyzeAgain() # redo analysis, right now return type is not known
         else:
             func.retype(tp_change)
 
     def translate(self, module, builder):
-        self.result.llvm = builder.call(self.args[0].llvm, [arg.llvm for arg in self.args[1:]])
+        args = self.func.combineAndCheckArgs(self.args, self.kw_args)
+        #logging.debug("Call using args: " + str(args))
+        #logging.debug("Call using arg_types: " + str(list(map (type, args))))
+        llvm_args = []
+
+        # the default arguments are still Python objects
+        for arg in args:
+            if isinstance(arg, Typable):
+                # ready to go
+                llvm_args.append(arg.llvm)
+            else:
+                # it has to be a constant
+                c = Const(arg)
+                llvm_args.append(c.llvm)
+        self.result.llvm = builder.call(self.func.llvm, llvm_args)
 
 class GET_ITER(Poison, Bytecode):
     """WIP"""

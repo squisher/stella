@@ -57,6 +57,8 @@ def llvm_constant(val):
         return llvm.core.Constant.real(tp_double, val)
     elif tp == bool:
         return llvm.core.Constant.int(tp_bool, val)
+    elif tp == str:
+        return llvm.core.Constant.string(val)
     # HACK {
     elif tp == None.__class__:
         return llvm.core.Constant.int(tp_int, 0)
