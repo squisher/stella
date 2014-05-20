@@ -116,7 +116,7 @@ def global_test_worker(x):
 def kwargs(a=0, b=1):
     return a+b
 
-def call_return(x,y):
+def return_without_init(x,y):
     if y > 0:
         return addition(x,y)
     else:
@@ -147,7 +147,7 @@ def array_len():
 
 
 @mark.parametrize('args', [(40,2), (43, -1), (41, 1)])
-@mark.parametrize('f', [direct_assignment, simple_assignment, double_assignment, double_cast]) #, call_return
+@mark.parametrize('f', [direct_assignment, simple_assignment, double_assignment, double_cast, return_without_init])
 def test1(f,args):
     make_eq_test(f, args)
 

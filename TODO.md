@@ -5,6 +5,9 @@ Things to try
     * https://github.com/fschulze/pytest-flakes
 * codecheckers - https://bitbucket.org/RonnyPfannschmidt/pytest-codecheckers/
     * Dead? Has bugs with *-s*
+* re-analysing the type of a function because a return type changed should be
+  using a use-graph of function calls as to avoid unecessary re-types. For an
+  example of this happening see langconstr.return_without_init().
 
 Questions to ask
 ----------------
