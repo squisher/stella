@@ -361,10 +361,11 @@ class Module(Globals):
     def addFunc(self, f):
         self.funcs.add(f)
 
-    def makeEntry(self, f):
+    def makeEntry(self, f, args):
         assert self.entry == None
         self.entry = f
         self[f.name] = f
+        self.entry_args = args
 
     def loadExt(self, module, attr):
         # TODO: Combine better with __getitem__, there is duplicate code
@@ -468,7 +469,7 @@ class Function(Scope):
         self.args = [self.getOrNewRegister('__param_'+n) for n in argspec.args]
         self.arg_names = argspec.args
         self.arg_defaults = argspec.defaults or []
-        self.arg_values = None
+        #self.arg_values = None
 
         # weak reference is necessary so that Python will start garbage
         # collection for Module.
@@ -488,7 +489,7 @@ class Function(Scope):
 
     def analyzeAgain(self):
         if not self.module.todoLastFunc(self):
-            self.module.todoAdd(self, self.arg_values, {})
+            self.module.todoAdd(self, None, None)
 
     def combineAndCheckArgs(self, args, kwargs):
         def_start = len(args)
@@ -526,8 +527,8 @@ class Function(Scope):
 
 
     def makeEntry(self, args, kwargs):
-        self.module.makeEntry(self)
-        self.arg_values = self.combineAndCheckArgs(args, kwargs)
+        self.module.makeEntry(self, self.combineAndCheckArgs(args, kwargs))
+        #self.arg_values = 
 
     def setParamTypes(self, args, kwargs):
         combined = self.combineAndCheckArgs(args, kwargs)
