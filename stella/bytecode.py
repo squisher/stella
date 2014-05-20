@@ -229,6 +229,9 @@ class Poison(object):
     """
     Require that this bytecode is rewritten by bailing out
     if it is ever evaluated.
+
+    Note that if the child overrides all methods, this mixin will be useless
+    and should be removed from the child.
     """
     def stack_eval(self, func, stack):
         raise UnimplementedError("{0} must be rewritten".format(self.__class__.__name__))
@@ -358,6 +361,25 @@ class Module(Globals):
         self.entry = f
         self[f.name] = f
 
+    def loadExt(self, module, attr):
+        # TODO: Combine better with __getitem__, there is duplicate code
+        assert type(module) == types.ModuleType and type(attr) == str
+
+        key = module.__name__ +'.'+ attr
+        try:
+            wrapped = self[key]
+        except UndefinedGlobalError as e:
+            try:
+                item = module.__dict__[attr]
+                if type(item) != types.FunctionType:
+                    raise UnimplementedError("Currently only Functions can be imported (not {0})".format(type(item)))
+                wrapped = Function(item, self)
+                self.addFunc(wrapped)
+                self[key] = wrapped
+            except KeyError:
+                raise e
+        return wrapped
+
     def __getitem__(self, key):
         # TODO: only tested for functions, not for variables so far!
         try:
@@ -372,6 +394,9 @@ class Module(Globals):
                     if type(item) == types.FunctionType:
                         wrapped = Function(item, self)
                         self.addFunc(wrapped)
+                    if type(item) == types.ModuleType:
+                        # no need to wrap it, it will be used with self.loadExt()
+                        wrapped = item
                     else:
                         # Assume it is a global variable
                         # TODO: is this safe? How do I catch types that aren't supported
@@ -1037,7 +1062,7 @@ class POP_BLOCK(BlockEnd, Bytecode):
     def type_eval(self, func):
         pass
 
-class LOAD_GLOBAL(Poison, Bytecode):
+class LOAD_GLOBAL(Bytecode):
     var = None
 
     def __init__(self, func, debuginfo):
@@ -1049,6 +1074,8 @@ class LOAD_GLOBAL(Poison, Bytecode):
     def stack_eval(self, func, stack):
         self.var = func.module[self.args[0]]
         if isinstance(self.var, Function):
+            self.result = self.var
+        elif isinstance(self.var, types.ModuleType):
             self.result = self.var
         elif isinstance(self.var, GlobalVariable):
             self.result = Register(func)
@@ -1065,6 +1092,30 @@ class LOAD_GLOBAL(Poison, Bytecode):
     def type_eval(self, func):
         if isinstance(self.var, GlobalVariable):
             self.result.unify_type(self.var.type, self.debuginfo)
+
+class LOAD_ATTR(Bytecode):
+    discard = True
+    var = None
+
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    def addName(self, func, name):
+        self.args.append(name)
+
+    @pop_stack(1)
+    def stack_eval(self, func, stack):
+        if isinstance(self.args[1], types.ModuleType):
+            self.result = func.module.loadExt(self.args[1], self.args[0])
+        else:
+            raise UnimplementedError("Cannot load attribute {0} of an object with type {1}".format(self.args[0], type(self.args[1])))
+        stack.push(self.result)
+
+    def translate(self, module, builder):
+        pass
+
+    def type_eval(self, func):
+        pass
 
 class CALL_FUNCTION(Bytecode):
 

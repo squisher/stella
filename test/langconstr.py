@@ -1,6 +1,7 @@
 from test import *
 from stella import zeros
 from .basicmath import addition, subtraction
+from . import basicmath
 
 def direct_assignment(x,y):
     a = x
@@ -122,6 +123,9 @@ def return_without_init(x,y):
     else:
         return subtraction(x,y)
 
+def ext_call(x):
+    return basicmath.subtraction(0,x)
+
 def array_allocation():
     a = zeros(5, dtype=int)
 
@@ -176,7 +180,7 @@ def test5b(f):
     make_eq_test(f, ())
 
 @mark.parametrize('arg', single_args([0, 1, 42, -1, -42]))
-@mark.parametrize('f', [for1, for2, while1, recursive])
+@mark.parametrize('f', [for1, for2, while1, recursive, ext_call])
 def test6(f,arg):
     make_eq_test(f, arg)
 
