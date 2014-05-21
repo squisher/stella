@@ -348,7 +348,7 @@ class Globals(object):
         else:
             return [(k,v) for k,v in self.store.items() if isinstance(v, tp)]
 
-class Module(Globals):
+class Module(object):
     i=0
     def __init__(self):
         super().__init__()
@@ -357,6 +357,7 @@ class Module(Globals):
         self._todo = []
         self.entry = None
         self.llvm = None
+        self.namestore = Globals()
 
     def addFunc(self, f):
         self.funcs.add(f)
@@ -364,53 +365,53 @@ class Module(Globals):
     def makeEntry(self, f, args):
         assert self.entry == None
         self.entry = f
-        self[f.name] = f
+        self.namestore[f.name] = f
         self.entry_args = args
 
+    def _wrapPython(self, key, item):
+        if type(item) == types.FunctionType:
+            wrapped = Function(item, self)
+            self.addFunc(wrapped)
+        elif type(item) == types.ModuleType:
+            # no need to wrap it, it will be used with self.loadExt()
+            wrapped = item
+        else:
+            # Assume it is a global variable
+            # TODO: is this safe? How do I catch types that aren't supported
+            # without listing all valid types?
+            wrapped = GlobalVariable(item, key)
+
+        return wrapped
+
     def loadExt(self, module, attr):
-        # TODO: Combine better with __getitem__, there is duplicate code
         assert type(module) == types.ModuleType and type(attr) == str
 
         key = module.__name__ +'.'+ attr
         try:
-            wrapped = self[key]
+            wrapped = self.namestore[key]
         except UndefinedGlobalError as e:
             try:
                 item = module.__dict__[attr]
                 if type(item) != types.FunctionType:
                     raise UnimplementedError("Currently only Functions can be imported (not {0})".format(type(item)))
-                wrapped = Function(item, self)
-                self.addFunc(wrapped)
-                self[key] = wrapped
+                wrapped = self._wrapPython(key, item)
+                self.namestore[key] = wrapped
             except KeyError:
                 raise e
         return wrapped
 
-    def __getitem__(self, key):
-        # TODO: only tested for functions, not for variables so far!
+    def loadGlobal(self, func, key):
         try:
-            return super().__getitem__(key)
+            wrapped = self.namestore[key]
         except UndefinedGlobalError as e:
-            #import pdb; pdb.set_trace()
-            # TODO: only search the current function instead of all of them?
-            # That would be required for multi-module support!
-            for impl in self.funcs:
-                if key in impl.f.__globals__:
-                    item = impl.f.__globals__[key]
-                    if type(item) == types.FunctionType:
-                        wrapped = Function(item, self)
-                        self.addFunc(wrapped)
-                    elif type(item) == types.ModuleType:
-                        # no need to wrap it, it will be used with self.loadExt()
-                        wrapped = item
-                    else:
-                        # Assume it is a global variable
-                        # TODO: is this safe? How do I catch types that aren't supported
-                        # without listing all valid types?
-                        wrapped = GlobalVariable(item, key)
-                    self[key] = wrapped
-                    return wrapped
-            raise e
+            if key not in func.f.__globals__:
+                raise e
+            item = func.f.__globals__[key]
+
+            wrapped = self._wrapPython(key, item)
+
+            self.namestore[key] = wrapped
+        return wrapped
 
     def functionCall(self, func, args, kwargs):
         #pdb.set_trace()
@@ -490,6 +491,9 @@ class Function(Scope):
     def analyzeAgain(self):
         if not self.module.todoLastFunc(self):
             self.module.todoAdd(self, None, None)
+
+    def loadGlobal(self, key):
+        return self.module.loadGlobal(self, key)
 
     def combineAndCheckArgs(self, args, kwargs):
         def_start = len(args)
@@ -635,7 +639,7 @@ class STORE_GLOBAL(Bytecode):
     def addName(self, func, name):
         # Python does not allocate new names, it just refers to them
         #import pdb; pdb.set_trace()
-        var = func.module[name]
+        var = func.loadGlobal(name)
 
         self.args.append(var)
 
@@ -1072,7 +1076,7 @@ class LOAD_GLOBAL(Bytecode):
 
     def stack_eval(self, func, stack):
         #pdb.set_trace()
-        self.var = func.module[self.args[0]]
+        self.var = func.loadGlobal(self.args[0])
         if isinstance(self.var, Function):
             self.result = self.var
         elif isinstance(self.var, types.ModuleType):

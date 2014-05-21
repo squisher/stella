@@ -76,7 +76,7 @@ class Program(object):
         bb = func.append_basic_block("entry")
         builder = llvm.core.Builder.new(bb)
 
-        for name, var in self.module.all(GlobalVariable):
+        for name, var in self.module.namestore.all(GlobalVariable):
             var.translate(self.module.llvm, builder)
 
         call = builder.call(impl.llvm, args)
