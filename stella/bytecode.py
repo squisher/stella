@@ -10,6 +10,7 @@ import pdb
 from .llvm import *
 from .exc import *
 from .utils import *
+from .intrinsics import *
 from abc import ABCMeta, abstractmethod, abstractproperty
 
 class Typable(object):

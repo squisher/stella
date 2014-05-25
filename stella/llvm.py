@@ -17,6 +17,8 @@ tp_int32 = llvm.core.Type.int(32)
 #tp_float = llvm.core.Type.float() # Python always works with double precision
 tp_double = llvm.core.Type.double()
 tp_bool = llvm.core.Type.int(1)
+def tp_array(tp, n):
+    return llvm.core.Type.array(tp, n)
 
 def py_type_to_llvm(tp):
     """Map from Python types to LLVM types."""

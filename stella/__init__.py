@@ -1,32 +1,14 @@
 #!/usr/bin/env python
-
-import stella.analysis as analysis
-import stella.codegen as codegen
-
+import sys
 import logging
 import faulthandler
 
+from . import analysis
+from . import codegen
+from . import intrinsics
+
 _f = open('faulthandler.err', 'w')
 faulthandler.enable(_f)
-def zeros(shape=1, dtype=None):
-    """Emulate certain features of `numpy.zeros`
-
-    Note that `dtype` is ignored in Python, but will be interpreted in Stella.
-    """
-    try:
-        dim = len(shape)
-        if dim == 1:
-            shape=shape[0]
-            raise TypeError()
-    except TypeError:
-        return [0 for i in range(shape)]
-
-    # here dim > 1, build up the inner most dimension
-    inner = [0 for i in range(shape[dim-1])]
-    for i in range(dim-2,-1,-1):
-        new_inner = [list(inner) for j in range(shape[i])]
-        inner = new_inner
-    return inner
 
 def wrap(f, debug=True, ir=False, lazy=False, opt=None, stats=None):
     if debug:
@@ -52,3 +34,9 @@ def wrap(f, debug=True, ir=False, lazy=False, opt=None, stats=None):
         else:
             return prog.run(pass_stats)
     return run
+
+# for convenience register the Python intrinsics directly in the stella namespace
+# TODO maybe this isn't the best idea? It may be confusing. On the other hand,
+# I don't plan to add more directly to the stella module.
+for func in intrinsics.getPythonIntrinsics():
+    sys.modules[__name__].__dict__[func.__name__] = func
