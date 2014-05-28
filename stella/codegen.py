@@ -70,7 +70,7 @@ class Program(object):
 
     def makeStub(self):
         impl = self.module.entry
-        args = [llvm_constant(arg) for arg in self.module.entry_args]
+        args = [arg.llvm for arg in self.module.entry_args]
         func_tp = llvm.core.Type.function(py_type_to_llvm(impl.result.type), [])
         func = self.module.llvm.add_function(func_tp, str(impl)+'__stub__')
         bb = func.append_basic_block("entry")

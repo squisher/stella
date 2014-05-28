@@ -9,6 +9,9 @@ from functools import wraps
 class Intrinsic(metaclass=ABCMeta):
     py_func = None
     @abstractmethod
+    def __init__ (self, args, kw_args):
+        pass
+    @abstractmethod
     def getReturnType(self):
         pass
     @abstractmethod
@@ -37,21 +40,21 @@ def zeros(shape=1, dtype=None):
 
 class Zeros(Intrinsic):
     py_func = zeros
-    def __init__(self, tp, n, name=''):
-        self.type = tp
-        self.n = n
-        self.name = name
+    def __init__(self, args):
+        # for now only 1D
+        self.shape = args[0]
+        self.type = args[1]
     def getReturnType(self):
         return tp_array(self.tp, self.n)
     def translate(self, module, builder):
-        return builder.alloca(self.tp, self.n, self.name)
+        return builder.alloca(self.tp, self.n)
 
 
 # --
 
 
 func2klass = {}
-# Get all contrete subclasses of Bytecode and register them
+# Get all contrete subclasses of Intrinsic and register them
 for name in dir(sys.modules[__name__]):
     klass = sys.modules[__name__].__dict__[name]
     try:

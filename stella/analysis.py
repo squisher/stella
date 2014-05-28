@@ -398,8 +398,13 @@ class Function(object):
 def main(f, args, kwargs):
     module = bytecode.Module()
     impl = bytecode.Function(f, module)
-    impl.makeEntry(args, kwargs)
+
+    const_kw = {}
+    for k,v in kwargs.items():
+        const_kw[k] = Const(v)
+    impl.makeEntry(list(map(Const, args)), const_kw)
     module.addFunc(impl)
+
     f = Function.get(impl, module)
     f.analyzeCall(args, kwargs)
     f.log.debug("called functions: " + str(module.todoCount()))

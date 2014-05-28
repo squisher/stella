@@ -138,6 +138,10 @@ def ext_call(x):
 def array_allocation():
     a = zeros(5, dtype=int)
 
+def array_allocation_reg():
+    l = 2
+    a = zeros(l, dtype=int)
+
 def array_alloc_assignment():
     a = zeros(5)
     for i in range(5):
@@ -183,7 +187,7 @@ def test4(f,args):
 def test5(f):
     make_eq_test(f, ())
 
-@mark.parametrize('f', [array_allocation, array_alloc_assignment, array_alloc_use, array_len])
+@mark.parametrize('f', [array_allocation, array_allocation_reg, array_alloc_assignment, array_alloc_use, array_len])
 @unimplemented
 def test5b(f):
     make_eq_test(f, ())

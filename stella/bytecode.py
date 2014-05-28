@@ -470,7 +470,7 @@ class Function(Scope):
         self.arg_names = [n for n in argspec.args]
         self.args = [self.getOrNewRegister('__param_'+n) for n in argspec.args]
         self.arg_names = argspec.args
-        self.arg_defaults = argspec.defaults or []
+        self.arg_defaults = [Const(default) for default in argspec.defaults or []]
         #self.arg_values = None
 
         # weak reference is necessary so that Python will start garbage
@@ -516,6 +516,7 @@ class Function(Scope):
 
         # set default values
         for i in range(def_start,len(self.args)):
+            #logging.debug("default argument {0} has type {1}".format(i,type(self.arg_defaults[i-def_start])))
             r[i] = self.arg_defaults[i-def_start]
 
         # insert kwargs
@@ -1126,6 +1127,8 @@ class CALL_FUNCTION(Bytecode):
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
+        self.intrinsic_class = None
+        self.intrinsic = None
 
     def addRawArg(self, arg):
         self.num_pos_args = arg & 0xFF
@@ -1161,36 +1164,36 @@ class CALL_FUNCTION(Bytecode):
         self.result = Register(func)
         stack.push(self.result)
 
-        self.func.combineAndCheckArgs(self.args, self.kw_args)
+        self.intrinsic_class = getIntrinsic(self.func)
 
-        func.module.functionCall(self.func, self.args, self.kw_args)
+        if self.intrinsic_class == None:
+            func.module.functionCall(self.func, self.args, self.kw_args)
 
     def type_eval(self, func):
-        #if not isinstance(self.func.type, Function):
-        #    raise TypingError("Tried to call an object of type {0}".format(self.func.type))
-#        self.result.unify_type(self.func.getReturnType(), self.debuginfo)
-        tp_change = self.result.unify_type(self.func.getReturnType(), self.debuginfo)
+        args = self.func.combineAndCheckArgs(self.args, self.kw_args)
+
+        if self.intrinsic_class:
+            if not self.intrinsic:
+                self.intrinsic = self.intrinsic_class(args)
+            tp = self.intrinsic.getReturnType()
+        else:
+            tp = self.func.getReturnType()
+        tp_change = self.result.unify_type(tp, self.debuginfo)
+
         if self.result.type == NoType:
             func.impl.analyzeAgain() # redo analysis, right now return type is not known
         else:
             func.retype(tp_change)
 
     def translate(self, module, builder):
-        args = self.func.combineAndCheckArgs(self.args, self.kw_args)
-        #logging.debug("Call using args: " + str(args))
-        #logging.debug("Call using arg_types: " + str(list(map (type, args))))
-        llvm_args = []
+        if self.intrinsic:
+            self.result.llvm = self.intrinsic.translate(module, builder)
+        else:
+            args = self.func.combineAndCheckArgs(self.args, self.kw_args)
+            #logging.debug("Call using args: " + str(args))
+            #logging.debug("Call using arg_types: " + str(list(map (type, args))))
 
-        # the default arguments are still Python objects
-        for arg in args:
-            if isinstance(arg, Typable):
-                # ready to go
-                llvm_args.append(arg.llvm)
-            else:
-                # it has to be a constant
-                c = Const(arg)
-                llvm_args.append(c.llvm)
-        self.result.llvm = builder.call(self.func.llvm, llvm_args)
+            self.result.llvm = builder.call(self.func.llvm, [arg.llvm for arg in args])
 
 class GET_ITER(Poison, Bytecode):
     """WIP"""
