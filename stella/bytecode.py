@@ -406,6 +406,11 @@ class Module(object):
             wrapped = self.namestore[key]
         except UndefinedGlobalError as e:
             if key not in func.f.__globals__:
+                # TODO: too much nesting, there should be a cleaner way to detect these types
+                if supported_py_type(key):
+                    return __builtins__[key]
+                else:
+                    raise UnimplementedError("Type {0} is not supported".format(key))
                 raise e
             item = func.f.__globals__[key]
 
@@ -1079,9 +1084,12 @@ class LOAD_GLOBAL(Bytecode):
     def stack_eval(self, func, stack):
         #pdb.set_trace()
         self.var = func.loadGlobal(self.args[0])
+        # TODO: remove these isinstance checks and just check for GlobalVariable else return directly?
         if isinstance(self.var, Function):
             self.result = self.var
         elif isinstance(self.var, types.ModuleType):
+            self.result = self.var
+        elif isinstance(self.var, type):
             self.result = self.var
         elif isinstance(self.var, GlobalVariable):
             self.result = Register(func)

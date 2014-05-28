@@ -20,6 +20,14 @@ tp_bool = llvm.core.Type.int(1)
 def tp_array(tp, n):
     return llvm.core.Type.array(tp, n)
 
+py_types = [int, float, bool]
+def supported_py_type(tp):
+    if type(tp) == str:
+        types = map(lambda x: x.__name__, py_types)
+    else:
+        types = py_types
+    return any([tp == t for t in types])
+
 def py_type_to_llvm(tp):
     """Map from Python types to LLVM types."""
     if tp == int:

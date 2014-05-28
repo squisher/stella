@@ -43,7 +43,7 @@ class Zeros(Intrinsic):
     def __init__(self, args):
         # for now only 1D
         self.shape = args[0]
-        self.type = args[1]
+        self.type = py_type_to_llvm(args[1])
     def getReturnType(self):
         return tp_array(self.tp, self.n)
     def translate(self, module, builder):
