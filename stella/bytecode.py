@@ -413,8 +413,12 @@ class Module(object):
                     raise UnimplementedError("Type {0} is not supported".format(key))
                 raise e
             item = func.f.__globals__[key]
+            intrinsic = getIntrinsic(item)
 
-            wrapped = self._wrapPython(key, item)
+            if intrinsic:
+                wrapped = intrinsic
+            else:
+                wrapped = self._wrapPython(key, item)
 
             self.namestore[key] = wrapped
         return wrapped
@@ -1135,8 +1139,6 @@ class CALL_FUNCTION(Bytecode):
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
-        self.intrinsic_class = None
-        self.intrinsic = None
 
     def addRawArg(self, arg):
         self.num_pos_args = arg & 0xFF
@@ -1161,31 +1163,23 @@ class CALL_FUNCTION(Bytecode):
         self.args = args
 
     def stack_eval(self, func, stack):
-        while True:
+        for i in range(self.num_pos_args + 2*self.num_kw_args +1):
             arg = stack.pop()
             self.args.append(arg)
-            if isinstance(arg, Function):
-                break
         self.args.reverse()
         self.separateArgs()
 
         self.result = Register(func)
         stack.push(self.result)
 
-        self.intrinsic_class = getIntrinsic(self.func.f)
-
-        if self.intrinsic_class == None:
+        if not issubclass (self.func, Intrinsic):
             func.module.functionCall(self.func, self.args, self.kw_args)
+            self.intrinsic = self.func(args)
 
     def type_eval(self, func):
         args = self.func.combineAndCheckArgs(self.args, self.kw_args)
 
-        if self.intrinsic_class:
-            if not self.intrinsic:
-                self.intrinsic = self.intrinsic_class(args)
-            tp = self.intrinsic.getReturnType()
-        else:
-            tp = self.func.getReturnType()
+        tp = self.func.getReturnType()
         tp_change = self.result.unify_type(tp, self.debuginfo)
 
         if self.result.type == NoType:
@@ -1194,7 +1188,7 @@ class CALL_FUNCTION(Bytecode):
             func.retype(tp_change)
 
     def translate(self, module, builder):
-        if self.intrinsic:
+        if issubclass (self.func, Intrinsic):
             self.result.llvm = self.intrinsic.translate(module, builder)
         else:
             args = self.func.combineAndCheckArgs(self.args, self.kw_args)
