@@ -41,13 +41,15 @@ def zeros(shape=1, dtype=None):
 class Zeros(Intrinsic):
     py_func = zeros
     def __init__(self, args):
-        # for now only 1D
-        self.shape = args[0]
-        self.type = py_type_to_llvm(args[1])
+        #if type(args[0]) != Const or args[0].type != int:
+        #    raise UnimplementedError("Zeros currently only supported with a constant int shape")
+        self.shape = args[0].value
+        self.type = args[1]
     def getReturnType(self):
-        return tp_array(self.tp, self.n)
+        return ArrayType(self.type, self.shape)
     def translate(self, module, builder):
-        return builder.alloca(self.tp, self.n)
+        tp = tp_array(self.type, self.shape)
+        return builder.alloca(tp, self.shape)
 
 
 # --

@@ -6,11 +6,25 @@ import logging
 
 from .exc import *
 
-class NoType:
+class NoType(object):
     __name__ = '?'
     @classmethod
     def __str__(klass):
         return '<?>'
+    # llvm.core.ArrayType does something funny, it will compare against _ptr,
+    # so let's just add the attribute here to enable equality tests
+    _ptr = None
+
+class ArrayType(object):
+    __name__ = 'ArrayType'
+    tp = NoType
+    shape = None
+    def __init__(self, tp, shape):
+        assert isinstance(tp, type)
+        self.tp = tp
+        self.shape = shape
+    def __str__(self):
+        return "<{0}*{1}>".format(tp, shape)
 
 tp_int = llvm.core.Type.int(64)
 tp_int32 = llvm.core.Type.int(32)
@@ -18,7 +32,7 @@ tp_int32 = llvm.core.Type.int(32)
 tp_double = llvm.core.Type.double()
 tp_bool = llvm.core.Type.int(1)
 def tp_array(tp, n):
-    return llvm.core.Type.array(tp, n)
+    return llvm.core.Type.array(py_type_to_llvm(tp), n)
 
 py_types = [int, float, bool]
 def supported_py_type(tp):

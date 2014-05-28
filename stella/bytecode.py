@@ -1172,7 +1172,7 @@ class CALL_FUNCTION(Bytecode):
         self.result = Register(func)
         stack.push(self.result)
 
-        self.intrinsic_class = getIntrinsic(self.func)
+        self.intrinsic_class = getIntrinsic(self.func.f)
 
         if self.intrinsic_class == None:
             func.module.functionCall(self.func, self.args, self.kw_args)
