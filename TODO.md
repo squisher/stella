@@ -58,3 +58,27 @@ jump test
 
 :end
 ```
+
+LLVMpy
+------
+
+Things to fix:
+* abort() still sometimes called (llvm issue?)
+* Exception not formatted correctly:
+```
+/home/squisher/usr/rsc/stella/stella/codegen.py in run(self, stats)
+    101     def run(self, stats):
+    102         logging.debug("Verifying... ")
+--> 103         self.module.llvm.verify()
+    104 
+    105         logging.debug("Preparing execution...")
+
+/home/squisher/usr/rsc/stella/llvmpy/build/lib.linux-x86_64-3.2/llvm/core.py in verify(self)
+    591         broken = api.llvm.verifyModule(self._ptr, action, errio)
+    592         if broken:
+--> 593             raise llvm.LLVMException(errio.getvalue())
+    594 
+    595     def to_bitcode(self, fileobj=None):
+
+LLVMException: b'Found return instr that returns non-void in Function of void return type!\n  ret i64 0\n voidBroken module found, compilation terminated.\nFound return instr that returns non-void in Function of void return type!\n  ret void <badref>\n voidBroken module found, compilation terminated.\nBroken module found, compilation terminated.\n'
+```

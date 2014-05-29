@@ -33,6 +33,7 @@ tp_int32 = llvm.core.Type.int(32)
 #tp_float = llvm.core.Type.float() # Python always works with double precision
 tp_double = llvm.core.Type.double()
 tp_bool = llvm.core.Type.int(1)
+tp_void = llvm.core.Type.void()
 def tp_array(tp, n):
     return llvm.core.Type.array(py_type_to_llvm(tp), n)
 
@@ -52,6 +53,8 @@ def py_type_to_llvm(tp):
         return tp_double
     elif tp == bool:
         return tp_bool
+    elif tp == type(None):
+        return tp_void
     elif type(tp) == ArrayType:
         # TODO is a pointer always required?
         return llvm.core.Type.pointer(tp.make())
