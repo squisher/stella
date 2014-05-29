@@ -5,7 +5,6 @@ import faulthandler
 
 from . import analysis
 from . import codegen
-from . import intrinsics
 
 _f = open('faulthandler.err', 'w')
 faulthandler.enable(_f)
@@ -38,5 +37,4 @@ def wrap(f, debug=True, ir=False, lazy=False, opt=None, stats=None):
 # for convenience register the Python intrinsics directly in the stella namespace
 # TODO maybe this isn't the best idea? It may be confusing. On the other hand,
 # I don't plan to add more directly to the stella module.
-for func in intrinsics.getPythonIntrinsics():
-    sys.modules[__name__].__dict__[func.__name__] = func
+from .intrinsics.python import *

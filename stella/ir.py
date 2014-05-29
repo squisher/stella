@@ -2,12 +2,14 @@ import logging
 import inspect
 import weakref
 import types
+import sys
 from abc import ABCMeta, abstractmethod, abstractproperty
 
 from .llvm import *
 from .exc import *
 from .utils import *
-from .intrinsics import *
+
+from .intrinsics import python
 
 import pdb
 
@@ -325,8 +327,13 @@ class Module(object):
 
     def _wrapPython(self, key, item):
         if type(item) == types.FunctionType:
-            wrapped = Function(item, self)
-            self.addFunc(wrapped)
+            intrinsic = getIntrinsic(item)
+
+            if intrinsic:
+                wrapped = intrinsic()
+            else:
+                wrapped = Function(item, self)
+                self.addFunc(wrapped)
         elif type(item) == types.ModuleType:
             # no need to wrap it, it will be used with self.loadExt()
             wrapped = item
@@ -367,12 +374,7 @@ class Module(object):
                     raise UnimplementedError("Type {0} is not supported".format(key))
                 raise e
             item = func.f.__globals__[key]
-            intrinsic = getIntrinsic(item)
-
-            if intrinsic:
-                wrapped = intrinsic
-            else:
-                wrapped = self._wrapPython(key, item)
+            wrapped = self._wrapPython(key, item)
 
             self.namestore[key] = wrapped
         return wrapped
@@ -421,7 +423,56 @@ class Module(object):
     def __str__(self):
         return '__module__' + str(id(self))
 
-class Function(Scope):
+class Callable(metaclass=ABCMeta):
+    arg_defaults = {}
+    arg_names = []
+    
+    @abstractmethod
+    def getReturnType(self):
+        pass
+
+    def readSignature(self, f):
+        argspec = inspect.getargspec(f)
+        #self.arg_names = [n for n in argspec.args]
+        self.arg_names = argspec.args
+        self.arg_defaults = [Const(default) for default in argspec.defaults or []]
+
+    def combineAndCheckArgs(self, args, kwargs):
+        def_start = len(args)
+        # TODO: is this the right place to check number of arguments?
+        if def_start+len(kwargs) < len(self.arg_names)-len(self.arg_defaults):
+            raise TypingError("takes at least {0} argument(s) ({1} given)".format(
+                len(self.arg_names)-len(self.arg_defaults), len(args)+len(kwargs)))
+        if def_start+len(kwargs) > len(self.arg_names):
+            raise TypingError("takes at most {0} argument(s) ({1} given)".format(
+                len(self.arg_names), len(args)))
+
+        # just initialize r to a list of the correct length
+        # TODO: I could initialize this smarter
+        r = list(self.arg_names)
+
+        # copy supplied regular arguments
+        for i in range(len(args)):
+            r[i] = args[i]
+
+        # set default values
+        for i in range(def_start,len(self.arg_names)):
+            #logging.debug("default argument {0} has type {1}".format(i,type(self.arg_defaults[i-def_start])))
+            r[i] = self.arg_defaults[i-def_start]
+
+        # insert kwargs
+        for k,v in kwargs.items():
+            try:
+                idx = self.arg_names.index(k)
+                if idx < def_start:
+                    raise TypingError("got multiple values for keyword argument '{0}'".format(self.arg_names[idx]))
+                r[idx] = v
+            except ValueError:
+                raise TypingError("Function does not take an {0} argument".format(k))
+
+        return r
+
+class Function(Callable, Scope):
     def __init__(self, f, module):
         # TODO: pass the module as the parent for scope
         super().__init__(None)
@@ -429,11 +480,8 @@ class Function(Scope):
         self.name = f.__name__
         self.result = Register(self, '__return__')
 
-        argspec = inspect.getargspec(f)
-        self.arg_names = [n for n in argspec.args]
-        self.args = [self.getOrNewRegister('__param_'+n) for n in argspec.args]
-        self.arg_names = argspec.args
-        self.arg_defaults = [Const(default) for default in argspec.defaults or []]
+        self.readSignature(f)
+        self.args = [self.getOrNewRegister('__param_'+n) for n in self.arg_names]
         #self.arg_values = None
 
         # weak reference is necessary so that Python will start garbage
@@ -458,42 +506,6 @@ class Function(Scope):
 
     def loadGlobal(self, key):
         return self.module.loadGlobal(self, key)
-
-    def combineAndCheckArgs(self, args, kwargs):
-        def_start = len(args)
-        # TODO: is this the right place to check number of arguments?
-        if def_start+len(kwargs) < len(self.args)-len(self.arg_defaults):
-            raise TypingError("takes at least {0} argument(s) ({1} given)".format(
-                len(self.args)-len(self.arg_defaults), len(args)+len(kwargs)))
-        if def_start+len(kwargs) > len(self.args):
-            raise TypingError("takes at most {0} argument(s) ({1} given)".format(
-                len(self.args), len(args)))
-
-        # just initialize r to a list of the correct length
-        # TODO: I could initialize this smarter
-        r = list(self.arg_names)
-
-        # copy supplied regular arguments
-        for i in range(len(args)):
-            r[i] = args[i]
-
-        # set default values
-        for i in range(def_start,len(self.args)):
-            #logging.debug("default argument {0} has type {1}".format(i,type(self.arg_defaults[i-def_start])))
-            r[i] = self.arg_defaults[i-def_start]
-
-        # insert kwargs
-        for k,v in kwargs.items():
-            try:
-                idx = self.arg_names.index(k)
-                if idx < def_start:
-                    raise TypingError("got multiple values for keyword argument '{0}'".format(self.arg_names[idx]))
-                r[idx] = v
-            except ValueError:
-                raise TypingError("Function does not take an {0} argument".format(k))
-
-        return r
-
 
     def makeEntry(self, args, kwargs):
         self.module.makeEntry(self, self.combineAndCheckArgs(args, kwargs))
@@ -540,3 +552,49 @@ class Function(Scope):
             del self.incoming_jumps[bc]
         bc.remove()
 
+class Intrinsic(Callable):
+    py_func = None
+
+    @abstractmethod
+    def translate(self, module, builder):
+        pass
+
+class Zeros(Intrinsic):
+    py_func = python.zeros
+
+    def __init__(self):
+        self.readSignature(self.py_func)
+
+    def addArgs(self, args):
+        #if type(args[0]) != Const or args[0].type != int:
+        #    raise UnimplementedError("Zeros currently only supported with a constant int shape")
+        self.shape = args[0].value
+        self.type = args[1]
+        # TODO(performance): readSignature is run per instance, but only needs to run once.
+
+    def getReturnType(self):
+        return ArrayType(self.type, self.shape)
+
+    def translate(self, module, builder):
+        tp = tp_array(self.type, self.shape)
+        return builder.alloca(tp)
+
+
+# --
+
+
+func2klass = {}
+# Get all contrete subclasses of Intrinsic and register them
+for name in dir(sys.modules[__name__]):
+    klass = sys.modules[__name__].__dict__[name]
+    try:
+        if issubclass(klass, Intrinsic) and len(klass.__abstractmethods__) == 0 and klass.py_func != None:
+            func2klass[klass.py_func] = klass
+    except TypeError:
+        pass
+
+def getIntrinsic(func):
+    if func in func2klass:
+        return func2klass[func]
+    else:
+        return None

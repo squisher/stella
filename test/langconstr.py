@@ -188,11 +188,11 @@ def test3(f,arg):
 def test4(f,args):
     make_eq_test(f, args)
 
-@mark.parametrize('f', [return_const, assign_const, use_global])
+@mark.parametrize('f', [return_const, assign_const, use_global, array_allocation])
 def test5(f):
     make_eq_test(f, ())
 
-@mark.parametrize('f', [array_allocation, array_allocation_reg, array_alloc_assignment, array_alloc_use, array_len, void])
+@mark.parametrize('f', [array_allocation_reg, array_alloc_assignment, array_alloc_use, array_len, void])
 @unimplemented
 def test5b(f):
     make_eq_test(f, ())

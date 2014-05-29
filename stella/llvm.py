@@ -23,8 +23,10 @@ class ArrayType(object):
         assert isinstance(tp, type)
         self.tp = tp
         self.shape = shape
+    def make(self):
+        return tp_array(self.tp, self.shape)
     def __str__(self):
-        return "<{0}*{1}>".format(tp, shape)
+        return "<{0}*{1}>".format(self.tp, self.shape)
 
 tp_int = llvm.core.Type.int(64)
 tp_int32 = llvm.core.Type.int(32)
@@ -50,6 +52,9 @@ def py_type_to_llvm(tp):
         return tp_double
     elif tp == bool:
         return tp_bool
+    elif type(tp) == ArrayType:
+        # TODO is a pointer always required?
+        return llvm.core.Type.pointer(tp.make())
     elif tp == NoType:
         raise TypingError("Insufficient knowledge to derive a type")
     else:

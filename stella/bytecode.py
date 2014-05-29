@@ -564,6 +564,8 @@ class LOAD_GLOBAL(Bytecode):
             self.result = self.var
         elif isinstance(self.var, type):
             self.result = self.var
+        elif isinstance(self.var, Intrinsic):
+            self.result = self.var
         elif isinstance(self.var, GlobalVariable):
             self.result = Register(func)
         else:
@@ -641,9 +643,9 @@ class CALL_FUNCTION(Bytecode):
         self.result = Register(func)
         stack.push(self.result)
 
-        if issubclass (self.func, Intrinsic):
+        if isinstance(self.func, Intrinsic):
             args = self.func.combineAndCheckArgs(self.args, self.kw_args)
-            self.intrinsic = self.func(args)
+            self.func.addArgs(args)
         else:
             func.module.functionCall(self.func, self.args, self.kw_args)
 
@@ -657,8 +659,8 @@ class CALL_FUNCTION(Bytecode):
             func.retype(tp_change)
 
     def translate(self, module, builder):
-        if issubclass (self.func, Intrinsic):
-            self.result.llvm = self.intrinsic.translate(module, builder)
+        if isinstance(self.func, Intrinsic):
+            self.result.llvm = self.func.translate(module, builder)
         else:
             args = self.func.combineAndCheckArgs(self.args, self.kw_args)
             #logging.debug("Call using args: " + str(args))
