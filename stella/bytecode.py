@@ -381,7 +381,11 @@ class RETURN_VALUE(BlockTerminal, Bytecode):
             func.retype(self.result.unify_type(arg.type, self.debuginfo))
 
     def translate(self, module, builder):
-        builder.ret(self.result.llvm)
+        if self.result.type == type(None):
+            # return None == void, do not generate a ret instruction as that is invalid
+            builder.ret_void()
+        else:
+            builder.ret(self.result.llvm)
 
 class HasTarget(object):
     target_label = None

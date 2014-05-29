@@ -78,6 +78,8 @@ def llvm_to_py(tp, val):
         return val.as_real(py_type_to_llvm(tp))
     elif tp == bool:
         return bool(val.as_int())
+    elif tp == type(None):
+        return None
     else:
         raise TypingError("Unknown type {0}".format(tp))
 

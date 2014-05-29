@@ -80,7 +80,10 @@ class Program(object):
             var.translate(self.module.llvm, builder)
 
         call = builder.call(impl.llvm, args)
-        builder.ret(call)
+        if impl.result.type is type(None):
+            builder.ret_void()
+        else:
+            builder.ret(call)
         return func
 
     def elapsed(self):

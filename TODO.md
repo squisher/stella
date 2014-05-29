@@ -82,3 +82,8 @@ Things to fix:
 
 LLVMException: b'Found return instr that returns non-void in Function of void return type!\n  ret i64 0\n voidBroken module found, compilation terminated.\nFound return instr that returns non-void in Function of void return type!\n  ret void <badref>\n voidBroken module found, compilation terminated.\nBroken module found, compilation terminated.\n'
 ```
+  * This exception was thrown in current_work() in this state:
+```
+[master d9c8574] Add void type (WIP)
+ 3 files changed, 28 insertions(+), 1 deletion(-)
+```
