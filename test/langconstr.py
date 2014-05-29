@@ -145,7 +145,7 @@ def array_allocation_reg():
     return 0
 
 def array_alloc_assignment():
-    a = zeros(5)
+    a = zeros(5, dtype=int)
     for i in range(5):
         a[i] = i
     return i
@@ -188,11 +188,11 @@ def test3(f,arg):
 def test4(f,args):
     make_eq_test(f, args)
 
-@mark.parametrize('f', [return_const, assign_const, use_global, array_allocation])
+@mark.parametrize('f', [return_const, assign_const, use_global, array_allocation, array_alloc_assignment])
 def test5(f):
     make_eq_test(f, ())
 
-@mark.parametrize('f', [array_allocation_reg, array_alloc_assignment, array_alloc_use, array_len, void])
+@mark.parametrize('f', [array_allocation_reg, array_alloc_use, array_len, void])
 @unimplemented
 def test5b(f):
     make_eq_test(f, ())

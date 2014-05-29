@@ -3,4 +3,4 @@ import stella
 #args_mod = list(filter(lambda e: e[0] >= 0, arglist2))
 
 def current_work(run=False):
-    print(stella.wrap(void, ir=not run)())
+    print(stella.wrap(array_alloc_assignment, ir=not run)())

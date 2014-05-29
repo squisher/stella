@@ -67,6 +67,7 @@ class Function(object):
         for bc in self.bytecodes:
             try:
                 if isinstance(bc, FOR_ITER):
+                    # TODO: move this into bytecode.ForLoop
                     cur = bc.prev
                     if not isinstance(cur, GET_ITER):
                         raise UnimplementedError('unsupported for loop')
@@ -76,9 +77,13 @@ class Function(object):
                         raise UnimplementedError('unsupported for loop')
                     cur.remove()
                     cur = bc.prev
-                    if not isinstance(cur, LOAD_FAST):
+                    # TODO: this if..elif should be more general!
+                    if isinstance(cur, LOAD_FAST):
+                        limit = cur.args[0]
+                    elif isinstance(cur, LOAD_CONST):
+                        limit = cur.args[0]
+                    else:
                         raise UnimplementedError('unsupported for loop')
-                    limit = cur.args[0]
                     cur.remove()
                     cur = bc.prev
                     if not isinstance(cur, LOAD_GLOBAL):

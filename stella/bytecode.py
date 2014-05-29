@@ -734,7 +734,12 @@ class ForLoop(IR):
         last.insert_after(b)
         last = b
 
-        b = LOAD_FAST(func.impl, self.debuginfo)
+        if isinstance(self.limit, StackLoc):
+            b = LOAD_FAST(func.impl, self.debuginfo)
+        elif isinstance(self.limit, Const):
+            b = LOAD_CONST(func.impl, self.debuginfo)
+        else:
+            raise UnimplementedError("Unsupported limit type {0}".format(type(self.limit)))
         b.addArg(self.limit)
         last.insert_after(b)
         last = b
@@ -796,6 +801,21 @@ class ForLoop(IR):
     def type_eval(self, func):
         #self.result.unify_type(int, self.debuginfo)
         pass
+
+class STORE_SUBSCR(Bytecode):
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    @pop_stack(3)
+    def stack_eval(self, func, stack):
+        #import pdb; pdb.set_trace()
+        self.result = None
+
+    def type_eval(self, func):
+        pass
+
+    def translate(self, module, builder):
+        builder.insert_element(self.args[0].llvm, self.args[1].llvm, self.args[2].llvm)
 
 #---
 

@@ -14,6 +14,10 @@ def undefined2():
     y = 0 + x
     return True
 
-@mark.parametrize('f', [undefined1, undefined2])
+def zeros_no_type():
+    a = zeros(5)
+
+@mark.parametrize('f', [undefined1, undefined2, zeros_no_type])
 def test_undefined(f):
     make_exc_test(f, (), UnboundLocalError, UndefinedError)
+
