@@ -2,6 +2,8 @@
 
 int main(int argc, char ** argv) {
     int i;
-    for (i=0; i<5; i++);
+    int a[5];
+    for (i=0; i<5; i++)
+        a[i] = 42;
     return i;
 }

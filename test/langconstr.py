@@ -146,8 +146,13 @@ def array_allocation_reg():
 
 def array_alloc_assignment():
     a = zeros(5, dtype=int)
+    i = 0
+    a[0] = i
+
+def array_alloc_assignment2():
+    a = zeros(5, dtype=int)
     for i in range(5):
-        a[i] = i
+        a[i] = 42
     return i
 
 def void():

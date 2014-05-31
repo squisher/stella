@@ -18,52 +18,65 @@ Questions to ask
 Current Work
 ------------
 
+Stella:
 ```
-In [1]: dis(for1)
- 41           0 LOAD_CONST               1 (0) 
-              3 STORE_FAST               1 (r) 
-
- 42           6 SETUP_LOOP              30 (to 39)      ForLoop
-              9 LOAD_GLOBAL              0 (range)      $init
-             12 LOAD_FAST                0 (x) 
-             15 CALL_FUNCTION            1 
-             18 GET_ITER             
-        >>   19 FOR_ITER                16 (to 38)      
-             22 STORE_FAST               2 (i) 
-
- 43          25 LOAD_FAST                1 (r)          $body
-             28 LOAD_FAST                2 (i) 
-             31 INPLACE_ADD          
-             32 STORE_FAST               1 (r) 
-             35 JUMP_ABSOLUTE           19              $jump, move down one, place test and increment here
-        >>   38 POP_BLOCK            
-
- 44     >>   39 LOAD_FAST                1 (r) 
-             42 RETURN_VALUE         
+define i64 @array_allocation() {
+entry:
+  %0 = alloca [5 x i64]
+  %a = alloca [5 x i64]*
+  store [5 x i64]* %0, [5 x i64]** %a
+  ret i64 0
+}
 ```
 
-_Idea_: use disassemble to create the bytecodes for the init, test and increment part of the for loop
-```for i in range(x):```
-is not flexible enough
-=>
+clang O0
 ```
-i=0 # init
+define i32 @main(i32 %argc, i8** %argv) #0 {
+entry:
+  %retval = alloca i32, align 4
+  %argc.addr = alloca i32, align 4
+  %argv.addr = alloca i8**, align 8
+  %i = alloca i32, align 4
+  %a = alloca [5 x i32], align 16
+  store i32 0, i32* %retval
+  store i32 %argc, i32* %argc.addr, align 4
+  store i8** %argv, i8*** %argv.addr, align 8
+  store i32 0, i32* %i, align 4
+  br label %for.cond
 
-if i>=x then jump end :test
+for.cond:                                         ; preds = %for.inc, %entry
+  %0 = load i32* %i, align 4
+  %cmp = icmp slt i32 %0, 5
+  br i1 %cmp, label %for.body, label %for.end
 
-$body
+for.body:                                         ; preds = %for.cond
+  %1 = load i32* %i, align 4
+  %idxprom = sext i32 %1 to i64
+  %arrayidx = getelementptr inbounds [5 x i32]* %a, i32 0, i64 %idxprom
+  store i32 42, i32* %arrayidx, align 4
+  br label %for.inc
 
-i=i+1
-jump test
+for.inc:                                          ; preds = %for.body
+  %2 = load i32* %i, align 4
+  %inc = add nsw i32 %2, 1
+  store i32 %inc, i32* %i, align 4
+  br label %for.cond
 
-:end
+for.end:                                          ; preds = %for.cond
+  %3 = load i32* %i, align 4
+  ret i32 %3
+}
 ```
 
 LLVMpy
 ------
 
 Things to fix:
-* abort() still sometimes called (llvm issue?)
+* abort() still sometimes called (llvm issue?) For example:
+```
+python3.2: Instructions.cpp:1488: llvm::InsertElementInst::InsertElementInst(llvm::Value *, llvm::Value *, llvm::Value *, const llvm::Twine &, llvm::Instruction *): Assertion `isValidOperands(Vec, Elt, Index) && "Invalid insertelement instruction operands!"' failed.
+zsh: abort      ipython3 -i ipythoninit.py
+``` @ `[master 992ea27] Store an array element (WIP)`
 * Exception not formatted correctly:
 ```
 /home/squisher/usr/rsc/stella/stella/codegen.py in run(self, stats)

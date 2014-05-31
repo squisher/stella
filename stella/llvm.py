@@ -27,6 +27,8 @@ class ArrayType(object):
         return tp_array(self.tp, self.shape)
     def __str__(self):
         return "<{0}*{1}>".format(self.tp, self.shape)
+    def __repr__(self):
+        return str(self)
 
 tp_int = llvm.core.Type.int(64)
 tp_int32 = llvm.core.Type.int(32)
