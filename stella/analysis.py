@@ -57,6 +57,10 @@ class Function(object):
         else:
             self.incoming_jumps[target_bc] = [source_bc]
 
+    def addLabel(self, bc):
+        """Remove replaceLocation() below?"""
+        self.replaceLocation(bc)
+
     def replaceLocation(self, bc):
         """Assume that bc.loc points to the new location already."""
         self.labels[bc.loc] = bc

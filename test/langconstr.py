@@ -61,6 +61,11 @@ def for2(x):
         s *= 2
     return r+s
 
+def for_loop_var(x):
+    for i in range(x):
+        x = i
+    return x
+
 def while1(x):
     r = 0
     while x>0:
@@ -153,7 +158,11 @@ def array_alloc_assignment2():
     a = zeros(5, dtype=int)
     for i in range(5):
         a[i] = 42
-    return i
+
+def array_alloc_assignment3():
+    a = zeros(5, dtype=int)
+    for i in range(5):
+        a[i] = i+1
 
 def void():
     pass
@@ -193,7 +202,7 @@ def test3(f,arg):
 def test4(f,args):
     make_eq_test(f, args)
 
-@mark.parametrize('f', [return_const, assign_const, use_global, array_allocation, array_alloc_assignment])
+@mark.parametrize('f', [return_const, assign_const, use_global, array_allocation, array_alloc_assignment, array_alloc_assignment2, array_alloc_assignment3])
 def test5(f):
     make_eq_test(f, ())
 
@@ -202,8 +211,8 @@ def test5(f):
 def test5b(f):
     make_eq_test(f, ())
 
-@mark.parametrize('arg', single_args([0, 1, 42, -1, -42]))
-@mark.parametrize('f', [for1, for2, while1, recursive, ext_call, kwargs_call1, kwargs_call2, kwargs_call3, kwargs_call4])
+@mark.parametrize('arg', single_args([0, 1, 2, 42, -1, -42]))
+@mark.parametrize('f', [for1, for2, for_loop_var, while1, recursive, ext_call, kwargs_call1, kwargs_call2, kwargs_call3, kwargs_call4])
 def test6(f,arg):
     make_eq_test(f, arg)
 

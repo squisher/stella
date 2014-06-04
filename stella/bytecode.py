@@ -726,7 +726,7 @@ class ForLoop(IR):
         last.insert_after(b)
         last = b
 
-        # test
+        # initial test
         b = LOAD_FAST(func.impl, self.debuginfo)
         b.addArg(self.loop_var)
         b.loc = self.test_loc
@@ -756,6 +756,9 @@ class ForLoop(IR):
 
 
         # $body, keep, find the end of it
+        body_loc = b.next.loc
+        func.addLabel(b.next)
+
         while b.next != None:
             b = b.next
         assert isinstance(b, BlockEnd)
@@ -768,6 +771,30 @@ class ForLoop(IR):
         incr_loc = last.loc
         last.loc = jump_loc
         func.replaceLocation(last)
+
+        # loop test
+        #pdb.set_trace()
+        b = LOAD_FAST(func.impl, self.debuginfo)
+        b.addArg(self.loop_var)
+        last.insert_before(b)
+
+        if isinstance(self.limit, StackLoc):
+            b = LOAD_FAST(func.impl, self.debuginfo)
+        elif isinstance(self.limit, Const):
+            b = LOAD_CONST(func.impl, self.debuginfo)
+        else:
+            raise UnimplementedError("Unsupported limit type {0}".format(type(self.limit)))
+        b.addArg(self.limit)
+        last.insert_before(b)
+
+        b = COMPARE_OP(func.impl, self.debuginfo)
+        b.addCmp('>=')
+        last.insert_before(b)
+
+        b = POP_JUMP_IF_TRUE(func.impl, self.debuginfo)
+        b.setTarget(self.end_loc)
+        last.insert_before(b)
+
 
         # increment
         b = LOAD_FAST(func.impl, self.debuginfo)
@@ -788,6 +815,7 @@ class ForLoop(IR):
         last.insert_before(b)
 
         # JUMP to COMPARE_OP is already part of the bytecodes
+        last.setTarget(body_loc)
         
 
     def stack_eval(self, func, stack):
