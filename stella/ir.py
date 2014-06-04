@@ -438,12 +438,12 @@ class Callable(metaclass=ABCMeta):
         self.arg_defaults = [Const(default) for default in argspec.defaults or []]
 
     def combineAndCheckArgs(self, args, kwargs):
-        def_start = len(args)
+        num_args = len(args)
         # TODO: is this the right place to check number of arguments?
-        if def_start+len(kwargs) < len(self.arg_names)-len(self.arg_defaults):
+        if num_args+len(kwargs) < len(self.arg_names)-len(self.arg_defaults):
             raise TypingError("takes at least {0} argument(s) ({1} given)".format(
                 len(self.arg_names)-len(self.arg_defaults), len(args)+len(kwargs)))
-        if def_start+len(kwargs) > len(self.arg_names):
+        if num_args+len(kwargs) > len(self.arg_names):
             raise TypingError("takes at most {0} argument(s) ({1} given)".format(
                 len(self.arg_names), len(args)))
 
@@ -456,15 +456,15 @@ class Callable(metaclass=ABCMeta):
             r[i] = args[i]
 
         # set default values
-        for i in range(def_start,len(self.arg_names)):
-            #logging.debug("default argument {0} has type {1}".format(i,type(self.arg_defaults[i-def_start])))
-            r[i] = self.arg_defaults[i-def_start]
+        def_offset = len(self.arg_names)-len(self.arg_defaults)
+        for i in range(max(num_args, len(self.arg_names)-len(self.arg_defaults)) ,len(self.arg_names)):
+            r[i] = self.arg_defaults[i-def_offset]
 
         # insert kwargs
         for k,v in kwargs.items():
             try:
                 idx = self.arg_names.index(k)
-                if idx < def_start:
+                if idx < num_args:
                     raise TypingError("got multiple values for keyword argument '{0}'".format(self.arg_names[idx]))
                 r[idx] = v
             except ValueError:
@@ -572,6 +572,8 @@ class Zeros(Intrinsic):
         #    raise UnimplementedError("Zeros currently only supported with a constant int shape")
         self.shape = args[0].value
         self.type = args[1]
+        if not supported_py_type(self.type):
+            raise TypingError("Invalid array element type {0}".format(self.type))
         # TODO(performance): readSignature is run per instance, but only needs to run once.
 
     def getReturnType(self):
