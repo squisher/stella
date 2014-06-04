@@ -326,7 +326,7 @@ class Module(object):
         self.entry_args = args
 
     def _wrapPython(self, key, item):
-        if type(item) == types.FunctionType:
+        if type(item) in (types.FunctionType, types.BuiltinFunctionType):
             intrinsic = getIntrinsic(item)
 
             if intrinsic:
@@ -366,14 +366,17 @@ class Module(object):
         try:
             wrapped = self.namestore[key]
         except UndefinedGlobalError as e:
-            if key not in func.f.__globals__:
-                # TODO: too much nesting, there should be a cleaner way to detect these types
+            # TODO: too much nesting, there should be a cleaner way to detect these types
+            if key == 'len':
+                item = len
+            elif key not in func.f.__globals__:
                 if supported_py_type(key):
                     return __builtins__[key]
                 else:
                     raise UnimplementedError("Type {0} is not supported".format(key))
                 raise e
-            item = func.f.__globals__[key]
+            else:
+                item = func.f.__globals__[key]
             wrapped = self._wrapPython(key, item)
 
             self.namestore[key] = wrapped
@@ -432,6 +435,11 @@ class Callable(metaclass=ABCMeta):
         pass
 
     def readSignature(self, f):
+        if f == len:
+            # yay, special cases
+            self.arg_names = ['obj']
+            self.arg_defaults = []
+            return
         argspec = inspect.getargspec(f)
         #self.arg_names = [n for n in argspec.args]
         self.arg_names = argspec.args
@@ -561,6 +569,10 @@ class Intrinsic(Callable):
     def translate(self, module, builder):
         pass
 
+    @abstractmethod
+    def getResult(self, func):
+        pass
+
 class Zeros(Intrinsic):
     py_func = python.zeros
 
@@ -582,6 +594,37 @@ class Zeros(Intrinsic):
     def translate(self, module, builder):
         tp = tp_array(self.type, self.shape)
         return builder.alloca(tp)
+
+    def getResult(self, func):
+        return Register(func)
+
+class Len(Intrinsic):
+    """
+    Determine the length of the array based on its type.
+    """
+    py_func = len
+
+    def __init__(self):
+        self.readSignature(self.py_func)
+
+    def addArgs(self, args):
+        self.obj = args[0]
+        # NOT TYPED YET
+
+    def getReturnType(self):
+        return int
+
+    def getResult(self, func):
+        # we need the reference to back-patch
+        self.result = Const(0)
+        return self.result
+
+    def translate(self, module, builder):
+        if not isinstance(self.obj.type, ArrayType):
+            raise TypingError("Invalid array type {0}".format(self.obj.type))
+        self.result.value = self.obj.type.shape
+        self.result.translate()
+        return self.result.llvm
 
 # --
 

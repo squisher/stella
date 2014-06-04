@@ -559,7 +559,6 @@ class LOAD_GLOBAL(Bytecode):
         self.args.append(name)
 
     def stack_eval(self, func, stack):
-        #pdb.set_trace()
         self.var = func.loadGlobal(self.args[0])
         # TODO: remove these isinstance checks and just check for GlobalVariable else return directly?
         if isinstance(self.var, Function):
@@ -644,14 +643,15 @@ class CALL_FUNCTION(Bytecode):
         self.args.reverse()
         self.separateArgs()
 
-        self.result = Register(func)
-        stack.push(self.result)
-
         if isinstance(self.func, Intrinsic):
             args = self.func.combineAndCheckArgs(self.args, self.kw_args)
             self.func.addArgs(args)
+            self.result = self.func.getResult(func)
         else:
+            self.result = Register(func)
+
             func.module.functionCall(self.func, self.args, self.kw_args)
+        stack.push(self.result)
 
     def type_eval(self, func):
         tp = self.func.getReturnType()
