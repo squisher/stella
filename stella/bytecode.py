@@ -879,6 +879,24 @@ class STORE_SUBSCR(Bytecode):
         #builder.store(llvm.core.Type.pointer(self.args[0].llvm), p)
         builder.store(self.args[0].llvm, p)
 
+class BINARY_SUBSCR(Bytecode):
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    @pop_stack(2)
+    def stack_eval(self, func, stack):
+        self.result = Register(func)
+        stack.push(self.result)
+
+    def type_eval(self, func):
+        if not isinstance(self.args[0].type, ArrayType):
+            raise TypingError("Expected an array, but got {0}".format(self.args[0].type))
+        self.result.unify_type(self.args[0].type.getElementType(), self.debuginfo)
+
+    def translate(self, module, builder):
+        p = builder.gep(self.args[0].llvm, [llvm_constant(0), self.args[1].llvm], inbounds=True)
+        self.result.llvm = builder.load(p)
+
 #---
 
 opconst = {}

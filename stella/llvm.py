@@ -25,6 +25,8 @@ class ArrayType(object):
         self.shape = shape
     def make(self):
         return tp_array(self.tp, self.shape)
+    def getElementType(self):
+        return self.tp
     def __str__(self):
         return "<{0}*{1}>".format(self.tp, self.shape)
     def __repr__(self):

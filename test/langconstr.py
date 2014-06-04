@@ -172,12 +172,12 @@ def void():
     pass
 
 def array_alloc_use():
-    a = zeros(5)
+    a = zeros(5, dtype=int)
     a[0] = 1
     return a[0]
 
 def array_alloc_use2():
-    a = zeros(5)
+    a = zeros(5, dtype=int)
     for i in range(5):
         a[i] = i**2
     r = 0
@@ -186,8 +186,7 @@ def array_alloc_use2():
     return r
 
 def array_len():
-    """ TODO: is there a reason not to support len? """
-    a = zeros(5)
+    a = zeros(5, dtype=int)
     return len(a)
 
 
@@ -211,11 +210,11 @@ def test3(f,arg):
 def test4(f,args):
     make_eq_test(f, args)
 
-@mark.parametrize('f', [return_const, assign_const, use_global, array_allocation, array_alloc_assignment, array_alloc_assignment2, array_alloc_assignment3, void])
+@mark.parametrize('f', [return_const, assign_const, use_global, array_allocation, array_alloc_assignment, array_alloc_assignment2, array_alloc_assignment3, void, array_alloc_use, array_alloc_use2])
 def test5(f):
     make_eq_test(f, ())
 
-@mark.parametrize('f', [array_allocation_reg, array_alloc_use, array_len])
+@mark.parametrize('f', [array_allocation_reg, array_len])
 @unimplemented
 def test5b(f):
     make_eq_test(f, ())
