@@ -9,7 +9,7 @@ from . import codegen
 _f = open('faulthandler.err', 'w')
 faulthandler.enable(_f)
 
-def wrap(f, debug=True, ir=False, lazy=False, opt=None, stats=None):
+def wrap(f, debug=True, p=False, ir=False, lazy=False, opt=None, stats=None):
     if debug:
         logging.getLogger().setLevel(logging.DEBUG)
     else:
@@ -30,6 +30,8 @@ def wrap(f, debug=True, ir=False, lazy=False, opt=None, stats=None):
             return prog
         elif ir:
             return prog.module.getLlvmIR()
+        elif p:
+            print (prog.module.getLlvmIR())
         else:
             return prog.run(pass_stats)
     return run
