@@ -815,15 +815,19 @@ class STORE_SUBSCR(Bytecode):
         pass
 
     def translate(self, module, builder):
+        ## for structs
         # insert_element(self, vec_val, elt_val, idx_val, name='')¶
         #builder.insert_element(self.args[1].llvm, self.args[0].llvm, self.args[2].llvm)
         #builder.insert_value(self.args[1].llvm, self.args[0].llvm, self.args[2].llvm)
-        logging.debug("Args:      {0}".format(self.args))
-        logging.debug("Arg types: {0}".format([a.type for a in self.args]))
-        logging.debug("Arg llvm:  {0}".format([str(a.llvm) for a in self.args]))
+
+        #logging.debug("Args:      {0}".format(self.args))
+        #logging.debug("Arg types: {0}".format([a.type for a in self.args]))
+        #logging.debug("Arg llvm:  {0}".format([str(a.llvm) for a in self.args]))
         #pdb.set_trace()
-        p = builder.gep(self.args[1].llvm, [self.args[2].llvm], inbounds=True)
-        builder.store(llvm.core.Type.pointer(self.args[0].llvm), p)
+        p = builder.gep(self.args[1].llvm, [llvm_constant(0), self.args[2].llvm], inbounds=True)
+        #logging.debug("gep:       {0}".format(str(p)))
+        #builder.store(llvm.core.Type.pointer(self.args[0].llvm), p)
+        builder.store(self.args[0].llvm, p)
 
 #---
 

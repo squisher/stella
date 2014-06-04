@@ -2,6 +2,7 @@
 
 from stella.exc import *
 from test import *
+from stella import zeros
 
 def undefined1():
     if False:
@@ -17,7 +18,11 @@ def undefined2():
 def zeros_no_type():
     a = zeros(5)
 
-@mark.parametrize('f', [undefined1, undefined2, zeros_no_type])
+@mark.parametrize('f', [undefined1, undefined2])
 def test_undefined(f):
     make_exc_test(f, (), UnboundLocalError, UndefinedError)
+
+#@mark.parametrize('f', [zeros_no_type])
+#def test_assertion(f):
+#    make_exc_test(f, (), AssertionError, UndefinedError)
 
