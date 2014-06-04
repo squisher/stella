@@ -552,6 +552,8 @@ class Function(Callable, Scope):
             del self.incoming_jumps[bc]
         bc.remove()
 
+# Intrinsics {...
+
 class Intrinsic(Callable):
     py_func = None
 
@@ -579,9 +581,7 @@ class Zeros(Intrinsic):
         tp = tp_array(self.type, self.shape)
         return builder.alloca(tp)
 
-
 # --
-
 
 func2klass = {}
 # Get all contrete subclasses of Intrinsic and register them
@@ -598,3 +598,5 @@ def getIntrinsic(func):
         return func2klass[func]
     else:
         return None
+
+# } Intrinsics

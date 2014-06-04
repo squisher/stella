@@ -1,7 +1,11 @@
 def zeros(shape=1, dtype=None):
-    """Emulate certain features of `numpy.zeros`
+    """
+    Emulate certain features of `numpy.zeros`
 
-    Note that `dtype` is ignored in Python, but will be interpreted in Stella.
+    Note:
+    * `dtype` is ignored in Python, but will be interpreted in Stella.
+    * This is for testing only! Memory allocation (and deallocation) is not
+      a feature of Stella at this point in time.
     """
     try:
         dim = len(shape)

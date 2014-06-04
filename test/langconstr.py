@@ -145,6 +145,10 @@ def array_allocation():
     return 0
 
 def array_allocation_reg():
+    """
+    Since memory allocation is not a focus right now,
+    this test will be skipped indefinitely.
+    """
     l = 2
     a = zeros(l, dtype=int)
     return 0
@@ -168,6 +172,11 @@ def void():
     pass
 
 def array_alloc_use():
+    a = zeros(5)
+    a[0] = 1
+    return a[0]
+
+def array_alloc_use2():
     a = zeros(5)
     for i in range(5):
         a[i] = i**2
@@ -202,11 +211,11 @@ def test3(f,arg):
 def test4(f,args):
     make_eq_test(f, args)
 
-@mark.parametrize('f', [return_const, assign_const, use_global, array_allocation, array_alloc_assignment, array_alloc_assignment2, array_alloc_assignment3])
+@mark.parametrize('f', [return_const, assign_const, use_global, array_allocation, array_alloc_assignment, array_alloc_assignment2, array_alloc_assignment3, void])
 def test5(f):
     make_eq_test(f, ())
 
-@mark.parametrize('f', [array_allocation_reg, array_alloc_use, array_len, void])
+@mark.parametrize('f', [array_allocation_reg, array_alloc_use, array_len])
 @unimplemented
 def test5b(f):
     make_eq_test(f, ())
