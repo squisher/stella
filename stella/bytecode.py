@@ -712,6 +712,7 @@ class ForLoop(IR):
 
     def rewrite(self, func):
         last = self
+        (self.limit_minus_one,_) = func.impl.getOrNewStackLoc(str(self.test_loc) + "__limit")
 
         # init
         b = LOAD_CONST(func.impl, self.debuginfo)
@@ -754,6 +755,32 @@ class ForLoop(IR):
         last.insert_after(b)
         last = b
 
+        # my_limit = limit -1
+        if isinstance(self.limit, StackLoc):
+            b = LOAD_FAST(func.impl, self.debuginfo)
+        elif isinstance(self.limit, Const):
+            b = LOAD_CONST(func.impl, self.debuginfo)
+        else:
+            raise UnimplementedError("Unsupported limit type {0}".format(type(self.limit)))
+        b.addArg(self.limit)
+        last.insert_after(b)
+        last = b
+
+        b = LOAD_CONST(func.impl, self.debuginfo)
+        b.addArg(Const(1))
+        last.insert_after(b)
+        last = b
+
+        b = BINARY_SUBTRACT(func.impl, self.debuginfo)
+        last.insert_after(b)
+        last = b
+
+        b = STORE_FAST(func.impl, self.debuginfo)
+        b.addArg(self.limit_minus_one)
+        b.new_allocate = True
+        last.insert_after(b)
+        last = b
+
 
         # $body, keep, find the end of it
         body_loc = b.next.loc
@@ -778,13 +805,8 @@ class ForLoop(IR):
         b.addArg(self.loop_var)
         last.insert_before(b)
 
-        if isinstance(self.limit, StackLoc):
-            b = LOAD_FAST(func.impl, self.debuginfo)
-        elif isinstance(self.limit, Const):
-            b = LOAD_CONST(func.impl, self.debuginfo)
-        else:
-            raise UnimplementedError("Unsupported limit type {0}".format(type(self.limit)))
-        b.addArg(self.limit)
+        b = LOAD_FAST(func.impl, self.debuginfo)
+        b.addArg(self.limit_minus_one)
         last.insert_before(b)
 
         b = COMPARE_OP(func.impl, self.debuginfo)
