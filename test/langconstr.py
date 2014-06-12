@@ -2,6 +2,7 @@ from test import *
 from stella import zeros
 from .basicmath import addition, subtraction
 from . import basicmath
+import numpy as np
 
 def direct_assignment(x,y):
     a = x
@@ -189,6 +190,8 @@ def array_len():
     a = zeros(5, dtype=int)
     return len(a)
 
+def numpy_array(a):
+    a[0] = 1
 
 @mark.parametrize('args', [(40,2), (43, -1), (41, 1)])
 @mark.parametrize('f', [direct_assignment, simple_assignment, double_assignment, double_cast, return_without_init])
@@ -246,3 +249,8 @@ def test10(args):
 @mark.xfail()
 def test11(args):
     make_eq_kw_test(kwargs, args)
+
+@mark.parametrize('arg', single_args([np.zeros(5, dtype=int)]))
+@mark.parametrize('f', [numpy_array])
+def test9(f,arg):
+    make_eq_test(f, arg)

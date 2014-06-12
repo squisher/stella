@@ -411,7 +411,7 @@ def main(f, args, kwargs):
     const_kw = {}
     for k,v in kwargs.items():
         const_kw[k] = Const(v)
-    impl.makeEntry(list(map(Const, args)), const_kw)
+    impl.makeEntry(list(map(wrapValue, args)), const_kw)
     module.addFunc(impl)
 
     f = Function.get(impl, module)

@@ -108,7 +108,7 @@ class STORE_FAST(Bytecode):
     def translate(self, module, builder):
         self.cast(builder)
         if self.new_allocate:
-            tp = py_type_to_llvm(self.args[0].type)
+            tp = self.args[0].llvmType()
             self.result.llvm = builder.alloca(tp, name=self.result.name)
         builder.store(self.args[0].llvm, self.result.llvm)
 
@@ -237,12 +237,12 @@ class BINARY_POWER(BinaryOp):
         else:
             power = self.args[1].llvm
 
-        llvm_pow = llvm.core.Function.intrinsic(module, self.b_func[self.args[1].type], [py_type_to_llvm(self.args[0].type)])
+        llvm_pow = llvm.core.Function.intrinsic(module, self.b_func[self.args[1].type], [self.args[0].llvmType()])
         pow_result = builder.call(llvm_pow, [self.args[0].llvm, power])
 
         if isinstance(self.args[0], Cast) and self.args[0].obj.type == int and self.args[1].type == int:
             # cast back to an integer
-            self.result.llvm = builder.fptosi(pow_result, py_type_to_llvm(int))
+            self.result.llvm = builder.fptosi(pow_result, py_scalar_type_to_llvm(int))
         else:
             self.result.llvm = pow_result
 
@@ -274,13 +274,13 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
         self.cast(builder)
 
         tmp = builder.fdiv(self.args[0].llvm, self.args[1].llvm, self.result.name)
-        llvm_floor = llvm.core.Function.intrinsic(module, llvm.core.INTR_FLOOR, [py_type_to_llvm(float)])
+        llvm_floor = llvm.core.Function.intrinsic(module, llvm.core.INTR_FLOOR, [py_scalar_type_to_llvm(float)])
         self.result.llvm = builder.call(llvm_floor, [tmp])
 
         #import pdb; pdb.set_trace()
         if all([isinstance(a,Cast) and a.obj.type == int for a in self.args]):
             # TODO this may be superflous if both args got converted to float in the translation stage -> move toFloat partially to the analysis stage.
-            self.result.llvm = builder.fptosi(self.result.llvm, py_type_to_llvm(int), "(int)"+self.result.name)
+            self.result.llvm = builder.fptosi(self.result.llvm, py_scalar_type_to_llvm(int), "(int)"+self.result.name)
 
 class BINARY_TRUE_DIVIDE(BinaryOp):
     b_func = {float: 'fdiv'}

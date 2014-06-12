@@ -13,3 +13,4 @@ faulthandler.err
 faulthandler.err
 fib
 test/benchmark.py.*
+.ropeproject/

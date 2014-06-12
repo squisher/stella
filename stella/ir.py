@@ -5,6 +5,8 @@ import types
 import sys
 from abc import ABCMeta, abstractmethod, abstractproperty
 
+import numpy as np
+
 from .llvm import *
 from .exc import *
 from .utils import *
@@ -27,6 +29,62 @@ class Typable(object):
             raise TypingError ("Unifying of types " + str(tp1) + " and " + str(tp2) + " not yet implemented", debuginfo)
 
         return False
+
+    def llvmType(self):
+        """Map from Python types to LLVM types."""
+        return py_scalar_type_to_llvm(self.type)
+
+
+class Const(Typable):
+    value = None
+
+    def __init__(self, value):
+        self.value = value
+        self.type = type(value)
+        self.name = str(value)
+        self.translate()
+
+    def translate(self):
+        self.llvm = llvm_constant(self.value)
+
+    def unify_type(self, tp2, debuginfo):
+        r = super().unify_type(tp2, debuginfo)
+        if r:
+            self.translate()
+        return r
+
+    def __str__(self):
+        return str(self.value)
+    def __repr__(self):
+        return self.__str__()
+
+class NumpyArray(Const):
+    #__name__ = 'NumpyArray'
+    #tp = NoType
+    #shape = None
+    #value = None
+    def __init__(self, array):
+        assert isinstance(array, np.ndarray)
+
+        # TODO: multi-dimensional arrays
+        self.type = ArrayType.fromArray(array)
+
+        self.value = array
+    def translate(self, builder):
+        ptr_int = self.value.ctypes.data  # int
+        ptr_int_llvm = py_scalar_type_to_llvm(ptr_int)
+        type_ = self.type.llvmType()
+        return builder.inttoptr(ptr_int_llvm, type_)
+    def __str__(self):
+        return str(self.type)
+    def __repr__(self):
+        return str(self)
+
+def wrapValue(value):
+    if type(value) == np.ndarray:
+        return NumpyArray(value)
+    else:
+        return Const(value)
 
 class Register(Typable):
     name = None
@@ -63,42 +121,17 @@ class GlobalVariable(Typable):
     def __init__(self, initial_value, name):
         super().__init__()
         self.name = name
-        self.initial_value = initial_value
-        self.type = type(initial_value)
+        self.initial_value = wrapValue(initial_value)
 
     def __str__(self):
-        return "+{0}<{1}>".format(self.name, self.type.__name__)
+        return "+{0}<{1}>".format(self.name, self.initial_value.type)
     def __repr__(self):
         return self.name
 
 
     def translate(self, module, builder):
-        self.llvm = module.add_global_variable(py_type_to_llvm(self.type), self.name)
-        self.llvm.initializer = llvm_constant(self.initial_value) #Constant.undef(tp)
-
-class Const(Typable):
-    value = None
-
-    def __init__(self, value):
-        self.value = value
-        self.type = type(value)
-        self.name = str(value)
-        self.translate()
-
-    def translate(self):
-        self.llvm = llvm_constant(self.value)
-
-    def unify_type(self, tp2, debuginfo):
-        r = super().unify_type(tp2, debuginfo)
-        if r:
-            self.translate()
-        return r
-
-    def __str__(self):
-        return str(self.value)
-    def __repr__(self):
-        return self.__str__()
-
+        self.llvm = module.add_global_variable(self.llvmType(), self.name)
+        self.llvm.initializer = self.initial_value.translate()  #Constant.undef(tp)
 class Cast(object):
     def __init__(self, obj, tp):
         assert obj.type != tp
@@ -128,7 +161,7 @@ class Cast(object):
             self.value = float(self.obj.value)
             self.llvm = llvm_constant(self.value)
         else:
-            self.llvm = builder.sitofp(self.obj.llvm, py_type_to_llvm(float), self.name)
+            self.llvm = builder.sitofp(self.obj.llvm, py_scalar_type_to_llvm(float), self.name)
 
     def __str__(self):
         return self.name
@@ -240,7 +273,7 @@ class PhiNode(IR):
     def translate(self, module, builder):
         if len(self.args) == 0:
             return
-        phi = builder.phi(py_type_to_llvm(self.result.type), self.result.name)
+        phi = builder.phi(py_type_to_llvm(self.result.llvmType), self.result.name)
         for arg in self.args:
             phi.add_incoming(arg.llvm, arg.bc.block)
 
@@ -429,7 +462,7 @@ class Module(object):
 class Callable(metaclass=ABCMeta):
     arg_defaults = {}
     arg_names = []
-    
+
     @abstractmethod
     def getReturnType(self):
         pass
@@ -517,7 +550,7 @@ class Function(Callable, Scope):
 
     def makeEntry(self, args, kwargs):
         self.module.makeEntry(self, self.combineAndCheckArgs(args, kwargs))
-        #self.arg_values = 
+        #self.arg_values =
 
     def setParamTypes(self, args, kwargs):
         combined = self.combineAndCheckArgs(args, kwargs)
@@ -532,7 +565,7 @@ class Function(Callable, Scope):
         self.analyzed = True
 
     def translate(self, module):
-        self.arg_types = [py_type_to_llvm(arg.type) for arg in self.args]
+        self.arg_types = [arg.llvmType() for arg in self.args]
 
         func_tp = llvm.core.Type.function(py_type_to_llvm(self.result.type), self.arg_types)
         self.llvm = module.add_function(func_tp, self.name)
