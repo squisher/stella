@@ -191,7 +191,8 @@ def array_len():
     return len(a)
 
 def numpy_array(a):
-    a[0] = 1
+    a[1] = 4
+    a[2] = 2
 
 @mark.parametrize('args', [(40,2), (43, -1), (41, 1)])
 @mark.parametrize('f', [direct_assignment, simple_assignment, double_assignment, double_cast, return_without_init])

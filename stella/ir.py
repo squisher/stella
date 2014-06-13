@@ -5,34 +5,34 @@ import types
 import sys
 from abc import ABCMeta, abstractmethod, abstractproperty
 
+import llvm
+import llvm.core
+import llvm.ee
 import numpy as np
 
-from .llvm import *
 from .exc import *
 from .utils import *
-
+from . import tp
 from .intrinsics import python
 
-import pdb
-
 class Typable(object):
-    type = NoType
+    type = tp.NoType
     def unify_type(self, tp2, debuginfo):
         tp1 = self.type
         if   tp1 == tp2:    pass
-        elif tp1 == NoType: self.type = tp2
-        elif tp2 == NoType: pass
-        elif (tp1 == int and tp2 == float) or (tp1 == float and tp2 == int):
+        elif tp1 == tp.NoType: self.type = tp2
+        elif tp2 == tp.NoType: pass
+        elif (tp1 == tp.Int and tp2 == tp.Float) or (tp1 == tp.Float and tp2 == tp.Int):
             self.type = float
             return True
         else:
-            raise TypingError ("Unifying of types " + str(tp1) + " and " + str(tp2) + " not yet implemented", debuginfo)
+            raise TypingError ("Unifying of types " + str(tp1) + " and " + str(tp2) + " (not yet) implemented", debuginfo)
 
         return False
 
     def llvmType(self):
         """Map from Python types to LLVM types."""
-        return py_scalar_type_to_llvm(self.type)
+        return self.type.llvmType()
 
 
 class Const(Typable):
@@ -40,12 +40,12 @@ class Const(Typable):
 
     def __init__(self, value):
         self.value = value
-        self.type = type(value)
+        self.type = tp.get_scalar(value)
         self.name = str(value)
         self.translate()
 
     def translate(self):
-        self.llvm = llvm_constant(self.value)
+        self.llvm = self.type.constant(self.value)
 
     def unify_type(self, tp2, debuginfo):
         r = super().unify_type(tp2, debuginfo)
@@ -59,22 +59,21 @@ class Const(Typable):
         return self.__str__()
 
 class NumpyArray(Const):
-    #__name__ = 'NumpyArray'
-    #tp = NoType
-    #shape = None
-    #value = None
     def __init__(self, array):
         assert isinstance(array, np.ndarray)
 
         # TODO: multi-dimensional arrays
-        self.type = ArrayType.fromArray(array)
-
+        self.type = tp.ArrayType.fromArray(array)
         self.value = array
-    def translate(self, builder):
+
+        self.translate()
+
+    def translate(self):  #, builder):
         ptr_int = self.value.ctypes.data  # int
-        ptr_int_llvm = py_scalar_type_to_llvm(ptr_int)
+        ptr_int_llvm = tp.Int.constant(ptr_int)
         type_ = self.type.llvmType()
-        return builder.inttoptr(ptr_int_llvm, type_)
+        self.llvm = llvm.core.Constant.inttoptr(ptr_int_llvm, type_)
+
     def __str__(self):
         return str(self.type)
     def __repr__(self):
@@ -98,7 +97,7 @@ class Register(Typable):
             self.name = func.newRegisterName()
 
     def __str__(self):
-        return "{0}<{1}>".format(self.name, self.type.__name__)
+        return "{0}<{1}>".format(self.name, self.type)
     def __repr__(self):
         return self.name
 
@@ -110,7 +109,7 @@ class StackLoc(Typable):
         self.name = name
 
     def __str__(self):
-        return "*{0}<{1}>".format(self.name, self.type.__name__)
+        return "*{0}<{1}>".format(self.name, self.type)
     def __repr__(self):
         return self.name
 
@@ -156,12 +155,11 @@ class Cast(object):
             self.llvm = self.obj.llvm
             return
 
-        # if value attribute is present, then it is a Const
-        if hasattr(self.obj, 'value'):
-            self.value = float(self.obj.value)
-            self.llvm = llvm_constant(self.value)
+        if isinstance(self.obj, Const):
+            value = float(self.obj.value)
+            self.llvm = self.obj.type.constant(value)
         else:
-            self.llvm = builder.sitofp(self.obj.llvm, py_scalar_type_to_llvm(float), self.name)
+            self.llvm = builder.sitofp(self.obj.llvm, tp.Float.llvmType(), self.name)
 
     def __str__(self):
         return self.name
@@ -182,7 +180,7 @@ class IR(metaclass=ABCMeta):
 
     def addConst(self, arg):
         #import pdb; pdb.set_trace()
-        self.addArg(Const(arg))
+        self.addArg(wrapValue(arg))
 
     def addArg(self, arg):
         self.args.append(arg)
@@ -273,7 +271,7 @@ class PhiNode(IR):
     def translate(self, module, builder):
         if len(self.args) == 0:
             return
-        phi = builder.phi(py_type_to_llvm(self.result.llvmType), self.result.name)
+        phi = builder.phi(self.result.llvmType(), self.result.name)
         for arg in self.args:
             phi.add_incoming(arg.llvm, arg.bc.block)
 
@@ -403,7 +401,7 @@ class Module(object):
             if key == 'len':
                 item = len
             elif key not in func.f.__globals__:
-                if supported_py_type(key):
+                if tp.supported_scalar(key):
                     return __builtins__[key]
                 else:
                     raise UnimplementedError("Type {0} is not supported".format(key))
@@ -561,13 +559,13 @@ class Function(Callable, Scope):
             if isinstance(combined[i], Typable):
                 self.args[i].type = combined[i].type
             else:
-                self.args[i].type = type(combined[i])
+                self.args[i].type = tp.get(combined[i])
         self.analyzed = True
 
     def translate(self, module):
         self.arg_types = [arg.llvmType() for arg in self.args]
 
-        func_tp = llvm.core.Type.function(py_type_to_llvm(self.result.type), self.arg_types)
+        func_tp = llvm.core.Type.function(self.result.type.llvmType(), self.arg_types)
         self.llvm = module.add_function(func_tp, self.name)
 
         for i in range(len(self.args)):
@@ -617,12 +615,12 @@ class Zeros(Intrinsic):
         #    raise UnimplementedError("Zeros currently only supported with a constant int shape")
         self.shape = args[0].value
         self.type = args[1]
-        if not supported_py_type(self.type):
+        if not tp.supported_scalar(self.type):
             raise TypingError("Invalid array element type {0}".format(self.type))
         # TODO(performance): readSignature is run per instance, but only needs to run once.
 
     def getReturnType(self):
-        return ArrayType(self.type, self.shape)
+        return tp.ArrayType(self.type, self.shape)
 
     def translate(self, module, builder):
         tp = tp_array(self.type, self.shape)
@@ -653,7 +651,7 @@ class Len(Intrinsic):
         return self.result
 
     def translate(self, module, builder):
-        if not isinstance(self.obj.type, ArrayType):
+        if not isinstance(self.obj.type, tp.ArrayType):
             raise TypingError("Invalid array type {0}".format(self.obj.type))
         self.result.value = self.obj.type.shape
         self.result.translate()

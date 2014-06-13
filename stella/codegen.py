@@ -9,7 +9,7 @@ import logging
 import time
 
 from . import analysis
-from .llvm import *
+from . import tp
 from .bytecode import *
 from .exc import *
 
@@ -71,7 +71,7 @@ class Program(object):
     def makeStub(self):
         impl = self.module.entry
         args = [arg.llvm for arg in self.module.entry_args]
-        func_tp = llvm.core.Type.function(py_type_to_llvm(impl.result.type), [])
+        func_tp = llvm.core.Type.function(impl.result.type.llvmType(), [])
         func = self.module.llvm.add_function(func_tp, str(impl)+'__stub__')
         bb = func.append_basic_block("entry")
         builder = llvm.core.Builder.new(bb)
@@ -119,9 +119,9 @@ class Program(object):
         #import pdb; pdb.set_trace()
 
         # BUG: clib.__powidf2 gets turned into the following bytecode:
-        # 103 LOAD_FAST                3 (clib) 
-        # 106 LOAD_ATTR               11 (_Program__powidf2) 
-        # 109 STORE_FAST               5 (f) 
+        # 103 LOAD_FAST                3 (clib)
+        # 106 LOAD_ATTR               11 (_Program__powidf2)
+        # 109 STORE_FAST               5 (f)
         # which is not correct. I have no idea where _Program is coming from,
         # I'm assuming it is some internal Python magic going wrong
         f = getattr(clib,'__powidf2')
@@ -150,4 +150,4 @@ class Program(object):
 
         logging.debug("Returning...")
         del (self.module)
-        return llvm_to_py(entry.result.type, retval)
+        return tp.llvm_to_py(entry.result.type, retval)

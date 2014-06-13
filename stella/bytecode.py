@@ -3,9 +3,12 @@ import logging
 import sys
 import types
 
-import pdb
+import llvm
+import llvm.core
+import llvm.ee
 
-from .llvm import *
+
+from . import tp
 from .exc import *
 from .utils import *
 from .intrinsics import *
@@ -193,10 +196,10 @@ class BinaryOp(Bytecode):
         return {}
 
 class BINARY_ADD(BinaryOp):
-    b_func = {float: 'fadd', int: 'add'}
+    b_func = {tp.Float: 'fadd', tp.Int: 'add'}
 
 class BINARY_SUBTRACT(BinaryOp):
-    b_func = {float: 'fsub', int: 'sub'}
+    b_func = {tp.Float: 'fsub', tp.Int: 'sub'}
 
 class BINARY_MULTIPLY(BinaryOp):
     b_func = {float: 'fmul', int: 'mul'}
@@ -381,7 +384,7 @@ class RETURN_VALUE(BlockTerminal, Bytecode):
             func.retype(self.result.unify_type(arg.type, self.debuginfo))
 
     def translate(self, module, builder):
-        if self.result.type == type(None):
+        if self.result.type == tp.Void:
             # return None == void, do not generate a ret instruction as that is invalid
             builder.ret_void()
         else:
@@ -657,7 +660,7 @@ class CALL_FUNCTION(Bytecode):
         tp = self.func.getReturnType()
         tp_change = self.result.unify_type(tp, self.debuginfo)
 
-        if self.result.type == NoType:
+        if self.result.type == tp.NoType:
             func.impl.analyzeAgain() # redo analysis, right now return type is not known
         else:
             func.retype(tp_change)
@@ -838,7 +841,7 @@ class ForLoop(IR):
 
         # JUMP to COMPARE_OP is already part of the bytecodes
         last.setTarget(body_loc)
-        
+
 
     def stack_eval(self, func, stack):
         #self.result = func.getOrNewRegister(self.loop_var)
@@ -874,7 +877,7 @@ class STORE_SUBSCR(Bytecode):
         #logging.debug("Arg types: {0}".format([a.type for a in self.args]))
         #logging.debug("Arg llvm:  {0}".format([str(a.llvm) for a in self.args]))
         #pdb.set_trace()
-        p = builder.gep(self.args[1].llvm, [llvm_constant(0), self.args[2].llvm], inbounds=True)
+        p = builder.gep(self.args[1].llvm, [tp.Int.constant(0), self.args[2].llvm], inbounds=True)
         #logging.debug("gep:       {0}".format(str(p)))
         #builder.store(llvm.core.Type.pointer(self.args[0].llvm), p)
         builder.store(self.args[0].llvm, p)
@@ -889,12 +892,12 @@ class BINARY_SUBSCR(Bytecode):
         stack.push(self.result)
 
     def type_eval(self, func):
-        if not isinstance(self.args[0].type, ArrayType):
+        if not isinstance(self.args[0].type, tp.ArrayType):
             raise TypingError("Expected an array, but got {0}".format(self.args[0].type))
         self.result.unify_type(self.args[0].type.getElementType(), self.debuginfo)
 
     def translate(self, module, builder):
-        p = builder.gep(self.args[0].llvm, [llvm_constant(0), self.args[1].llvm], inbounds=True)
+        p = builder.gep(self.args[0].llvm, [tp.Int.constant(0), self.args[1].llvm], inbounds=True)
         self.result.llvm = builder.load(p)
 
 #---
