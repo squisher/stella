@@ -253,5 +253,6 @@ def test11(args):
 
 @mark.parametrize('arg', single_args([np.zeros(5, dtype=int)]))
 @mark.parametrize('f', [numpy_array])
-def test9(f,arg):
+@unimplemented
+def test12(f,arg):
     make_eq_test(f, arg)

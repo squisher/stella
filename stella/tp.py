@@ -12,7 +12,7 @@ class Type(object):
     _llvm = None
 
     def __str__(self):
-        return '<?>'
+        return '?'
     # llvm.core.ArrayType does something funny, it will compare against _ptr,
     # so let's just add the attribute here to enable equality tests
     _ptr = None
@@ -43,7 +43,7 @@ class ScalarType(Type):
         return self.type_.__name__
 
 tp_int = llvm.core.Type.int(64)
-#tp_int32 = llvm.core.Type.int(32)
+tp_int32 = llvm.core.Type.int(32)  # needed for llvm operators
 #tp_float = llvm.core.Type.float() # Python always works with double precision
 tp_double = llvm.core.Type.double()
 tp_bool = llvm.core.Type.int(1)
@@ -69,6 +69,11 @@ None_ = ScalarType(
     lambda t,v: llvm.ee.GenericValue.int(t, 0),
     lambda t,v: llvm.core.Constant.int(t, 0)
 )
+Str = ScalarType(
+    str, None,
+    lambda t,v: None,
+    lambda t,v: None
+)
 
 _pyscalars = {
     int: Int,
@@ -81,14 +86,26 @@ def get_scalar(obj):
     if type_ == type(int):
         type_ = obj
 
-    # HACK
+    # HACK {
     if type_ == type(None):
         return None_
+    elif type_ == str:
+        return Str
+    # } HACK
 
     try:
         return _pyscalars[type_]
     except KeyError:
         raise TypingError("Invalid scalar type `{0}'".format(type_))
+
+class TransientType(Type):
+    """A type which is only valid during translation time."""
+    def __init__(self, type_):
+        self.type_ = type_
+
+    def __str__(self):
+        return self.type_.__name__
+#Str = TransientType(str)  # see above
 
 class ArrayType(Type):
     tp = NoType
@@ -114,8 +131,9 @@ class ArrayType(Type):
     def getElementType(self):
         return self.tp
     def llvmType(self):
-        tp = llvm.core.Type.array(self.tp.llvmType(), self.shape)
-        return llvm.core.Type.pointer(tp)
+        type_ = llvm.core.Type.array(self.tp.llvmType(), self.shape)
+        #return llvm.core.Type.pointer(tp)
+        return type_
     def __str__(self):
         return "<{0}*{1}>".format(self.tp, self.shape)
     def __repr__(self):
@@ -123,16 +141,18 @@ class ArrayType(Type):
 
 def supported_scalar(type_):
     if type(type_) == str:
+        # it shouldn't be necessary to add the values here, because strings are
+        # only used when parsing the python bytecode.
         types = map(lambda x: x.__name__, _pyscalars.keys())
     else:
-        types = _pyscalars.keys()
+        types = list(_pyscalars.keys()) + list(_pyscalars.values())
     return any([type_ == t for t in types])
 
 def llvm_to_py(tp, val):
     if tp == Int:
         return val.as_int_signed()
     elif tp == Float:
-        return val.as_real(py_type_to_llvm(tp))
+        return val.as_real(tp.llvmType())
     elif tp == Bool:
         return bool(val.as_int())
     elif tp == None_:

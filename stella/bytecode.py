@@ -78,7 +78,6 @@ class LOAD_FAST(Bytecode):
         self.result.type = self.args[0].type
 
     def translate(self, module, builder):
-        #tp = py_type_to_llvm(self.loc.type)
         self.result.llvm = builder.load(self.args[0].llvm)
 
 class STORE_FAST(Bytecode):
@@ -111,8 +110,11 @@ class STORE_FAST(Bytecode):
     def translate(self, module, builder):
         self.cast(builder)
         if self.new_allocate:
-            tp = self.args[0].llvmType()
-            self.result.llvm = builder.alloca(tp, name=self.result.name)
+            type_ = self.args[0].llvmType()
+            # TODO: is this the right place to decide about pointers?
+            if type(self.args[0].type) == tp.ArrayType:
+                type_ = llvm.core.Type.pointer(type_)
+            self.result.llvm = builder.alloca(type_, name=self.result.name)
         builder.store(self.args[0].llvm, self.result.llvm)
 
 class STORE_GLOBAL(Bytecode):
@@ -202,13 +204,13 @@ class BINARY_SUBTRACT(BinaryOp):
     b_func = {tp.Float: 'fsub', tp.Int: 'sub'}
 
 class BINARY_MULTIPLY(BinaryOp):
-    b_func = {float: 'fmul', int: 'mul'}
+    b_func = {tp.Float: 'fmul', tp.Int: 'mul'}
 
 class BINARY_MODULO(BinaryOp):
-    b_func = {float: 'frem', int: 'srem'}
+    b_func = {tp.Float: 'frem', tp.Int: 'srem'}
 
 class BINARY_POWER(BinaryOp):
-    b_func = {float: llvm.core.INTR_POW, int: llvm.core.INTR_POWI}
+    b_func = {tp.Float: llvm.core.INTR_POW, tp.Int: llvm.core.INTR_POWI}
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
@@ -220,38 +222,38 @@ class BINARY_POWER(BinaryOp):
 
     def type_eval(self, func):
         # TODO if args[1] is int but negative, then the result will be float, too!
-#        if self.args[0].type == int and self.args[1].type == int:
-#            tp = int
+#        if self.args[0].type == tp.Int and self.args[1].type == tp.Int:
+#            type_ = tp.Int
 #        else:
-#            tp = float
-#        tp_changed = self.result.unify_type(tp, self.debuginfo)
+#            type_ = tp.Float
+#        tp_changed = self.result.unify_type(type_, self.debuginfo)
         super().type_eval(func)
 
     def translate(self, module, builder):
         # llvm.pow[i]'s first argument always has to be float
-        if self.args[0].type == int:
-            self.args[0] = Cast(self.args[0], float)
+        if self.args[0].type == tp.Int:
+            self.args[0] = Cast(self.args[0], tp.Float)
 
         self.cast(builder)
 
-        if self.args[1].type == int:
+        if self.args[1].type == tp.Int:
             # powi takes a i32 argument
-            power = builder.trunc(self.args[1].llvm, tp_int32, '(i32)'+self.args[1].name)
+            power = builder.trunc(self.args[1].llvm, tp.tp_int32, '(i32)'+self.args[1].name)
         else:
             power = self.args[1].llvm
 
         llvm_pow = llvm.core.Function.intrinsic(module, self.b_func[self.args[1].type], [self.args[0].llvmType()])
         pow_result = builder.call(llvm_pow, [self.args[0].llvm, power])
 
-        if isinstance(self.args[0], Cast) and self.args[0].obj.type == int and self.args[1].type == int:
+        if isinstance(self.args[0], Cast) and self.args[0].obj.type == tp.Int and self.args[1].type == tp.Int:
             # cast back to an integer
-            self.result.llvm = builder.fptosi(pow_result, py_scalar_type_to_llvm(int))
+            self.result.llvm = builder.fptosi(pow_result, tp.Int.llvmType())
         else:
             self.result.llvm = pow_result
 
 class BINARY_FLOOR_DIVIDE(BinaryOp):
     """Python compliant `//' operator: Slow since it has to perform type conversions and floating point division for integers"""
-    b_func = {float: 'fdiv', int: 'fdiv'} # NOT USED, but required to make it a concrete class
+    b_func = {tp.Float: 'fdiv', tp.Int: 'fdiv'} # NOT USED, but required to make it a concrete class
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
@@ -260,33 +262,33 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
         for arg in self.args:
             # TODO: this is a HACK
             if isinstance(arg, Cast):
-                tp = arg.obj.type
+                type_ = arg.obj.type
             else:
-                tp = arg.type
-            self.result.unify_type(tp, self.debuginfo)
+                type_ = arg.type
+            self.result.unify_type(type_, self.debuginfo)
 
         # convert all arguments to float, since fp division is required to apply floor
         for i in range(len(self.args)):
             arg = self.args[i]
-            do_cast = arg.type != float
+            do_cast = arg.type != tp.Float
             if do_cast:
-                self.args[i] = Cast(arg, float)
+                self.args[i] = Cast(arg, tp.Float)
                 func.retype()
 
     def translate(self, module, builder):
         self.cast(builder)
 
         tmp = builder.fdiv(self.args[0].llvm, self.args[1].llvm, self.result.name)
-        llvm_floor = llvm.core.Function.intrinsic(module, llvm.core.INTR_FLOOR, [py_scalar_type_to_llvm(float)])
+        llvm_floor = llvm.core.Function.intrinsic(module, llvm.core.INTR_FLOOR, [tp.Float.llvmType()])
         self.result.llvm = builder.call(llvm_floor, [tmp])
 
         #import pdb; pdb.set_trace()
-        if all([isinstance(a,Cast) and a.obj.type == int for a in self.args]):
+        if all([isinstance(a,Cast) and a.obj.type == tp.Int for a in self.args]):
             # TODO this may be superflous if both args got converted to float in the translation stage -> move toFloat partially to the analysis stage.
-            self.result.llvm = builder.fptosi(self.result.llvm, py_scalar_type_to_llvm(int), "(int)"+self.result.name)
+            self.result.llvm = builder.fptosi(self.result.llvm, tp.Int.llvmType(), "(int)"+self.result.name)
 
 class BINARY_TRUE_DIVIDE(BinaryOp):
-    b_func = {float: 'fdiv'}
+    b_func = {tp.Float: 'fdiv'}
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
@@ -295,14 +297,14 @@ class BINARY_TRUE_DIVIDE(BinaryOp):
 
     def type_eval(self, func):
         # The result of `/', true division, is always a float
-        self.result.type = float
+        self.result.type = tp.Float
         super().type_eval(func)
 
 #class InplaceOp(BinaryOp):
 #    @pop_stack(2)
 #    def stack_eval(self, func, stack):
-#        tp = unify_type(self.args[0].type, self.args[1].type, self.debuginfo)
-#        if tp != self.args[0].type:
+#        type_ = unify_type(self.args[0].type, self.args[1].type, self.debuginfo)
+#        if type_ != self.args[0].type:
 #            self.result = Local.tmp(self.args[0])
 #            self.result.type = tp
 #        else:
@@ -323,7 +325,7 @@ class INPLACE_FLOOR_DIVIDE(BINARY_FLOOR_DIVIDE): pass
 class INPLACE_MODULO(BINARY_MODULO): pass
 
 class COMPARE_OP(Bytecode):
-    b_func = {float: 'fcmp', int: 'icmp', bool: 'icmp'}
+    b_func = {tp.Float: 'fcmp', tp.Int: 'icmp', tp.Bool: 'icmp'}
     op = None
 
     icmp = {'==': llvm.core.ICMP_EQ,
@@ -355,18 +357,18 @@ class COMPARE_OP(Bytecode):
 
     def type_eval(self, func):
         #func.retype(self.result.unify_type(bool, self.debuginfo))
-        self.result.type = bool
+        self.result.type = tp.Bool
         if self.args[0].type != self.args[1].type:
             raise TypingError("Comparing different types ({0} with {1})".format(self.args[0].type, self.args[1].type))
 
     def translate(self, module, builder):
         # assume both types are the same, see @stack_eval
-        tp = self.args[0].type
+        type_ = self.args[0].type
         if not self.args[0].type in self.b_func:
-            raise UnimplementedError(tp)
+            raise UnimplementedError(type_)
 
-        f = getattr(builder, self.b_func[tp])
-        m = getattr(self,    self.b_func[tp])
+        f = getattr(builder, self.b_func[type_])
+        m = getattr(self,    self.b_func[type_])
 
         self.result.llvm = f(m[self.op], self.args[0].llvm, self.args[1].llvm, self.result.name)
 
@@ -657,8 +659,8 @@ class CALL_FUNCTION(Bytecode):
         stack.push(self.result)
 
     def type_eval(self, func):
-        tp = self.func.getReturnType()
-        tp_change = self.result.unify_type(tp, self.debuginfo)
+        type_ = self.func.getReturnType()
+        tp_change = self.result.unify_type(type_, self.debuginfo)
 
         if self.result.type == tp.NoType:
             func.impl.analyzeAgain() # redo analysis, right now return type is not known

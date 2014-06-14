@@ -23,7 +23,7 @@ class Typable(object):
         elif tp1 == tp.NoType: self.type = tp2
         elif tp2 == tp.NoType: pass
         elif (tp1 == tp.Int and tp2 == tp.Float) or (tp1 == tp.Float and tp2 == tp.Int):
-            self.type = float
+            self.type = tp.Float
             return True
         else:
             raise TypingError ("Unifying of types " + str(tp1) + " and " + str(tp2) + " (not yet) implemented", debuginfo)
@@ -130,8 +130,8 @@ class GlobalVariable(Typable):
 
     def translate(self, module, builder):
         self.llvm = module.add_global_variable(self.llvmType(), self.name)
-        self.llvm.initializer = self.initial_value.translate()  #Constant.undef(tp)
-class Cast(object):
+        self.llvm.initializer = self.initial_value.llvm  #Constant.undef(tp)
+class Cast(Typable):
     def __init__(self, obj, tp):
         assert obj.type != tp
         self.obj = obj
@@ -614,7 +614,7 @@ class Zeros(Intrinsic):
         #if type(args[0]) != Const or args[0].type != int:
         #    raise UnimplementedError("Zeros currently only supported with a constant int shape")
         self.shape = args[0].value
-        self.type = args[1]
+        self.type = tp.get_scalar(args[1])
         if not tp.supported_scalar(self.type):
             raise TypingError("Invalid array element type {0}".format(self.type))
         # TODO(performance): readSignature is run per instance, but only needs to run once.
@@ -623,8 +623,8 @@ class Zeros(Intrinsic):
         return tp.ArrayType(self.type, self.shape)
 
     def translate(self, module, builder):
-        tp = tp_array(self.type, self.shape)
-        return builder.alloca(tp)
+        type_ = self.getReturnType().llvmType()
+        return builder.alloca(type_)
 
     def getResult(self, func):
         return Register(func)
@@ -643,7 +643,7 @@ class Len(Intrinsic):
         # NOT TYPED YET
 
     def getReturnType(self):
-        return int
+        return tp.Int
 
     def getResult(self, func):
         # we need the reference to back-patch
