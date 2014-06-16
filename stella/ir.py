@@ -552,7 +552,6 @@ class Function(Callable, Scope):
 
     def setParamTypes(self, args, kwargs):
         combined = self.combineAndCheckArgs(args, kwargs)
-        import pdb; pdb.set_trace()  # XXX BREAKPOINT
 
         self.arg_transfer = []
 
@@ -570,12 +569,12 @@ class Function(Callable, Scope):
                 arg.type = type_
                 arg.type.makePointer()
             else:
-                name = '__param_'+self.arg_names[i]
-                arg = self.getOrNewRegister(name)
+                name = self.arg_names[i]
+                arg = self.getOrNewRegister('__param_'+name)
                 arg.type = type_
                 self.arg_transfer.append(name)
 
-            self.args.append(args)
+            self.args.append(arg)
 
         self.analyzed = True
 

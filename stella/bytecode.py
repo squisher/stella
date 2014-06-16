@@ -69,16 +69,34 @@ class LOAD_FAST(Bytecode):
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
+
+    def addLocalName(self, func, name):
+        # TODO: crude?
+        try:
+            self.args.append(func.getRegister(name))
+        except UndefinedError:
+            self.args.append(func.getStackLoc(name))
+
     def stack_eval(self, func, stack):
-        assert type(self.args[0]) == StackLoc
-        self.result = Register(func)
+        type_ = type(self.args[0])
+        if type_ == StackLoc:
+            self.result = Register(func)
+        elif type_ == Register:
+            self.result = self.args[0]
+        else:
+            raise StellaException("Invalid LOAD_FAST argument type `{0}'".format(type_))
         stack.push(self.result)
 
     def type_eval(self, func):
         self.result.type = self.args[0].type
 
     def translate(self, module, builder):
-        self.result.llvm = builder.load(self.args[0].llvm)
+        type_ = type(self.args[0])
+        if type_ == StackLoc:
+            self.result.llvm = builder.load(self.args[0].llvm)
+        elif type_ == Register:
+            # nothing to load, it's a pseudo instruction in this case
+            pass
 
 class STORE_FAST(Bytecode):
     def __init__(self, func, debuginfo):

@@ -181,7 +181,7 @@ class Function(object):
 
         # For the STORE_FAST of the argument(s)
         for arg in reversed(self.impl.arg_transfer):
-            stack.push(self.impl.getRegister(arg))
+            stack.push(self.impl.getRegister('__param_'+arg))
 
         while not self.todo.empty():
             (bc, stack) = self.todo.pop()

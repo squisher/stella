@@ -193,6 +193,7 @@ def array_len():
 def numpy_array(a):
     a[1] = 4
     a[2] = 2
+    a[3] = -1
 
 @mark.parametrize('args', [(40,2), (43, -1), (41, 1)])
 @mark.parametrize('f', [direct_assignment, simple_assignment, double_assignment, double_cast, return_without_init])
@@ -253,6 +254,5 @@ def test11(args):
 
 @mark.parametrize('arg', single_args([np.zeros(5, dtype=int)]))
 @mark.parametrize('f', [numpy_array])
-@unimplemented
 def test12(f,arg):
     make_eq_test(f, arg)
