@@ -71,7 +71,7 @@ class NumpyArray(Const):
     def translate(self):  #, builder):
         ptr_int = self.value.ctypes.data  # int
         ptr_int_llvm = tp.Int.constant(ptr_int)
-        type_ = self.type.llvmType()
+        type_ = llvm.core.Type.pointer(self.type.llvmType())
         self.llvm = llvm.core.Constant.inttoptr(ptr_int_llvm, type_)
 
     def __str__(self):
@@ -520,7 +520,7 @@ class Function(Callable, Scope):
         self.result = Register(self, '__return__')
 
         self.readSignature(f)
-        self.args = [self.getOrNewRegister('__param_'+n) for n in self.arg_names]
+        self.args = []
         #self.arg_values = None
 
         # weak reference is necessary so that Python will start garbage
@@ -552,14 +552,31 @@ class Function(Callable, Scope):
 
     def setParamTypes(self, args, kwargs):
         combined = self.combineAndCheckArgs(args, kwargs)
+        import pdb; pdb.set_trace()  # XXX BREAKPOINT
+
+        self.arg_transfer = []
 
         for i in range(len(combined)):
             # TODO: I don't particularly like this isinstance check here but it seems the easiest
             #       way to also handle the initial entry function
             if isinstance(combined[i], Typable):
-                self.args[i].type = combined[i].type
+                type_ = combined[i].type
             else:
-                self.args[i].type = tp.get(combined[i])
+                type_ = tp.get(combined[i])
+
+            if isinstance(type_, tp.ArrayType):
+                # TODO: create superclass for complex types
+                arg = self.getOrNewRegister(self.arg_names[i])
+                arg.type = type_
+                arg.type.makePointer()
+            else:
+                name = '__param_'+self.arg_names[i]
+                arg = self.getOrNewRegister(name)
+                arg.type = type_
+                self.arg_transfer.append(name)
+
+            self.args.append(args)
+
         self.analyzed = True
 
     def translate(self, module):

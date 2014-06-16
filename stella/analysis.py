@@ -180,8 +180,8 @@ class Function(object):
         evaled = set()
 
         # For the STORE_FAST of the argument(s)
-        for arg in reversed(self.impl.arg_names):
-            stack.push(self.impl.getRegister('__param_'+arg))
+        for arg in reversed(self.impl.arg_transfer):
+            stack.push(self.impl.getRegister(arg))
 
         while not self.todo.empty():
             (bc, stack) = self.todo.pop()
@@ -294,7 +294,7 @@ class Function(object):
         self.last_bc = None
 
         # Store arguments in memory locations for uniformity
-        for arg in self.impl.arg_names:
+        for arg in self.impl.arg_transfer:
             # TODO Patch up di?
             di = None
             bc = STORE_FAST(self.impl, di)

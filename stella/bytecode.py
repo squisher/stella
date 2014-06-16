@@ -111,7 +111,7 @@ class STORE_FAST(Bytecode):
         self.cast(builder)
         if self.new_allocate:
             type_ = self.args[0].llvmType()
-            # TODO: is this the right place to decide about pointers?
+            # TODO: is this the right place to make it a pointer?
             if type(self.args[0].type) == tp.ArrayType:
                 type_ = llvm.core.Type.pointer(type_)
             self.result.llvm = builder.alloca(type_, name=self.result.name)

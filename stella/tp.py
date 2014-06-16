@@ -10,6 +10,12 @@ from .exc import *
 class Type(object):
     type_ = None
     _llvm = None
+    ptr = 0
+    def makePointer(self):
+        """Note: each subtype must interpret `ptr` itself"""
+        self.ptr += 1
+    def isPointer(self):
+        return self.ptr > 0
 
     def __str__(self):
         return '?'
@@ -98,13 +104,13 @@ def get_scalar(obj):
     except KeyError:
         raise TypingError("Invalid scalar type `{0}'".format(type_))
 
-class TransientType(Type):
-    """A type which is only valid during translation time."""
-    def __init__(self, type_):
-        self.type_ = type_
-
-    def __str__(self):
-        return self.type_.__name__
+#class TransientType(Type):
+#    """A type which is only valid during translation time."""
+#    def __init__(self, type_):
+#        self.type_ = type_
+#
+#    def __str__(self):
+#        return self.type_.__name__
 #Str = TransientType(str)  # see above
 
 class ArrayType(Type):
@@ -132,12 +138,32 @@ class ArrayType(Type):
         return self.tp
     def llvmType(self):
         type_ = llvm.core.Type.array(self.tp.llvmType(), self.shape)
+        if self.ptr:
+            type_ = llvm.core.Type.pointer(type_)
         #return llvm.core.Type.pointer(tp)
         return type_
     def __str__(self):
-        return "<{0}*{1}>".format(self.tp, self.shape)
+        if self.ptr:
+            p = '*'
+        else:
+            p = ''
+        return "<{0}{1}*{2}>".format(p, self.tp, self.shape)
     def __repr__(self):
         return str(self)
+
+
+#class Pointer(object):
+#    """Turn the obj's type into a pointer type.
+#
+#    Note that pointer of pointers are not supported!
+#    """
+#    obj = None
+#
+#    def __init__(self, obj):
+#        self.obj = obj
+#
+#    def llvmType(self):
+#        return llvm.core.Type.pointer(self.obj.llvmType())
 
 def supported_scalar(type_):
     if type(type_) == str:
