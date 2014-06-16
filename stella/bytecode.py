@@ -7,13 +7,11 @@ import llvm
 import llvm.core
 import llvm.ee
 
-
 from . import tp
 from .exc import *
 from .utils import *
 from .intrinsics import *
 from .ir import *
-
 
 def pop_stack(n):
     """

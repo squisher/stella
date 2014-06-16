@@ -195,6 +195,15 @@ def numpy_array(a):
     a[2] = 2
     a[3] = -1
 
+def numpy_len_indirect(a):
+    l = len(a)
+    for i in range(l):
+        a[i] = i+1
+
+def numpy_len_direct(a):
+    for i in range(len(a)):
+        a[i] = i+1
+
 @mark.parametrize('args', [(40,2), (43, -1), (41, 1)])
 @mark.parametrize('f', [direct_assignment, simple_assignment, double_assignment, double_cast, return_without_init])
 def test1(f,args):
@@ -253,6 +262,12 @@ def test11(args):
     make_eq_kw_test(kwargs, args)
 
 @mark.parametrize('arg', single_args([np.zeros(5, dtype=int)]))
-@mark.parametrize('f', [numpy_array])
+@mark.parametrize('f', [numpy_array, numpy_len_indirect])
 def test12(f,arg):
+    make_eq_test(f, arg)
+
+@mark.parametrize('arg', single_args([np.zeros(5, dtype=int)]))
+@mark.parametrize('f', [numpy_len_direct])
+@unimplemented
+def test12b(f,arg):
     make_eq_test(f, arg)
