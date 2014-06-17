@@ -540,6 +540,7 @@ class Function(Callable, Scope):
         return self.result.type
 
     def analyzeAgain(self):
+        """Pushes the current function on the module's analysis todo list"""
         if not self.module.todoLastFunc(self):
             self.module.todoAdd(self, None, None)
 

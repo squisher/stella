@@ -47,6 +47,7 @@ class Function(object):
         return self.getName()
 
     def retype(self, go = True):
+        """Immediately retype this function if go is True"""
         if go:
             self.analyze_again = True
 
