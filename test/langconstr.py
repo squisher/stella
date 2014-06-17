@@ -208,6 +208,18 @@ def numpy_len_direct(a):
     for i in range(len(a)):
         a[i] = i+1
 
+def numpy_passing(a):
+    a[0] = 3
+    a[2] = 1
+    numpy_receiving(a)
+    return a[4]
+
+def numpy_receiving(a):
+    l = len(a)
+    for i in range(l):
+        if a[i] > 0:
+            a[i] += 1
+
 @mark.parametrize('args', [(40,2), (43, -1), (41, 1)])
 @mark.parametrize('f', [direct_assignment, simple_assignment, double_assignment, double_cast, return_without_init])
 def test1(f,args):
@@ -271,7 +283,7 @@ def test12(f,arg):
     make_eq_test(f, arg)
 
 @mark.parametrize('arg', single_args([np.zeros(5, dtype=int)]))
-@mark.parametrize('f', [numpy_len_direct])
+@mark.parametrize('f', [numpy_len_direct, numpy_passing])
 @unimplemented
 def test12b(f,arg):
     make_eq_test(f, arg)

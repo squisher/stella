@@ -933,6 +933,41 @@ class POP_TOP(Bytecode):
     def translate(self, module, builder):
         pass
 
+class DUP_TOP_TWO(Bytecode):
+    discard = True
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    @pop_stack(2)
+    def stack_eval(self, func, stack):
+        stack.push(self.args[0])
+        stack.push(self.args[1])
+        stack.push(self.args[0])
+        stack.push(self.args[1])
+
+    def type_eval(self, func):
+        pass
+
+    def translate(self, module, builder):
+        pass
+
+class ROT_THREE(Bytecode, Poison):
+    discard = True
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    @pop_stack(3)
+    def stack_eval(self, func, stack):
+        stack.push(self.args[0])
+        stack.push(self.args[2])
+        stack.push(self.args[1])
+
+    def type_eval(self, func):
+        pass
+
+    def translate(self, module, builder):
+        pass
+
 #---
 
 opconst = {}

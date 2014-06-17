@@ -48,7 +48,6 @@ class Function(object):
 
     def retype(self, go = True):
         if go:
-            #import pdb; pdb.set_trace()
             self.analyze_again = True
 
     def add_incoming_jump(self, target_bc, source_bc):
