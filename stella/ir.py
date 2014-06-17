@@ -235,6 +235,12 @@ class IR(metaclass=ABCMeta):
     def locStr(self):
         return "{0:2s} {1}".format(str(self.loc), str(self))
 
+    def equivalent(self, other):
+        """Equality but location independent.
+
+        This method may need to be overridden by the concrete implementation.
+        """
+        return type(self) == type(other) and self.args == other.args
 
 class PhiNode(IR):
     def __init__(self, func, debuginfo):

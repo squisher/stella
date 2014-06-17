@@ -820,6 +820,11 @@ class ForLoop(IR):
         last.loc = jump_loc
         func.replaceLocation(last)
 
+        if last.prev.equivalent(last) and isinstance(last, JUMP_ABSOLUTE):
+            # Python seems to sometimes add a duplicate JUMP_ABSOLUTE at the
+            # end of the loop. Remove it.
+            last.prev.remove()
+
         # loop test
         #pdb.set_trace()
         b = LOAD_FAST(func.impl, self.debuginfo)
