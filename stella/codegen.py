@@ -80,7 +80,7 @@ class Program(object):
             var.translate(self.module.llvm, builder)
 
         call = builder.call(impl.llvm, args)
-        if impl.result.type is type(None):
+        if impl.result.type is tp.Void:
             builder.ret_void()
         else:
             builder.ret(call)

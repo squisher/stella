@@ -27,7 +27,6 @@ class Type(object):
         raise TypingError("Cannot create llvm type for an unknown type. This should have been cought earlier.")
 
 NoType = Type()
-Void = None
 
 class ScalarType(Type):
     def __init__(self, type_, llvm, f_generic_value, f_constant):
@@ -70,11 +69,14 @@ Bool = ScalarType(
     llvm.ee.GenericValue.int,
     llvm.core.Constant.int
 )
+def invalid_none_use(msg):
+    raise StellaException(msg)
 None_ = ScalarType(
-    type(None), tp_int,
-    lambda t,v: llvm.ee.GenericValue.int(t, 0),
-    lambda t,v: llvm.core.Constant.int(t, 0)
+    type(None), tp_void,
+    lambda t,v: invalid_none_use("Can't create a generic value ({0},{1}) for void".format(t,v)),
+    lambda t,v: None  # Constant, needed for constructing `RETURN None'
 )
+Void = None_  # TODO: Could there be differences later?
 Str = ScalarType(
     str, None,
     lambda t,v: None,

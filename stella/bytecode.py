@@ -918,6 +918,21 @@ class BINARY_SUBSCR(Bytecode):
         p = builder.gep(self.args[0].llvm, [tp.Int.constant(0), self.args[1].llvm], inbounds=True)
         self.result.llvm = builder.load(p)
 
+class POP_TOP(Bytecode):
+    discard = True
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    @pop_stack(1)
+    def stack_eval(self, func, stack):
+        pass
+
+    def type_eval(self, func):
+        pass
+
+    def translate(self, module, builder):
+        pass
+
 #---
 
 opconst = {}

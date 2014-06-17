@@ -172,6 +172,10 @@ def array_alloc_assignment3():
 def void():
     pass
 
+def call_void():
+    void()
+    return 1
+
 def array_alloc_use():
     a = zeros(5, dtype=int)
     a[0] = 1
@@ -224,7 +228,7 @@ def test3(f,arg):
 def test4(f,args):
     make_eq_test(f, args)
 
-@mark.parametrize('f', [return_const, assign_const, use_global, array_allocation, array_alloc_assignment, array_alloc_assignment2, array_alloc_assignment3, void, array_alloc_use, array_alloc_use2, array_len])
+@mark.parametrize('f', [return_const, assign_const, use_global, array_allocation, array_alloc_assignment, array_alloc_assignment2, array_alloc_assignment3, void, call_void, array_alloc_use, array_alloc_use2, array_len])
 def test5(f):
     make_eq_test(f, ())
 
