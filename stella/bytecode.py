@@ -963,8 +963,8 @@ class ROT_THREE(Bytecode, Poison):
 
     @pop_stack(3)
     def stack_eval(self, func, stack):
-        stack.push(self.args[0])
         stack.push(self.args[2])
+        stack.push(self.args[0])
         stack.push(self.args[1])
 
     def type_eval(self, func):
