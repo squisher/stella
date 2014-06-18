@@ -277,12 +277,12 @@ def test11(args):
     make_eq_kw_test(kwargs, args)
 
 @mark.parametrize('arg', single_args([np.zeros(5, dtype=int)]))
-@mark.parametrize('f', [numpy_array, numpy_len_indirect, numpy_receiving, numpy_passing])
+@mark.parametrize('f', [numpy_array, numpy_len_indirect, numpy_receiving, numpy_passing, numpy_len_direct])
 def test12(f,arg):
     make_eq_test(f, arg)
 
 @mark.parametrize('arg', single_args([np.zeros(5, dtype=int)]))
-@mark.parametrize('f', [numpy_len_direct])
+@mark.parametrize('f', [])
 @unimplemented
 def test12b(f,arg):
     make_eq_test(f, arg)

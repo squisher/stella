@@ -498,6 +498,7 @@ class JUMP_IF_TRUE_OR_POP(Jump_if_X_or_pop, Bytecode):
 class Pop_jump_if_X(Jump):
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
+        self.additional_pops = 0
 
     def processFallThrough(self):
         self.fallthrough = self.next
@@ -510,12 +511,23 @@ class Pop_jump_if_X(Jump):
             assert self.fallthrough == old_bc
             self.fallthrough = new_bc
 
+    def additionalPop(self, i):
+        """Deviate from Python semantics: pop i more items off the stack WHEN jumping.
+
+        Instead of the Python semantics to pop one value of the stack, pop i more when jumping.
+        """
+        self.additional_pops = i
+
     @pop_stack(1)
     def stack_eval(self, func, stack):
         r = []
         # if X, jump
         self.args[0].bc = self
-        r.append((self.target_bc, stack))
+
+        jump_stack = stack.clone()
+        for i in range(self.additional_pops):
+            jump_stack.pop()
+        r.append((self.target_bc, jump_stack))
         # else continue to the next instruction
         r.append((self.next, stack))
         # (pop happens in any case)
@@ -738,7 +750,7 @@ class ForLoop(IR):
 
     def rewrite(self, func):
         last = self
-        (self.limit_minus_one,_) = func.impl.getOrNewStackLoc(str(self.test_loc) + "__limit")
+        (self.limit_minus_one, _) = func.impl.getOrNewStackLoc(str(self.test_loc) + "__limit")
 
         # init
         b = LOAD_CONST(func.impl, self.debuginfo)
@@ -776,6 +788,13 @@ class ForLoop(IR):
             for b in reversed(self.limit):
                 last.insert_after(b)
                 last = b
+            b = DUP_TOP(func.impl, self.debuginfo)
+            last.insert_after(b)
+            last = b
+
+            b = ROT_THREE(func.impl, self.debuginfo)
+            last.insert_after(b)
+            last = b
         else:
             raise UnimplementedError("Unsupported limit type {0}".format(type(self.limit)))
 
@@ -786,24 +805,27 @@ class ForLoop(IR):
 
         b = POP_JUMP_IF_TRUE(func.impl, self.debuginfo)
         b.setTarget(self.end_loc)
+        if isinstance(self.limit, list):
+            b.additionalPop(1)
         last.insert_after(b)
         last = b
 
         # my_limit = limit -1
         if isinstance(self.limit, StackLoc):
             b = LOAD_FAST(func.impl, self.debuginfo)
+            b.addArg(self.limit)
+            last.insert_after(b)
+            last = b
         elif isinstance(self.limit, Const):
             b = LOAD_CONST(func.impl, self.debuginfo)
+            b.addArg(self.limit)
+            last.insert_after(b)
+            last = b
         elif isinstance(self.limit, list):
-            # TODO: we call the function twice. That sucks.
-            for b in reversed(self.limit):
-                last.insert_after(b)
-                last = b
+            # Nothing to do, the value is already on the stack
+            pass
         else:
             raise UnimplementedError("Unsupported limit type {0}".format(type(self.limit)))
-        b.addArg(self.limit)
-        last.insert_after(b)
-        last = b
 
         b = LOAD_CONST(func.impl, self.debuginfo)
         b.addArg(Const(1))
@@ -955,6 +977,22 @@ class POP_TOP(Bytecode):
     @pop_stack(1)
     def stack_eval(self, func, stack):
         pass
+
+    def type_eval(self, func):
+        pass
+
+    def translate(self, module, builder):
+        pass
+
+class DUP_TOP(Bytecode):
+    discard = True
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    @pop_stack(1)
+    def stack_eval(self, func, stack):
+        stack.push(self.args[0])
+        stack.push(self.args[0])
 
     def type_eval(self, func):
         pass
