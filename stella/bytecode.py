@@ -638,13 +638,14 @@ class CALL_FUNCTION(Bytecode):
     def addRawArg(self, arg):
         self.num_pos_args = arg & 0xFF
         self.num_kw_args = (arg >> 8) & 0xFF
+        self.num_stack_args = self.num_pos_args + self.num_kw_args*2
 
     def separateArgs(self):
         self.func = self.args[0]
         args = self.args[1:]
 
         #pdb.set_trace()
-        assert len(args) == self.num_pos_args + self.num_kw_args*2
+        assert len(args) == self.num_stack_args
 
         self.kw_args = {}
         for i in range(self.num_kw_args):
@@ -762,13 +763,21 @@ class ForLoop(IR):
 
         if isinstance(self.limit, StackLoc):
             b = LOAD_FAST(func.impl, self.debuginfo)
+            b.addArg(self.limit)
+            last.insert_after(b)
+            last = b
         elif isinstance(self.limit, Const):
             b = LOAD_CONST(func.impl, self.debuginfo)
+            b.addArg(self.limit)
+            last.insert_after(b)
+            last = b
+        elif isinstance(self.limit, list):
+            # limit is return value of a function call
+            for b in reversed(self.limit):
+                last.insert_after(b)
+                last = b
         else:
             raise UnimplementedError("Unsupported limit type {0}".format(type(self.limit)))
-        b.addArg(self.limit)
-        last.insert_after(b)
-        last = b
 
         b = COMPARE_OP(func.impl, self.debuginfo)
         b.addCmp('>=')
@@ -785,6 +794,11 @@ class ForLoop(IR):
             b = LOAD_FAST(func.impl, self.debuginfo)
         elif isinstance(self.limit, Const):
             b = LOAD_CONST(func.impl, self.debuginfo)
+        elif isinstance(self.limit, list):
+            # TODO: we call the function twice. That sucks.
+            for b in reversed(self.limit):
+                last.insert_after(b)
+                last = b
         else:
             raise UnimplementedError("Unsupported limit type {0}".format(type(self.limit)))
         b.addArg(self.limit)

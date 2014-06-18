@@ -86,12 +86,21 @@ class Function(object):
                     # TODO: this if..elif should be more general!
                     if isinstance(cur, LOAD_FAST):
                         limit = cur.args[0]
+                        cur.remove()
                     elif isinstance(cur, LOAD_CONST):
                         limit = cur.args[0]
+                        cur.remove()
+                    elif isinstance(cur, CALL_FUNCTION):
+                        cur.remove()
+                        limit = [cur]
+                        for i in range(cur.num_stack_args+1):  # +1 for the function name
+                            cur = cur.prev
+                            cur.remove()
+                            limit.append(cur)
                     else:
-                        raise UnimplementedError('unsupported for loop')
-                    cur.remove()
+                        raise UnimplementedError('unsupported for loop: limit {0}'.format(type(cur)))
                     cur = bc.prev
+
                     if not isinstance(cur, LOAD_GLOBAL):
                         raise UnimplementedError('unsupported for loop')
                     cur.remove()
