@@ -72,6 +72,8 @@ class Function(object):
             try:
                 if isinstance(bc, FOR_ITER):
                     # TODO: move this into bytecode.ForLoop
+                    iter_loc = bc.loc
+
                     cur = bc.prev
                     if not isinstance(cur, GET_ITER):
                         raise UnimplementedError('unsupported for loop')
@@ -105,6 +107,7 @@ class Function(object):
                     for_loop.setLimit(limit)
                     for_loop.setEndLoc(end_loc)
                     for_loop.setTestLoc(bc.loc)
+                    for_loop.setIterLoc(iter_loc)
 
                     cur.insert_after(for_loop)
                     cur.remove()

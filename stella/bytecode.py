@@ -731,6 +731,10 @@ class ForLoop(IR):
     def setTestLoc(self, loc):
         self.test_loc = loc
 
+    def setIterLoc(self, loc):
+        """The location of FOR_ITER which may be referenced as 'restart loop'"""
+        self.iter_loc = loc
+
     def rewrite(self, func):
         last = self
         (self.limit_minus_one,_) = func.impl.getOrNewStackLoc(str(self.test_loc) + "__limit")
@@ -807,7 +811,10 @@ class ForLoop(IR):
         body_loc = b.next.loc
         func.addLabel(b.next)
 
+        jump_updates = []
         while b.next != None:
+            if isinstance(b, Jump) and b.target_label == self.iter_loc:
+                jump_updates.append(b)
             b = b.next
         assert isinstance(b, BlockEnd)
         #import pdb; pdb.set_trace()
@@ -816,9 +823,12 @@ class ForLoop(IR):
         b.remove()
 
         # go back to the JUMP and switch locations
-        incr_loc = last.loc
+        loop_test_loc = last.loc
         last.loc = jump_loc
         func.replaceLocation(last)
+
+        for b in jump_updates:
+            b.setTarget(loop_test_loc)
 
         if last.prev.equivalent(last) and isinstance(last, JUMP_ABSOLUTE):
             # Python seems to sometimes add a duplicate JUMP_ABSOLUTE at the
@@ -829,6 +839,8 @@ class ForLoop(IR):
         #pdb.set_trace()
         b = LOAD_FAST(func.impl, self.debuginfo)
         b.addArg(self.loop_var)
+        b.loc = loop_test_loc
+        func.replaceLocation(b)
         last.insert_before(b)
 
         b = LOAD_FAST(func.impl, self.debuginfo)
@@ -847,8 +859,6 @@ class ForLoop(IR):
         # increment
         b = LOAD_FAST(func.impl, self.debuginfo)
         b.addArg(self.loop_var)
-        b.loc = incr_loc
-        func.replaceLocation(b)
         last.insert_before(b)
 
         b = LOAD_CONST(func.impl, self.debuginfo)
