@@ -1,10 +1,15 @@
 #!/usr/bin/env python
 
 from random import randint
+import numpy as np
 from test import *
 
 def return_bool(): return True
 def return_arg(x): return x
+
+def numpy_return_element(a):
+    return a[2]
+
 def equality(a,b): return a==b
 
 def test1():
@@ -22,3 +27,9 @@ def test3(args):
 @mark.xfail()
 def test3fail(args):
     make_eq_test(equality, args)
+
+@mark.parametrize('args', single_args([np.zeros(5, dtype=int), np.array([1,2,3,4,5], dtype=int)]))
+@mark.parameterize('f', numpy_return_element)
+@mark.xfail()
+def test4fail(f, args):
+    make_eq_test(f, args)

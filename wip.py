@@ -6,4 +6,4 @@ import numpy as np
 a = np.zeros(5, dtype=int)
 
 def current_work(run=False):
-    print(stella.wrap(numpy_receiving, ir=not run)(a))
+    print(stella.wrap(numpy_passing, ir=not run)(a))
