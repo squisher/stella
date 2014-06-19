@@ -374,7 +374,8 @@ class COMPARE_OP(Bytecode):
     def type_eval(self, func):
         #func.retype(self.result.unify_type(bool, self.debuginfo))
         self.result.type = tp.Bool
-        if self.args[0].type != self.args[1].type:
+        if (self.args[0].type != self.args[1].type and
+                self.args[0].type != tp.NoType and self.args[1].type != tp.NoType):
             raise TypingError("Comparing different types ({0} with {1})".format(self.args[0].type, self.args[1].type))
 
     def translate(self, module, builder):

@@ -219,6 +219,16 @@ def numpy_receiving(a):
         if a[i] > 0:
             a[i] += 1
 
+def return_2():
+    return 2
+
+def if_func_call():
+    return return_2() > 1
+
+def numpy_func_limit(a):
+    for i in range(return_2()):
+        a[i] = i+1
+
 @mark.parametrize('args', [(40,2), (43, -1), (41, 1)])
 @mark.parametrize('f', [direct_assignment, simple_assignment, double_assignment, double_cast, return_without_init])
 def test1(f,args):
@@ -239,7 +249,7 @@ def test3(f,arg):
 def test4(f,args):
     make_eq_test(f, args)
 
-@mark.parametrize('f', [return_const, assign_const, use_global, array_allocation, array_alloc_assignment, array_alloc_assignment2, array_alloc_assignment3, void, call_void, array_alloc_use, array_alloc_use2, array_len])
+@mark.parametrize('f', [return_const, assign_const, use_global, array_allocation, array_alloc_assignment, array_alloc_assignment2, array_alloc_assignment3, void, call_void, array_alloc_use, array_alloc_use2, array_len, if_func_call])
 def test5(f):
     make_eq_test(f, ())
 
