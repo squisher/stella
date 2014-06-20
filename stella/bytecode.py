@@ -698,14 +698,7 @@ class CALL_FUNCTION(Bytecode):
             func.retype(tp_change)
 
     def translate(self, module, builder):
-        if isinstance(self.func, Intrinsic):
-            self.result.llvm = self.func.translate(module, builder)
-        else:
-            args = self.func.combineAndCheckArgs(self.args, self.kw_args)
-            #logging.debug("Call using args: " + str(args))
-            #logging.debug("Call using arg_types: " + str(list(map (type, args))))
-
-            self.result.llvm = builder.call(self.func.llvm, [arg.llvm for arg in args])
+        self.result.llvm = self.func.call(module, builder, self.args, self.kw_args)
 
 class GET_ITER(Poison, Bytecode):
     """WIP"""

@@ -536,6 +536,13 @@ class Callable(metaclass=ABCMeta):
 
         return r
 
+    def call(self, module, builder, args, kw_args):
+        args = self.combineAndCheckArgs(args, kw_args)
+        #logging.debug("Call using args: " + str(args))
+        #logging.debug("Call using arg_types: " + str(list(map (type, args))))
+
+        return builder.call(self.llvm, [arg.llvm for arg in args])
+
 class Function(Callable, Scope):
     def __init__(self, f, module):
         # TODO: pass the module as the parent for scope
@@ -557,6 +564,8 @@ class Function(Callable, Scope):
 
     def __str__(self):
         return self.name
+#    def __repr__(self):
+#        return super().__repr__()[:-1]+self.name+'>'
 
     def nameAndType(self):
         return self.name + "(" + str(self.args) + ")"
@@ -642,11 +651,16 @@ class Intrinsic(Foreign, Callable):
     py_func = None
 
     @abstractmethod
-    def translate(self, module, builder):
+    def call(self, module, builder, args, kw_args):
+        """args and kw_args are already added by a call through addArgs()"""
         pass
 
     @abstractmethod
     def getResult(self, func):
+        pass
+
+    @abstractmethod
+    def addArgs(self, args):
         pass
 
 class Zeros(Intrinsic):
@@ -667,7 +681,7 @@ class Zeros(Intrinsic):
     def getReturnType(self):
         return tp.ArrayType(self.type, self.shape)
 
-    def translate(self, module, builder):
+    def call (self, module, builder, args, kw_args):
         type_ = self.getReturnType().llvmType()
         return builder.alloca(type_)
 
@@ -695,7 +709,7 @@ class Len(Intrinsic):
         self.result = Const(0)
         return self.result
 
-    def translate(self, module, builder):
+    def call(self, module, builder, args, kw_args):
         if not isinstance(self.obj.type, tp.ArrayType):
             raise TypingError("Invalid array type {0}".format(self.obj.type))
         self.result.value = self.obj.type.shape
