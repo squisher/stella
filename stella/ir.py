@@ -775,7 +775,6 @@ class ExtModule(object):
 class ExtFunction(Foreign, Callable):
     llvm = None
     name = '?()'
-    signature = None
 
     def __init__(self, name, signature):
         self.name = name
@@ -804,5 +803,22 @@ class ExtFunction(Foreign, Callable):
         #func_tp = llvm.core.Type.function(self.result.type.llvmType(), self.arg_types)
         func_tp = llvm.core.Type.function(self.return_type.llvmType(), llvm_arg_types)
         self.llvm = module.add_function(func_tp, self.name)
+
+    def call(self, module, builder, args, kw_args):
+        args = self.combineAndCheckArgs(args, kw_args)
+        #logging.debug("Call using args: " + str(args))
+        #logging.debug("Call using arg_types: " + str(list(map (type, args))))
+
+        args_llvm = []
+        for arg, arg_type in zip(args, self.arg_types):
+            if arg.type != arg_type:
+                # TODO: trunc is not valid for all type combinations.
+                # Needs to be generalized.
+                llvm = builder.trunc(arg.llvm, arg_type.llvmType(), '({0}){1}'.format(arg_type, arg.name))
+            else:
+                llvm = arg.llvm
+            args_llvm.append(llvm)
+
+        return builder.call(self.llvm, args_llvm)
 
     #def getResult(self, func):

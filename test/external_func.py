@@ -1,24 +1,33 @@
+import numpy as np
+from random import randint
+
+import mtpy
+
 from test import *
 from stella import zeros
 from .basicmath import addition, subtraction
 from . import basicmath
-import numpy as np
 
-import mtpy
 
-def seed():
+def seed_const():
     mtpy.mt_seed32new(42)
 
-def drand():
-    mtpy.mt_seed32new(42)
-    return mtpy.drand()
+def seed(s):
+    mtpy.mt_seed32new(s)
 
-#@mark.parametrize('args', [(40,2), (43, -1), (41, 1)])
-@mark.parametrize('f', [])
-def test1(f,args):
+def drand_const():
+    mtpy.mt_seed32new(42)
+    return mtpy.mt_drand()
+
+def drand(s):
+    mtpy.mt_seed32new(s)
+    return mtpy.mt_drand() + mtpy.mt_drand()
+
+@mark.parametrize('f', [seed_const, drand_const])
+def test1(f):
     make_eq_test(f, ())
 
+@mark.parametrize('arg', single_args([1,2,42,1823828, randint(1, 10000000), randint(1, 10000000)]))
 @mark.parametrize('f', [seed,drand])
-@unimplemented
-def test1b(f):
-    make_eq_test(f, ())
+def test2(f, arg):
+    make_eq_test(f, arg)

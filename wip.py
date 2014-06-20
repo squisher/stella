@@ -7,4 +7,4 @@ import mtpy
 a = np.zeros(5, dtype=int)
 
 def current_work(run=False):
-    print(stella.wrap(seed, ir=not run)())
+    print(stella.wrap(drand, ir=not run)(5))
