@@ -4,6 +4,7 @@ import weakref
 import types
 import sys
 from abc import ABCMeta, abstractmethod, abstractproperty
+import ctypes
 
 import llvm
 import llvm.core
@@ -352,6 +353,7 @@ class Module(object):
         self.entry = None
         self.llvm = None
         self.namestore = Globals()
+        self.external_modules = dict()
 
     def addFunc(self, f):
         self.funcs.add(f)
@@ -362,12 +364,23 @@ class Module(object):
         self.namestore[f.name] = f
         self.entry_args = args
 
-    def _wrapPython(self, key, item):
+    def getExternalModule(self, mod):
+        if mod not in self.external_modules:
+            self.external_modules[mod] = ExtModule(mod)
+        return self.external_modules[mod]
+
+    def getExternalModules(self):
+        return self.external_modules.values()
+
+    def _wrapPython(self, key, item, module = None):
         if type(item) in (types.FunctionType, types.BuiltinFunctionType):
             intrinsic = getIntrinsic(item)
 
             if intrinsic:
                 wrapped = intrinsic()
+            elif module and module.__file__[-3:] == '.so':
+                ext_module = self.getExternalModule(module)
+                wrapped = ext_module.getFunction(item)
             else:
                 wrapped = Function(item, self)
                 self.addFunc(wrapped)
@@ -391,9 +404,12 @@ class Module(object):
         except UndefinedGlobalError as e:
             try:
                 item = module.__dict__[attr]
-                if type(item) != types.FunctionType:
+                if module.__file__[-3:] == '.so' and type(item) == type(print):
+                    # external module
+                    pass
+                elif type(item) != types.FunctionType:
                     raise UnimplementedError("Currently only Functions can be imported (not {0})".format(type(item)))
-                wrapped = self._wrapPython(key, item)
+                wrapped = self._wrapPython(key, item, module)
                 self.namestore[key] = wrapped
             except KeyError:
                 raise e
@@ -420,7 +436,10 @@ class Module(object):
         return wrapped
 
     def functionCall(self, func, args, kwargs):
-        #pdb.set_trace()
+        if isinstance(func, Foreign):
+            # no need to analyze it
+            return
+
         if kwargs == None:
             kwargs = {}
         if not func.analyzed:
@@ -614,9 +633,12 @@ class Function(Callable, Scope):
             del self.incoming_jumps[bc]
         bc.remove()
 
+class Foreign(object):
+    """Mixin: This is not a Python function. It does not need to get analyzed."""
+    pass
 # Intrinsics {...
 
-class Intrinsic(Callable):
+class Intrinsic(Foreign, Callable):
     py_func = None
 
     @abstractmethod
@@ -699,3 +721,74 @@ def getIntrinsic(func):
         return None
 
 # } Intrinsics
+
+
+class ExtModule(object):
+    python = None
+    signatures = {}
+    funcs = dict()
+
+    def __init__(self, python):
+        assert type(python) == type(sys)
+
+        self.python = python
+        self.signatures = python.getCSignatures()
+
+        for name, sig in self.signatures.items():
+            self.funcs[name] = ExtFunction(name, sig)
+
+    def getFile(self):
+        return self.python.__file__
+
+    def getSymbols(self):
+        return self.signatures.keys()
+
+    def getSignatures(self):
+        return self.signatures.items()
+
+    def getFunction(self, f):
+        return self.funcs[f.__name__]
+
+    def __str__(self):
+        return str(self.python)
+
+    def translate(self, module):
+        logging.debug("Adding external module {0}".format(self.python))
+        clib = ctypes.cdll.LoadLibrary(self.python.__file__)
+        for func in self.funcs.values():
+            func.translate(clib, module)
+
+class ExtFunction(Foreign, Callable):
+    llvm = None
+    name = '?()'
+    signature = None
+
+    def __init__(self, name, signature):
+        self.name = name
+        ret, arg_types = signature
+        self.return_type = tp.from_ctype(ret)
+        self.arg_types = list(map(tp.from_ctype, arg_types))
+        self.readSignature(None)
+
+    def __str__(self):
+        return self.name
+
+    def readSignature(self, f):
+        # arg, inspect.getargspec(f) doesn't work for C/cython functions
+        self.arg_names = ['arg{0}' for i in range(len(self.arg_types))]
+        self.arg_defaults = []
+    def getReturnType(self):
+        return self.return_type
+
+    def translate(self, clib, module):
+        logging.debug("Adding external function {0}".format(self.name))
+        f = getattr(clib, self.name)
+        llvm.ee.dylib_add_symbol(self.name, ctypes.cast(f, ctypes.c_void_p).value)
+
+        llvm_arg_types = [arg.llvmType() for arg in self.arg_types]
+
+        #func_tp = llvm.core.Type.function(self.result.type.llvmType(), self.arg_types)
+        func_tp = llvm.core.Type.function(self.return_type.llvmType(), llvm_arg_types)
+        self.llvm = module.add_function(func_tp, self.name)
+
+    #def getResult(self, func):

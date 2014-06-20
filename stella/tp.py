@@ -4,6 +4,7 @@ import llvm
 import llvm.core
 import llvm.ee
 import numpy as np
+import ctypes
 
 from .exc import *
 
@@ -57,6 +58,11 @@ tp_void = llvm.core.Type.void()
 Int = ScalarType(
     int, tp_int,
     llvm.ee.GenericValue.int_signed,
+    llvm.core.Constant.int
+)
+uInt = ScalarType(  # TODO: unclear whether this is correct or not
+    int, tp_int32,
+    llvm.ee.GenericValue.int,
     llvm.core.Constant.int
 )
 Float  = ScalarType(
@@ -208,3 +214,12 @@ def get(obj):
 #    # } HACK
 #    else:
 #        raise UnimplementedError("Unknown constant type {0}".format(tp))
+
+_cscalars = {
+    ctypes.c_double: Float,
+    ctypes.c_uint: uInt,
+    None: Void
+}
+def from_ctype(type_):
+    assert type(type_) == type(ctypes.c_int) or type(type_) == type(None)
+    return _cscalars[type_]

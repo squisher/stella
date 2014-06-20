@@ -1,4 +1,5 @@
-from math import log
+#from math import log
+import ctypes
 
 # cdef extern void c_eject_tomato "eject_tomato" (float speed)
 cdef extern from "mtwist-1.1/mtwist.c":
@@ -14,6 +15,13 @@ cdef extern from "mtwist-1.1/mtwist.c":
 #
 #def seed(s):
 #    mt_seed32new (s)
+
+def getCSignatures():
+    """There should be a way to retrieve this info from cython, but I couldn't find it"""
+    return {
+        'mt_drand': (ctypes.c_double, []),
+        'mt_seed32new': (None, [ctypes.c_uint32])
+    }
 
 def mt_drand():
     return c_mt_drand()

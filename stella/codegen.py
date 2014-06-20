@@ -44,6 +44,9 @@ class Program(object):
                 bc.block = bb
             impl.log.debug("BLOCK'D {0}{1}".format(bc, newblock))
 
+        for ext_module in self.module.getExternalModules():
+            ext_module.translate(self.module.llvm)
+
         impl.log.debug("Printing all bytecodes:")
         impl.bytecodes.printAll(impl.log)
 
