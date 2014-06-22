@@ -30,7 +30,8 @@ class Type(object):
 NoType = Type()
 
 class ScalarType(Type):
-    def __init__(self, type_, llvm, f_generic_value, f_constant):
+    def __init__(self, name, type_, llvm, f_generic_value, f_constant):
+        self.name = name
         self.type_ = type_
         self._llvm = llvm
         self.f_generic_value = f_generic_value
@@ -46,7 +47,7 @@ class ScalarType(Type):
         return self.f_constant(self._llvm, value)
 
     def __str__(self):
-        return self.type_.__name__
+        return self.name
 
 tp_int = llvm.core.Type.int(64)
 tp_int32 = llvm.core.Type.int(32)  # needed for llvm operators
@@ -56,21 +57,25 @@ tp_bool = llvm.core.Type.int(1)
 tp_void = llvm.core.Type.void()
 
 Int = ScalarType(
+    "Int",
     int, tp_int,
     llvm.ee.GenericValue.int_signed,
     llvm.core.Constant.int
 )
 uInt = ScalarType(  # TODO: unclear whether this is correct or not
+    "uInt",
     int, tp_int32,
     llvm.ee.GenericValue.int,
     llvm.core.Constant.int
 )
 Float  = ScalarType(
+    "Float",
     float, tp_double,
     llvm.ee.GenericValue.real,
     llvm.core.Constant.real
 )
 Bool = ScalarType(
+    "Bool",
     bool, tp_bool,
     llvm.ee.GenericValue.int,
     llvm.core.Constant.int
@@ -78,12 +83,14 @@ Bool = ScalarType(
 def invalid_none_use(msg):
     raise StellaException(msg)
 None_ = ScalarType(
+    "NONE",
     type(None), tp_void,
     lambda t,v: invalid_none_use("Can't create a generic value ({0},{1}) for void".format(t,v)),
     lambda t,v: None  # Constant, needed for constructing `RETURN None'
 )
 Void = None_  # TODO: Could there be differences later?
 Str = ScalarType(
+    "Str",
     str, None,
     lambda t,v: None,
     lambda t,v: None
