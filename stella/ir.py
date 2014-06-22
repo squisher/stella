@@ -41,8 +41,12 @@ class Const(Typable):
 
     def __init__(self, value):
         self.value = value
-        self.type = tp.get_scalar(value)
-        self.name = str(value)
+        try:
+            self.type = tp.get_scalar(value)
+            self.name = str(value)
+        except TypingError as e:
+            self.name = "InvalidConst({0}, type={1})".format(value, type(value))
+            raise e
         self.translate()
 
     def translate(self):
@@ -55,7 +59,7 @@ class Const(Typable):
         return r
 
     def __str__(self):
-        return str(self.value)
+        return self.name
     def __repr__(self):
         return self.__str__()
 
