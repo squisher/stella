@@ -126,6 +126,8 @@ class GlobalVariable(Typable):
         super().__init__()
         self.name = name
         self.initial_value = wrapValue(initial_value)
+        self.type = self.initial_value.type
+        self.type.makePointer()
 
     def __str__(self):
         return "+{0}<{1}>".format(self.name, self.initial_value.type)
