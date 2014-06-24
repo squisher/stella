@@ -5,6 +5,7 @@ import types
 import sys
 from abc import ABCMeta, abstractmethod, abstractproperty
 import ctypes
+import math
 
 import llvm
 import llvm.core
@@ -384,7 +385,7 @@ class Module(object):
 
             if intrinsic:
                 wrapped = intrinsic()
-            elif module and module.__file__[-3:] == '.so':
+            elif hasattr(module, '__file__') and module and module.__file__[-3:] == '.so':
                 ext_module = self.getExternalModule(module)
                 wrapped = ext_module.getFunction(item)
             else:
@@ -410,10 +411,10 @@ class Module(object):
         except UndefinedGlobalError as e:
             try:
                 item = module.__dict__[attr]
-                if module.__file__[-3:] == '.so' and type(item) == type(print):
+                if hasattr(module, '__file__') and module.__file__[-3:] == '.so' and type(item) == type(print):
                     # external module
                     pass
-                elif type(item) != types.FunctionType:
+                elif type(item) not in (types.FunctionType, type(print)):
                     raise UnimplementedError("Currently only Functions can be imported (not {0})".format(type(item)))
                 wrapped = self._wrapPython(key, item, module)
                 self.namestore[key] = wrapped
@@ -721,6 +722,67 @@ class Len(Intrinsic):
         self.result.value = self.obj.type.shape
         self.result.translate()
         return self.result.llvm
+
+class Log(Intrinsic):
+    py_func = math.log
+
+    def __init__(self):
+        self.readSignature(self.py_func)
+
+    def readSignature(self, f):
+        # arg, inspect.getargspec(f) doesn't work for C/cython functions
+        self.arg_names = ['x']
+        self.arg_defaults = []
+
+    def addArgs(self, args):
+        self.args = args
+
+    def getReturnType(self):
+        return tp.Float
+
+    def call (self, module, builder, args, kw_args):
+        if self.args[0].type == tp.Int:
+            self.args[0] = Cast(self.args[0], tp.Float)
+            self.args[0].translate(builder)
+
+        intr = llvm.core.INTR_LOG
+        llvm_f = llvm.core.Function.intrinsic(module, intr, [self.args[0].llvmType()])
+        result = builder.call(llvm_f, [self.args[0].llvm])
+        return result
+
+    def getResult(self, func):
+        return Register(func)
+
+class Exp(Intrinsic):
+    # TODO: Unify with Log
+    py_func = math.exp
+
+    def __init__(self):
+        self.readSignature(self.py_func)
+
+    def readSignature(self, f):
+        # arg, inspect.getargspec(f) doesn't work for C/cython functions
+        self.arg_names = ['x']
+        self.arg_defaults = []
+
+    def addArgs(self, args):
+        self.args = args
+
+    def getReturnType(self):
+        return tp.Float
+
+    def call (self, module, builder, args, kw_args):
+        if self.args[0].type == tp.Int:
+            self.args[0] = Cast(self.args[0], tp.Float)
+            self.args[0].translate(builder)
+
+        intr = llvm.core.INTR_EXP
+        llvm_f = llvm.core.Function.intrinsic(module, intr, [self.args[0].llvmType()])
+        result = builder.call(llvm_f, [self.args[0].llvm])
+        return result
+
+    def getResult(self, func):
+        return Register(func)
 
 # --
 

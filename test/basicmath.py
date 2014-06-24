@@ -3,6 +3,7 @@
 from random import randint
 import sys
 from test import *
+import math
 
 def addition(a,b):       return a+b
 def subtraction(a,b):    return a-b
@@ -12,6 +13,8 @@ def floor_division(a,b): return a//b
 def modulo(a,b):         return a%b
 def power(a,b):          return a**b
 def chained(a,b):        return (a-b)/b*a
+def logarithm(x):        return math.log(x)
+def exponential(x):      return math.exp(x)
 def inplace(a,b):
     x = a
     x += b
@@ -65,3 +68,8 @@ def test_semantics_power(args):
     4**2 returns an integer, but 4**-2 returns a float.
     """
     make_delta_test(power, args)
+
+@mark.parametrize('args', single_args([1,2,42,1.5,7.9]))
+@mark.parametrize('f', [logarithm, exponential])
+def test4(f, args):
+    make_delta_test(f, args)
