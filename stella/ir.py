@@ -854,6 +854,7 @@ class ExtModule(object):
 
         for name, sig in self.signatures.items():
             self.funcs[name] = ExtFunction(name, sig)
+        self.translated = False
 
     def getFile(self):
         return self.python.__file__
@@ -871,10 +872,14 @@ class ExtModule(object):
         return str(self.python)
 
     def translate(self, module):
-        logging.debug("Adding external module {0}".format(self.python))
-        clib = ctypes.cdll.LoadLibrary(self.python.__file__)
-        for func in self.funcs.values():
-            func.translate(clib, module)
+        if not self.translated:
+            self.translated = True
+            logging.debug("Adding external module {0}".format(self.python))
+            clib = ctypes.cdll.LoadLibrary(self.python.__file__)
+            for func in self.funcs.values():
+                func.translate(clib, module)
+        #else:
+        #    logging.debug("Skipping already added  external module {0}".format(self.python))
 
 class ExtFunction(Foreign, Callable):
     llvm = None
