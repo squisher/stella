@@ -1037,6 +1037,31 @@ class ROT_THREE(Bytecode, Poison):
     def translate(self, module, builder):
         pass
 
+class UNARY_NEGATIVE(Bytecode):
+    b_func = {tp.Float: 'fsub', tp.Int: 'sub'}
+
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+        self.result = Register(func)
+
+    @pop_stack(1)
+    def stack_eval(self, func, stack):
+        stack.push(self.result)
+
+    def type_eval(self, func):
+        arg = self.args[0]
+        self.result.unify_type(arg.type, self.debuginfo)
+
+    def builderFuncName(self):
+        try:
+            return self.b_func[self.result.type]
+        except KeyError:
+            raise TypingError("{0} does not yet implement type {1}".format(self.__class__.__name__, self.result.type))
+
+    def translate(self, module, builder):
+        self.cast(builder)
+        f = getattr(builder, self.builderFuncName())
+        self.result.llvm = f(self.result.type.constant(0), self.args[0].llvm, self.result.name)
 #---
 
 opconst = {}

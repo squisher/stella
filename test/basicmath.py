@@ -15,6 +15,7 @@ def power(a,b):          return a**b
 def chained(a,b):        return (a-b)/b*a
 def logarithm(x):        return math.log(x)
 def exponential(x):      return math.exp(x)
+def unary_neg(x):        return -x
 def inplace(a,b):
     x = a
     x += b
@@ -72,4 +73,9 @@ def test_semantics_power(args):
 @mark.parametrize('args', single_args([1,2,42,1.5,7.9]))
 @mark.parametrize('f', [logarithm, exponential])
 def test4(f, args):
+    make_delta_test(f, args)
+
+@mark.parametrize('args', single_args([1,2,42,1.5,7.9, randint(1, 1000000), 0, -4, -999999]))
+@mark.parametrize('f', [unary_neg])
+def test5(f, args):
     make_delta_test(f, args)
