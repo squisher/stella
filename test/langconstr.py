@@ -1,8 +1,10 @@
+import numpy as np
+
 from test import *
 from stella import zeros
+import stella
 from .basicmath import addition, subtraction
 from . import basicmath
-import numpy as np
 
 def direct_assignment(x,y):
     a = x
@@ -219,7 +221,6 @@ def numpy_receiving(a):
         if a[i] > 0:
             a[i] += 1
 
-numpy_global_var= np.zeros(5, dtype=int)
 def numpy_global():
     global numpy_global_var
     numpy_global_var[3] = 4
@@ -255,7 +256,7 @@ def test3(f,arg):
 def test4(f,args):
     make_eq_test(f, args)
 
-@mark.parametrize('f', [return_const, assign_const, use_global, array_allocation, array_alloc_assignment, array_alloc_assignment2, array_alloc_assignment3, void, call_void, array_alloc_use, array_alloc_use2, array_len, if_func_call, numpy_global])
+@mark.parametrize('f', [return_const, assign_const, use_global, array_allocation, array_alloc_assignment, array_alloc_assignment2, array_alloc_assignment3, void, call_void, array_alloc_use, array_alloc_use2, array_len, if_func_call])
 def test5(f):
     make_eq_test(f, ())
 
@@ -302,3 +303,33 @@ def test12(f,arg):
 @unimplemented
 def test12b(f,arg):
     make_eq_test(f, arg)
+
+def test13():
+    global numpy_global_var
+
+    orig = np.zeros(5, dtype=int)
+
+    numpy_global_var = np.array(orig)
+    py = numpy_global()
+    py_res = numpy_global_var
+
+    numpy_global_var = orig
+    st = stella.wrap(numpy_global)()
+    st_res = numpy_global_var
+
+    assert py == st
+    assert all(py_res == st_res)
+
+def test13b():
+    """Global scalars are currently not updated in Python when their value changes in Stella"""
+    global some_global
+
+    some_global = 0
+    py = use_global()
+    assert some_global == 1
+
+    some_global = 0
+    st = stella.wrap(use_global)()
+    assert some_global == 0
+
+    assert py == st
