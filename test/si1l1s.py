@@ -128,8 +128,8 @@ class BaseSettings(object):
         return r[:-2] + '}'
 
 class Settings(BaseSettings):
-  def setDefaults(self):
-    self.settings = {
+    def setDefaults(self):
+        self.settings = {
                 'seed'      : [int(time.time()), int],
                 'r'         : [0.1, float],
                 'koffp'     : [1.0, float],

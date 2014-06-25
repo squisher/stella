@@ -140,7 +140,10 @@ class STORE_GLOBAL(Bytecode):
     def addName(self, func, name):
         # Python does not allocate new names, it just refers to them
         #import pdb; pdb.set_trace()
-        var = func.loadGlobal(name)
+        try:
+            var = func.loadGlobal(name)
+        except UndefinedError:
+            var = func.newGlobal(name)
 
         self.args.append(var)
 
@@ -151,6 +154,14 @@ class STORE_GLOBAL(Bytecode):
     def type_eval(self, func):
         #func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
         arg = self.args[0]
+
+        if self.result.initial_value == None:
+            # This means we're defining a new variable
+            if type(arg) != Const:
+                # TODO: I probably want to allow everything at some point
+                raise TypingError("Trying to initialize a new global variable {0} with unsupported type {1}".format(self.result, type(arg)))
+            self.result.setInitialValue(arg.value)
+
         #import pdb; pdb.set_trace()
         tp_changed = self.result.unify_type(arg.type, self.debuginfo)
         if tp_changed:

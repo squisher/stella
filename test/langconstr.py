@@ -122,6 +122,10 @@ def global_test_worker(x):
         some_global = 1
     return x-1
 
+def new_global():
+    global prev_undefined
+    prev_undefined = 1
+
 def kwargs(a=0, b=1):
     return a+b
 
@@ -331,5 +335,21 @@ def test13b():
     some_global = 0
     st = stella.wrap(use_global)()
     assert some_global == 0
+
+    assert py == st
+
+def test13c():
+    """Defining a new (i.e. not in Python initialized) global variable"""
+    global prev_undefined
+
+    assert 'prev_undefined' not in globals()
+    py = new_global()
+    assert 'prev_undefined' in globals()
+
+    del prev_undefined
+    assert 'prev_undefined' not in globals()
+    st = stella.wrap(new_global)()
+    # Note: currently no variable updates are transfered back to Python
+    assert 'prev_undefined' not in globals()
 
     assert py == st

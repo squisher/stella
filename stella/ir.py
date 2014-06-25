@@ -123,15 +123,19 @@ class GlobalVariable(Typable):
     name = None
     initial_value = None
 
-    def __init__(self, initial_value, name):
+    def __init__(self, name, initial_value):
         super().__init__()
         self.name = name
+        if initial_value != None:
+            self.setInitialValue(initial_value)
+
+    def setInitialValue(self, initial_value):
         self.initial_value = wrapValue(initial_value)
         self.type = self.initial_value.type
         self.type.makePointer()
 
     def __str__(self):
-        return "+{0}<{1}>".format(self.name, self.initial_value.type)
+        return "+{0}<{1}>".format(self.name, self.type)
     def __repr__(self):
         return self.name
 
@@ -398,7 +402,7 @@ class Module(object):
             # Assume it is a global variable
             # TODO: is this safe? How do I catch types that aren't supported
             # without listing all valid types?
-            wrapped = GlobalVariable(item, key)
+            wrapped = GlobalVariable(key, item)
 
         return wrapped
 
@@ -433,13 +437,19 @@ class Module(object):
                 if tp.supported_scalar(key):
                     return __builtins__[key]
                 else:
-                    raise UnimplementedError("Type {0} is not supported".format(key))
+                    raise UndefinedError("Cannot find global variable `{0}'".format(key))
                 raise e
             else:
                 item = func.f.__globals__[key]
             wrapped = self._wrapPython(key, item)
 
             self.namestore[key] = wrapped
+        return wrapped
+
+    def newGlobal(self, func, name):
+        """MUST ensure that loadGlobal() fails before calling this function!"""
+        wrapped = GlobalVariable(name, None)
+        self.namestore[name] = wrapped
         return wrapped
 
     def functionCall(self, func, args, kwargs):
@@ -587,6 +597,9 @@ class Function(Callable, Scope):
 
     def loadGlobal(self, key):
         return self.module.loadGlobal(self, key)
+
+    def newGlobal(self, key):
+        return self.module.newGlobal(self, key)
 
     def makeEntry(self, args, kwargs):
         self.module.makeEntry(self, self.combineAndCheckArgs(args, kwargs))
