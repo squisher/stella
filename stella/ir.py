@@ -371,6 +371,7 @@ class Module(object):
         self.llvm = None
         self.namestore = Globals()
         self.external_modules = dict()
+        self._cleanup = []
 
     def addFunc(self, f):
         self.funcs.add(f)
@@ -494,8 +495,23 @@ class Module(object):
         for impl in self.funcs:
             impl.translate(self.llvm)
 
-#    def __del__(self):
-#        logging.debug("DEL  " + repr(self))
+    def destruct(self):
+        logging.debug("destruct() of " + repr(self))
+        while True:
+            try:
+                d = self._cleanup.pop()
+                d()
+            except IndexError:
+                break
+
+    def addDestruct(self, d):
+        self._cleanup.append(d)
+
+    def __del__(self):
+        logging.debug("DEL  " + repr(self))
+        if len(self._cleanup) > 0:
+            self.destruct()
+
     def getLlvmIR(self):
         if self.llvm:
             return str(self.llvm)
@@ -587,8 +603,9 @@ class Function(Callable, Scope):
 
     def __str__(self):
         return self.name
-#    def __repr__(self):
-#        return super().__repr__()[:-1]+self.name+'>'
+
+    def __repr__(self):
+        return super().__repr__()[:-1]+':'+str(self)+'>'
 
     def nameAndType(self):
         return self.name + "(" + str(self.args) + ")"

@@ -1,5 +1,5 @@
 import time
-from math import log, exp
+from math import log
 
 import numpy as np
 
@@ -140,7 +140,7 @@ class Settings(BaseSettings):
 
 
 @unimplemented
-def test():
+def test1():
     s = Settings([])
     prepare(s)
     stella.wrap(run)()

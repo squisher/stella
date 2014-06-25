@@ -152,5 +152,6 @@ class Program(object):
         stats['elapsed'] = time.time() - time_start
 
         logging.debug("Returning...")
+        self.module.destruct()
         del (self.module)
         return tp.llvm_to_py(entry.result.type, retval)

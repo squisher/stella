@@ -1,5 +1,4 @@
 import dis
-import weakref
 
 import logging
 
@@ -17,10 +16,13 @@ class DebugInfo(object):
         return self.filename + ':' + str(self.line)
 
 class Function(object):
-    funcs = weakref.WeakValueDictionary()
+    funcs = {}
+    @classmethod
+    def clearCache(klass):
+        klass.funcs = {}
     @classmethod
     def get(klass, impl, module):
-        logging.debug("Function.get({0}|{1}, {2}|{3})".format(impl, id(impl), module, id(module)))
+        logging.debug("Function.get({0}|{1}, {2})".format(impl, id(impl), module))
         try:
             return klass.funcs[(impl, module)]
         except KeyError:
@@ -46,6 +48,8 @@ class Function(object):
     def __str__(self):
         return self.getName()
 
+    def __repr__(self):
+        return super().__repr__()[:-1]+':'+self.getName()+'>'
     def retype(self, go = True):
         """Immediately retype this function if go is True"""
         if go:
@@ -435,4 +439,5 @@ def main(f, args, kwargs):
         (call_impl, call_args, call_kwargs) = module.todoNext()
         call_f = Function.get(call_impl, module)
         call_f.analyzeCall(call_args, call_kwargs)
+    module.addDestruct(Function.clearCache)
     return module
