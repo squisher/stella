@@ -1,4 +1,4 @@
-from test.basicmath import *
+from test.si1l1s import *
 import stella
 #args_mod = list(filter(lambda e: e[0] >= 0, arglist2))
 import numpy as np
