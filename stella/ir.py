@@ -123,14 +123,17 @@ class GlobalVariable(Typable):
     name = None
     initial_value = None
 
-    def __init__(self, name, initial_value):
+    def __init__(self, name, initial_value = None):
         super().__init__()
         self.name = name
         if initial_value != None:
             self.setInitialValue(initial_value)
 
     def setInitialValue(self, initial_value):
-        self.initial_value = wrapValue(initial_value)
+        if isinstance(initial_value, Typable):
+            self.initial_value = initial_value
+        else:
+            self.initial_value = wrapValue(initial_value)
         self.type = self.initial_value.type
         self.type.makePointer()
 
@@ -142,7 +145,10 @@ class GlobalVariable(Typable):
 
     def translate(self, module, builder):
         self.llvm = module.add_global_variable(self.llvmType(), self.name)
-        self.llvm.initializer = self.initial_value.llvm  #Constant.undef(tp)
+        if hasattr(self.initial_value, 'llvm'):
+            self.llvm.initializer = self.initial_value.llvm
+        else:
+            self.llvm.initializer = llvm.core.Constant.undef(self.initial_value.type.llvmType())
 class Cast(Typable):
     def __init__(self, obj, tp):
         assert obj.type != tp

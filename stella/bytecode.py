@@ -157,10 +157,7 @@ class STORE_GLOBAL(Bytecode):
 
         if self.result.initial_value == None:
             # This means we're defining a new variable
-            if type(arg) != Const:
-                # TODO: I probably want to allow everything at some point
-                raise TypingError("Trying to initialize a new global variable {0} with unsupported type {1}".format(self.result, type(arg)))
-            self.result.setInitialValue(arg.value)
+            self.result.setInitialValue(arg)
 
         #import pdb; pdb.set_trace()
         tp_changed = self.result.unify_type(arg.type, self.debuginfo)
