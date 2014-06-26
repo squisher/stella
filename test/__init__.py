@@ -1,5 +1,7 @@
 import sys
 import numpy as np
+from functools import wraps
+import time
 
 from stella import wrap
 from pytest import mark
@@ -43,3 +45,12 @@ def make_exc_test(f, args, py_exc, stella_exc):
 
 unimplemented = mark.xfail(reason="Unimplemented", run=False)
 
+def timeit(f):
+    @wraps(f)
+    def wrapper(*args, **kw_args):
+        start = time.time()
+        r = f(*args, **kw_args)
+        end = time.time()
+        print ("{0}({1}, {2}) took {3:0.2f}s".format(f.__name__, args, kw_args, end - start))
+        return r
+    return wrapper

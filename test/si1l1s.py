@@ -158,3 +158,8 @@ def prototype(params):
 @mark.parametrize('args', [['seed=42'], ['seed=63'], ['seed=123456']])
 def test1(args):
     prototype(args)
+
+timed = timeit(prototype)
+
+def bench1():
+    timed(['seed=42', 'rununtiltime=1e6'])

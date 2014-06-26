@@ -2,8 +2,11 @@
 
 import os, os.path
 from subprocess import call
-import stella
 from time import time
+
+import pystache
+
+import stella
 
 def ccompile(fn, src, opt=0):
     """
@@ -29,38 +32,11 @@ def ccompile(fn, src, opt=0):
     call(cmd)
     return root
 
-def bench_fib(opt=0):
-    from test.langconstr import fib_harness
-    n = 4
-    x = 45
-
-    fib_c = """
-#include <stdio.h>
-#include <stdlib.h>
-
-int fib(int x) {{
-    if (x <= 2) {{
-        return 1;
-    }} else {{
-        return fib(x-1) + fib(x-2);
-    }}
-}}
-
-int main(int argc, char ** argv) {{
-    int i;
-    long long r = 0;
-
-    for (i=0; i<{n}; i++) {{
-        r += fib({x});
-    }}
-
-    printf ("%lld\\n", r);
-    exit (0);
-}}
-""".format(n=n, x=x)
-
-    print ("Doing {0} iterations of fib({1})".format(n,x))
-    exe = ccompile(__file__+".fib.c", fib_c, opt)
+def bench_it(opt, name, c_src, stella_f, args):
+    """args = [(k,v),(k,v),...]"""
+    print ("Doing {0}({1})".format(name,args))
+    src = pystache.render(c_src,**dict(args))
+    exe = ccompile(__file__+"."+name+".c", src, opt)
 
     cmd = ['./'+exe]
     print ("Running C:", " ".join(cmd))
@@ -68,13 +44,43 @@ int main(int argc, char ** argv) {{
     call(cmd)
     elapsed_c = time() - time_start
 
-    print ("Running Stella")
+    print ("Running Stella:")
     stats = {}
     time_start = time()
-    print(stella.wrap(fib_harness, debug=False, opt=opt, stats=stats)(n,x))
+    print(stella.wrap(stella_f, debug=False, opt=opt, stats=stats)(*[v for k,v in args]))
     elapsed_stella  = time() - time_start
     return (elapsed_c, stats['elapsed'], elapsed_stella)
 
+def bench_fib(opt):
+    from test.langconstr import fib_harness
+
+    args = [('n',4), ('x',45)]
+    fib_c = """
+#include <stdio.h>
+#include <stdlib.h>
+
+int fib(int x) {
+    if (x <= 2) {
+        return 1;
+    } else {
+        return fib(x-1) + fib(x-2);
+    }
+}
+
+int main(int argc, char ** argv) {
+    int i;
+    long long r = 0;
+
+    for (i=0; i<{{n}}; i++) {
+        r += fib({{x}});
+    }
+
+    printf ("%lld\\n", r);
+    exit (0);
+}
+"""
+
+    return bench_it(opt, 'fib', fib_c, fib_harness, args)
 
 if __name__ == '__main__':
     opt=2
