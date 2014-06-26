@@ -526,8 +526,11 @@ class Callable(metaclass=ABCMeta):
     arg_names = []
 
     @abstractmethod
-    def getReturnType(self):
+    def getReturnType(self, args, kw_args):
         pass
+
+    def getResult(self, func):
+        return Register(func)
 
     def readSignature(self, f):
         if f == len:
@@ -610,7 +613,7 @@ class Function(Callable, Scope):
     def nameAndType(self):
         return self.name + "(" + str(self.args) + ")"
 
-    def getReturnType(self):
+    def getReturnType(self, args, kw_args):
         return self.result.type
 
     def analyzeAgain(self):
@@ -698,13 +701,6 @@ class Intrinsic(Foreign, Callable):
         """args and kw_args are already added by a call through addArgs()"""
         pass
 
-    @abstractmethod
-    def getResult(self, func):
-        pass
-
-    @abstractmethod
-    def addArgs(self, args):
-        pass
 
 class Zeros(Intrinsic):
     py_func = python.zeros
@@ -712,24 +708,17 @@ class Zeros(Intrinsic):
     def __init__(self):
         self.readSignature(self.py_func)
 
-    def addArgs(self, args):
-        #if type(args[0]) != Const or args[0].type != int:
-        #    raise UnimplementedError("Zeros currently only supported with a constant int shape")
-        self.shape = args[0].value
-        self.type = tp.get_scalar(args[1])
-        if not tp.supported_scalar(self.type):
-            raise TypingError("Invalid array element type {0}".format(self.type))
-        # TODO(performance): readSignature is run per instance, but only needs to run once.
-
-    def getReturnType(self):
-        return tp.ArrayType(self.type, self.shape)
+    def getReturnType(self, args, kw_args):
+        combined = self.combineAndCheckArgs(args, kw_args)
+        shape = combined[0].value
+        type_ = tp.get_scalar(combined[1])
+        if not tp.supported_scalar(type_):
+            raise TypingError("Invalid array element type {0}".format(type_))
+        return tp.ArrayType(type_, shape)
 
     def call (self, module, builder, args, kw_args):
-        type_ = self.getReturnType().llvmType()
+        type_ = self.getReturnType(args, kw_args).llvmType()
         return builder.alloca(type_)
-
-    def getResult(self, func):
-        return Register(func)
 
 class Len(Intrinsic):
     """
@@ -740,11 +729,8 @@ class Len(Intrinsic):
     def __init__(self):
         self.readSignature(self.py_func)
 
-    def addArgs(self, args):
-        self.obj = args[0]
-        # NOT TYPED YET
 
-    def getReturnType(self):
+    def getReturnType(self, args, kw_args):
         return tp.Int
 
     def getResult(self, func):
@@ -753,14 +739,16 @@ class Len(Intrinsic):
         return self.result
 
     def call(self, module, builder, args, kw_args):
-        if not isinstance(self.obj.type, tp.ArrayType):
+        obj = args[0]
+        if not isinstance(obj.type, tp.ArrayType):
             raise TypingError("Invalid array type {0}".format(self.obj.type))
-        self.result.value = self.obj.type.shape
+        self.result.value = obj.type.shape
         self.result.translate()
         return self.result.llvm
 
 class Log(Intrinsic):
     py_func = math.log
+    intr = llvm.core.INTR_LOG
 
     def __init__(self):
         self.readSignature(self.py_func)
@@ -770,55 +758,27 @@ class Log(Intrinsic):
         self.arg_names = ['x']
         self.arg_defaults = []
 
-    def addArgs(self, args):
-        self.args = args
-
-    def getReturnType(self):
+    def getReturnType(self, args, kw_args):
         return tp.Float
 
     def call (self, module, builder, args, kw_args):
-        if self.args[0].type == tp.Int:
-            self.args[0] = Cast(self.args[0], tp.Float)
-            self.args[0].translate(builder)
+        if args[0].type == tp.Int:
+            args[0] = Cast(args[0], tp.Float)
+            args[0].translate(builder)
 
-        intr = llvm.core.INTR_LOG
-        llvm_f = llvm.core.Function.intrinsic(module, intr, [self.args[0].llvmType()])
-        result = builder.call(llvm_f, [self.args[0].llvm])
+        llvm_f = llvm.core.Function.intrinsic(module, self.intr, [args[0].llvmType()])
+        result = builder.call(llvm_f, [args[0].llvm])
         return result
 
     def getResult(self, func):
         return Register(func)
 
-class Exp(Intrinsic):
-    # TODO: Unify with Log
+class Exp(Log):
     py_func = math.exp
+    intr = llvm.core.INTR_EXP
 
     def __init__(self):
-        self.readSignature(self.py_func)
-
-    def readSignature(self, f):
-        # arg, inspect.getargspec(f) doesn't work for C/cython functions
-        self.arg_names = ['x']
-        self.arg_defaults = []
-
-    def addArgs(self, args):
-        self.args = args
-
-    def getReturnType(self):
-        return tp.Float
-
-    def call (self, module, builder, args, kw_args):
-        if self.args[0].type == tp.Int:
-            self.args[0] = Cast(self.args[0], tp.Float)
-            self.args[0].translate(builder)
-
-        intr = llvm.core.INTR_EXP
-        llvm_f = llvm.core.Function.intrinsic(module, intr, [self.args[0].llvmType()])
-        result = builder.call(llvm_f, [self.args[0].llvm])
-        return result
-
-    def getResult(self, func):
-        return Register(func)
+        super().__init__()
 
 # --
 
@@ -899,7 +859,7 @@ class ExtFunction(Foreign, Callable):
         # arg, inspect.getargspec(f) doesn't work for C/cython functions
         self.arg_names = ['arg{0}' for i in range(len(self.arg_types))]
         self.arg_defaults = []
-    def getReturnType(self):
+    def getReturnType(self, args, kw_args):
         return self.return_type
 
     def translate(self, clib, module):
@@ -929,5 +889,3 @@ class ExtFunction(Foreign, Callable):
             args_llvm.append(llvm)
 
         return builder.call(self.llvm, args_llvm)
-
-    #def getResult(self, func):

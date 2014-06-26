@@ -686,18 +686,14 @@ class CALL_FUNCTION(Bytecode):
         self.args.reverse()
         self.separateArgs()
 
-        if isinstance(self.func, Intrinsic):
-            args = self.func.combineAndCheckArgs(self.args, self.kw_args)
-            self.func.addArgs(args)
-            self.result = self.func.getResult(func)
-        else:
-            self.result = Register(func)
-
-            func.module.functionCall(self.func, self.args, self.kw_args)
+        self.result = self.func.getResult(func)
         stack.push(self.result)
 
+        if not isinstance(self.func, Intrinsic):
+            func.module.functionCall(self.func, self.args, self.kw_args)
+
     def type_eval(self, func):
-        type_ = self.func.getReturnType()
+        type_ = self.func.getReturnType(self.args, self.kw_args)
         tp_change = self.result.unify_type(type_, self.debuginfo)
 
         if self.result.type == tp.NoType:
