@@ -8,7 +8,7 @@ import pystache
 
 import stella
 
-opt=2
+opt=3
 
 def ccompile(fn, src, flags=[]):
     """
@@ -21,7 +21,7 @@ def ccompile(fn, src, flags=[]):
     if 'CC' in os.environ:
         CC=os.environ['CC']
     else:
-        CC='clang'
+        CC='gcc'
 
     (root, ext) = os.path.splitext(fn)
     if os.path.exists(root):
@@ -68,12 +68,12 @@ def print_it(f):
 def bench_fib():
     from test.langconstr import fib_harness
 
-    args = [('n',4), ('x',45)]
+    args = [('n',4), ('x',47)]
     fib_c = """
 #include <stdio.h>
 #include <stdlib.h>
 
-int fib(int x) {
+long long fib(long long x) {
     if (x <= 2) {
         return 1;
     } else {
@@ -98,7 +98,7 @@ int main(int argc, char ** argv) {
 
 def bench_si1l1s():
     import test.si1l1s
-    args = [('seed_init', 'seed=42'), ('rununtiltime_init', 'rununtiltime=1e8')]
+    args = [('seed_init', 'seed=42'), ('rununtiltime_init', 'rununtiltime=1e9')]
     name = 'si1l1s'
     with open(os.path.dirname(__file__)+'/template.'+os.path.basename(__file__)+'.'+name+'.c') as f:
         src = f.read()
@@ -118,5 +118,6 @@ def bench_si1l1s():
     return bench_it(name, src, args, flags=['-lm'], full_f=run_si1l1s)
 
 if __name__ == '__main__':
-    #print_it(opt, bench_fib)
+    print_it(bench_fib)
+    print('----------------------------------------')
     print_it(bench_si1l1s)
