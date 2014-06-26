@@ -73,6 +73,9 @@ def run():
     t = 0.0;
     next_obs_time = getNextObsTime();
 
+    # TODO: Declaring R here is not necessary in Python! But llvm needs a
+    # it because otherwise the definition of R does not dominate the use below.
+    R = 0.0
     while obs_i < K and t < rununtiltime:
         if leg < substrate:
             R = koffp
@@ -139,8 +142,19 @@ class Settings(BaseSettings):
                 }
 
 
-@unimplemented
-def test1():
-    s = Settings([])
+def prototype(params):
+    s = Settings(params)
+
+    prepare(s)
+    run()
+    py = np.array(observations)
+
     prepare(s)
     stella.wrap(run)()
+    st = np.array(observations)
+
+    assert all(py == st)
+
+@mark.parametrize('args', [['seed=42'], ['seed=63'], ['seed=123456']])
+def test1(args):
+    prototype(args)
