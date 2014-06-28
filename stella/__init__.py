@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import sys
 import logging
 import faulthandler
 
@@ -9,6 +8,7 @@ from . import codegen
 _f = open('faulthandler.err', 'w')
 faulthandler.enable(_f)
 
+
 def wrap(f, debug=True, p=False, ir=False, lazy=False, opt=None, stats=None):
     if debug:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -16,7 +16,7 @@ def wrap(f, debug=True, p=False, ir=False, lazy=False, opt=None, stats=None):
         logging.getLogger().setLevel(logging.INFO)
 
     def run(*args, **kwargs):
-        if stats == None:
+        if stats is None:
             pass_stats = {}
         else:
             pass_stats = stats
@@ -31,12 +31,12 @@ def wrap(f, debug=True, p=False, ir=False, lazy=False, opt=None, stats=None):
         elif ir:
             return prog.module.getLlvmIR()
         elif p:
-            print (prog.module.getLlvmIR())
+            print(prog.module.getLlvmIR())
         else:
             return prog.run(pass_stats)
     return run
 
-# for convenience register the Python intrinsics directly in the stella namespace
-# TODO maybe this isn't the best idea? It may be confusing. On the other hand,
-# I don't plan to add more directly to the stella module.
-from .intrinsics.python import *
+# for convenience register the Python intrinsics directly in the stella
+# namespace TODO maybe this isn't the best idea? It may be confusing. On the
+# other hand, I don't plan to add more directly to the stella module.
+# from .intrinsics.python import *

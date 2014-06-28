@@ -1,38 +1,49 @@
 import logging
 
+
 class Stack(object):
     backend = None
+
     def __init__(self, name="Stack", log=None):
         self.backend = []
         self.name = name
-        if log == None:
+        if log is None:
             self.log = logging
         else:
             self.log = log
+
     def __str__(self):
-        return "["+self.name+"("+str(len(self.backend))+")]"
+        return "[" + self.name + "(" + str(len(self.backend)) + ")]"
+
     def __repr__(self):
-        return "["+self.name+"="+", ".join([str(x) for x in self.backend])+"]"
+        return "[" + self.name + "=" + ", ".join([str(x) for x in self.backend]) + "]"
+
     def push(self, item):
-        self.log.debug("["+self.name+"] Pushing " + str(item))
+        self.log.debug("[" + self.name + "] Pushing " + str(item))
         self.backend.append(item)
+
     def pop(self):
         item = self.backend.pop()
-        self.log.debug("["+self.name+"] Popping " + str(item))
+        self.log.debug("[" + self.name + "] Popping " + str(item))
         return item
+
     def peek(self):
         if len(self.backend) > 0:
             return self.backend[-1]
         else:
             return None
+
     def empty(self):
         return len(self.backend) == 0
+
     def clone(self):
         s = Stack(self.name)
         s.backend = [x for x in self.backend]
         return s
 
+
 class LinkedListIter(object):
+
     def __init__(self, start):
         self.next = start
         self.stack = Stack('iter')
@@ -41,9 +52,8 @@ class LinkedListIter(object):
         return self
 
     def __next__(self):
-        if self.next == None:
+        if self.next is None:
             if not self.stack.empty():
-                #import pdb; pdb.set_trace()
                 self.next = self.stack.pop()
                 return self.__next__()
             raise StopIteration()
@@ -57,6 +67,7 @@ class LinkedListIter(object):
         self.next = self.next.next
         return current
 
+
 def linkedlist(klass):
     klass.next = None
     klass.prev = None
@@ -69,24 +80,24 @@ def linkedlist(klass):
     def printAll(self, log=None):
         """Debugging: print all IRs in this list"""
 
-        if log == None:
-            log = logger
+        if log is None:
+            log = logging
 
         # find the first bytecode
         bc_start = self
         while True:
-            while bc_start.prev != None:
+            while bc_start.prev is not None:
                 bc_start = bc_start.prev
-            if bc_start._block_parent == None:
+            if bc_start._block_parent is None:
                 break
             else:
                 bc_start = bc_start._block_parent
 
         for bc in bc_start:
-            #logging.debug(str(bc))
+            # logging.debug(str(bc))
             log.debug(bc.locStr())
     klass.printAll = printAll
-    
+
     def insert_after(self, bc):
         """Insert bc after self.
 
@@ -122,9 +133,9 @@ def linkedlist(klass):
                 self.prev.blockEnd(self.blockEnd())
     klass.remove = remove
 
-    def blockStart(self, new_parent = None):
+    def blockStart(self, new_parent=None):
         """Get the block parent, or set a new block parent."""
-        if new_parent == None:
+        if new_parent is None:
             return self._block_parent
 
         # Update the block's start
@@ -133,9 +144,9 @@ def linkedlist(klass):
         self._block_parent = new_parent
     klass.blockStart = blockStart
 
-    def blockEnd(self, new_parent = None):
+    def blockEnd(self, new_parent=None):
         """Get the block parent, or set a new block parent."""
-        if new_parent == None:
+        if new_parent is None:
             return self._block_parent
 
         # Update the block's end
@@ -147,7 +158,7 @@ def linkedlist(klass):
     def linearNext(self):
         """Move to the previous bytecode, transparently handling blocks"""
         # TODO should this be its own iterator?
-        if self.next == None:
+        if self.next is None:
             if self._block_parent:
                 return self._block_parent.next
             else:
@@ -160,7 +171,7 @@ def linkedlist(klass):
     def linearPrev(self):
         """Move to the previous bytecode, transparently handling blocks"""
         # TODO should this be its own iterator?
-        if self.prev == None:
+        if self.prev is None:
             if self._block_parent:
                 return self._block_parent.prev
             else:
@@ -172,11 +183,14 @@ def linkedlist(klass):
 
     return klass
 
+
 @linkedlist
 class Block(object):
+
     """A block is a nested list of bytecodes."""
     _block_start = None
     _block_end = None
+
     def __init__(self, bc):
         self._block_start = bc
         bc._block_parent = self
@@ -184,15 +198,27 @@ class Block(object):
     def blockContent(self):
         return self._block_start
 
+
 @linkedlist
 class BlockStart(object):
+
     """Marks the start of a block of nested bytecodes.
-    
+
     Enables checks via multiple inheritance."""
     pass
 
+
 class BlockEnd(object):
+
     """Marks the end of a block of nested bytecodes.
-    
+
     Enables checks via multiple inheritance."""
+    pass
+
+
+class BlockTerminal(object):
+
+    """
+    Marker class for instructions which terminate a block.
+    """
     pass

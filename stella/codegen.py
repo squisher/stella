@@ -8,10 +8,10 @@ import llvm.passes
 import logging
 import time
 
-from . import analysis
 from . import tp
-from .bytecode import *
-from .exc import *
+from . import utils
+from . import ir
+
 
 class Program(object):
     def __init__(self, module):
@@ -51,7 +51,6 @@ class Program(object):
         impl.bytecodes.printAll(impl.log)
 
         impl.log.debug("Emitting code:")
-        #import pdb; pdb.set_trace()
         bb = None
         for bc in impl.bytecodes:
             if bb != bc.block:
@@ -66,9 +65,9 @@ class Program(object):
             #       TODO is this the proper way to handle those returns? Any side effects?
             #            NEEDS REVIEW
             #       See also analysis.Function.analyze
-            if isinstance(bc, BlockTerminal) and bc.next and bc.next not in impl.incoming_jumps:
+            if isinstance(bc, utils.BlockTerminal) and \
+                    bc.next and bc.next not in impl.incoming_jumps:
                 impl.log.debug("TRANS stopping")
-                #import pdb; pdb.set_trace()
                 break
 
     def makeStub(self):
@@ -79,7 +78,7 @@ class Program(object):
         bb = func.append_basic_block("entry")
         builder = llvm.core.Builder.new(bb)
 
-        for name, var in self.module.namestore.all(GlobalVariable):
+        for name, var in self.module.namestore.all(ir.GlobalVariable):
             var.translate(self.module.llvm, builder)
 
         call = builder.call(impl.llvm, args)
@@ -90,12 +89,12 @@ class Program(object):
         return func
 
     def elapsed(self):
-        if self.start == None or self.end == None:
+        if self.start is None or self.end is None:
             return None
         return self.end - self.start
 
     def optimize(self, opt):
-        if (opt!=None):
+        if opt is not None:
             logging.debug("Running optimizations level {0}... ".format(opt))
             self.module.llvm.verify()
 
@@ -103,23 +102,20 @@ class Program(object):
             pm = llvm.passes.build_pass_managers(tm, opt=opt, loop_vectorize=True, fpm=False).pm
             pm.run(self.module.llvm)
 
-
     def run(self, stats):
         logging.debug("Verifying... ")
         self.module.llvm.verify()
 
         logging.debug("Preparing execution...")
 
-        #m = Module.new('-lm')
-        #fntp = Type.function(Type.float(), [Type.int()])
-        #func = m.add_function(fntp, '__powidf2')
+        # m = Module.new('-lm')
+        # fntp = Type.function(Type.float(), [Type.int()])
+        # func = m.add_function(fntp, '__powidf2')
 
         import ctypes
         from llvmpy import _api
         clib = ctypes.cdll.LoadLibrary(_api.__file__)
         logging.debug(str(clib))
-
-        #import pdb; pdb.set_trace()
 
         # BUG: clib.__powidf2 gets turned into the following bytecode:
         # 103 LOAD_FAST                3 (clib)
@@ -127,13 +123,13 @@ class Program(object):
         # 109 STORE_FAST               5 (f)
         # which is not correct. I have no idea where _Program is coming from,
         # I'm assuming it is some internal Python magic going wrong
-        f = getattr(clib,'__powidf2')
+        f = getattr(clib, '__powidf2')
 
         logging.debug(str(f))
 
         llvm.ee.dylib_add_symbol('__powidf2', ctypes.cast(f, ctypes.c_void_p).value)
 
-        #ee = ExecutionEngine.new(self.module)
+        # ee = ExecutionEngine.new(self.module)
         eb = llvm.ee.EngineBuilder.new(self.module.llvm)
 
         logging.debug("Enabling mcjit...")
@@ -143,7 +139,8 @@ class Program(object):
 
         entry = self.module.entry
 
-        logging.info("running {0}{1}".format(entry, list(zip(entry.arg_types, self.module.entry_args))))
+        logging.info("running {0}{1}".format(entry,
+                                             list(zip(entry.arg_types, self.module.entry_args))))
 
         # Now let's compile and run!
 

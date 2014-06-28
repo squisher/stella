@@ -1,5 +1,6 @@
 import dis
 
+
 class StellaException(Exception):
     def __init__(self, msg, debuginfo=None):
         super().__init__(msg)
@@ -16,18 +17,28 @@ class StellaException(Exception):
         else:
             return super().__str__()
 
+
 class UnsupportedOpcode(StellaException):
     def __init__(self, op, debuginfo):
         super().__init__(dis.opname[op])
         self.addDebug(debuginfo)
 
+
 class TypingError(StellaException):
     pass
+
+
 class UnimplementedError(StellaException):
     pass
+
+
 class UndefinedError(StellaException):
     pass
+
+
 class UndefinedGlobalError(StellaException):
     pass
+
+
 class WrongNumberOfArgsError(StellaException):
     pass

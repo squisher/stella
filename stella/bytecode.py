@@ -1,17 +1,18 @@
 import dis
-import logging
 import sys
 import types
+from abc import abstractproperty
 
 import llvm
 import llvm.core
 import llvm.ee
 
 from . import tp
-from .exc import *
-from .utils import *
-from .intrinsics import *
-from .ir import *
+from . import exc
+from . import utils
+from . import ir
+from .ir import Register, StackLoc, Cast, GlobalVariable, Const
+
 
 def pop_stack(n):
     """
@@ -25,7 +26,7 @@ def pop_stack(n):
                 args.append(stack.pop())
             args.reverse()
 
-            if self.args == None:
+            if self.args is None:
                 self.args = args
             else:
                 self.args.extend(args)
@@ -33,13 +34,9 @@ def pop_stack(n):
         return extract_from_stack
     return extract_n
 
-class BlockTerminal(object):
-    """
-    Marker class for instructions which terminate a block.
-    """
-    pass
 
 class Poison(object):
+
     """
     Require that this bytecode is rewritten by bailing out
     if it is ever evaluated.
@@ -47,32 +44,41 @@ class Poison(object):
     Note that if the child overrides all methods, this mixin will be useless
     and should be removed from the child.
     """
+
     def stack_eval(self, func, stack):
-        raise UnimplementedError("{0} must be rewritten".format(self.__class__.__name__))
+        raise exc.UnimplementedError(
+            "{0} must be rewritten".format(
+                self.__class__.__name__))
 
     def translate(self, module, builder):
-        raise UnimplementedError("{0} must be rewritten".format(self.__class__.__name__))
+        raise exc.UnimplementedError(
+            "{0} must be rewritten".format(
+                self.__class__.__name__))
 
     def type_eval(self, func):
-        raise UnimplementedError("{0} must be rewritten".format(self.__class__.__name__))
+        raise exc.UnimplementedError(
+            "{0} must be rewritten".format(
+                self.__class__.__name__))
 
 
-class Bytecode(IR):
+class Bytecode(ir.IR):
+
     """
     Parent class for all Python bytecodes
     """
     pass
 
+
 class LOAD_FAST(Bytecode):
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
-
 
     def addLocalName(self, func, name):
         # TODO: crude?
         try:
             self.args.append(func.getRegister(name))
-        except UndefinedError:
+        except exc.UndefinedError:
             self.args.append(func.getStackLoc(name))
 
     def stack_eval(self, func, stack):
@@ -82,7 +88,8 @@ class LOAD_FAST(Bytecode):
         elif type_ == Register:
             self.result = self.args[0]
         else:
-            raise StellaException("Invalid LOAD_FAST argument type `{0}'".format(type_))
+            raise exc.StellaException(
+                "Invalid LOAD_FAST argument type `{0}'".format(type_))
         stack.push(self.result)
 
     def type_eval(self, func):
@@ -96,14 +103,15 @@ class LOAD_FAST(Bytecode):
             # nothing to load, it's a pseudo instruction in this case
             pass
 
+
 class STORE_FAST(Bytecode):
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
         self.new_allocate = False
 
     def addLocalName(self, func, name):
         # Python does not allocate new names, it just refers to them
-        #import pdb; pdb.set_trace()
         (var, self.new_allocate) = func.getOrNewStackLoc(name)
 
         self.args.append(var)
@@ -113,9 +121,8 @@ class STORE_FAST(Bytecode):
         self.result = self.popFirstArg()
 
     def type_eval(self, func):
-        #func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
+        # func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
         arg = self.args[0]
-        #import pdb; pdb.set_trace()
         tp_changed = self.result.unify_type(arg.type, self.debuginfo)
         if tp_changed:
             # TODO: can I avoid a retype in some cases?
@@ -128,21 +135,22 @@ class STORE_FAST(Bytecode):
         if self.new_allocate:
             type_ = self.args[0].llvmType()
             # TODO: is this the right place to make it a pointer?
-            if type(self.args[0].type) == tp.ArrayType:
+            if isinstance(self.args[0].type, tp.ArrayType):
                 type_ = llvm.core.Type.pointer(type_)
             self.result.llvm = builder.alloca(type_, name=self.result.name)
         builder.store(self.args[0].llvm, self.result.llvm)
 
+
 class STORE_GLOBAL(Bytecode):
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
     def addName(self, func, name):
         # Python does not allocate new names, it just refers to them
-        #import pdb; pdb.set_trace()
         try:
             var = func.loadGlobal(name)
-        except UndefinedError:
+        except exc.UndefinedError:
             var = func.newGlobal(name)
 
         self.args.append(var)
@@ -152,14 +160,13 @@ class STORE_GLOBAL(Bytecode):
         self.result = self.popFirstArg()
 
     def type_eval(self, func):
-        #func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
+        # func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
         arg = self.args[0]
 
-        if self.result.initial_value == None:
+        if self.result.initial_value is None:
             # This means we're defining a new variable
             self.result.setInitialValue(arg)
 
-        #import pdb; pdb.set_trace()
         tp_changed = self.result.unify_type(arg.type, self.debuginfo)
         if tp_changed:
             # TODO: can I avoid a retype in some cases?
@@ -172,22 +179,27 @@ class STORE_GLOBAL(Bytecode):
         self.cast(builder)
         builder.store(self.args[0].llvm, self.result.llvm)
 
+
 class LOAD_CONST(Bytecode):
     discard = True
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
     def stack_eval(self, func, stack):
-        if self.result == None:
+        if self.result is None:
             self.result = self.popFirstArg()
         stack.push(self.result)
 
     def type_eval(self, func):
         pass
+
     def translate(self, module, builder):
         pass
 
+
 class BinaryOp(Bytecode):
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
         self.result = Register(func)
@@ -210,28 +222,39 @@ class BinaryOp(Bytecode):
         try:
             return self.b_func[self.result.type]
         except KeyError:
-            raise TypingError("{0} does not yet implement type {1}".format(self.__class__.__name__, self.result.type))
+            raise exc.TypingError(
+                "{0} does not yet implement type {1}".format(
+                    self.__class__.__name__,
+                    self.result.type))
 
     def translate(self, module, builder):
         self.cast(builder)
         f = getattr(builder, self.builderFuncName())
-        self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
+        self.result.llvm = f(
+            self.args[0].llvm,
+            self.args[1].llvm,
+            self.result.name)
 
     @abstractproperty
     def b_func(self):
         return {}
 
+
 class BINARY_ADD(BinaryOp):
     b_func = {tp.Float: 'fadd', tp.Int: 'add'}
+
 
 class BINARY_SUBTRACT(BinaryOp):
     b_func = {tp.Float: 'fsub', tp.Int: 'sub'}
 
+
 class BINARY_MULTIPLY(BinaryOp):
     b_func = {tp.Float: 'fmul', tp.Int: 'mul'}
 
+
 class BINARY_MODULO(BinaryOp):
     b_func = {tp.Float: 'frem', tp.Int: 'srem'}
+
 
 class BINARY_POWER(BinaryOp):
     b_func = {tp.Float: llvm.core.INTR_POW, tp.Int: llvm.core.INTR_POWI}
@@ -246,11 +269,6 @@ class BINARY_POWER(BinaryOp):
 
     def type_eval(self, func):
         # TODO if args[1] is int but negative, then the result will be float, too!
-#        if self.args[0].type == tp.Int and self.args[1].type == tp.Int:
-#            type_ = tp.Int
-#        else:
-#            type_ = tp.Float
-#        tp_changed = self.result.unify_type(type_, self.debuginfo)
         super().type_eval(func)
 
     def translate(self, module, builder):
@@ -262,22 +280,35 @@ class BINARY_POWER(BinaryOp):
 
         if self.args[1].type == tp.Int:
             # powi takes a i32 argument
-            power = builder.trunc(self.args[1].llvm, tp.tp_int32, '(i32)'+self.args[1].name)
+            power = builder.trunc(
+                self.args[1].llvm,
+                tp.tp_int32,
+                '(i32)' +
+                self.args[1].name)
         else:
             power = self.args[1].llvm
 
-        llvm_pow = llvm.core.Function.intrinsic(module, self.b_func[self.args[1].type], [self.args[0].llvmType()])
+        llvm_pow = llvm.core.Function.intrinsic(
+            module, self.b_func[
+                self.args[1].type], [
+                self.args[0].llvmType()])
         pow_result = builder.call(llvm_pow, [self.args[0].llvm, power])
 
-        if isinstance(self.args[0], Cast) and self.args[0].obj.type == tp.Int and self.args[1].type == tp.Int:
+        if isinstance(self.args[0], Cast) and \
+                self.args[0].obj.type == tp.Int and self.args[1].type == tp.Int:
             # cast back to an integer
             self.result.llvm = builder.fptosi(pow_result, tp.Int.llvmType())
         else:
             self.result.llvm = pow_result
 
+
 class BINARY_FLOOR_DIVIDE(BinaryOp):
-    """Python compliant `//' operator: Slow since it has to perform type conversions and floating point division for integers"""
-    b_func = {tp.Float: 'fdiv', tp.Int: 'fdiv'} # NOT USED, but required to make it a concrete class
+    """Python compliant `//' operator.
+
+    Slow since it has to perform type conversions and floating point division for integers"""
+    b_func = {
+        tp.Float: 'fdiv',
+        tp.Int: 'fdiv'}  # NOT USED, but required to make it a concrete class
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
@@ -291,7 +322,8 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
                 type_ = arg.type
             self.result.unify_type(type_, self.debuginfo)
 
-        # convert all arguments to float, since fp division is required to apply floor
+        # convert all arguments to float, since fp division is required to
+        # apply floor
         for i in range(len(self.args)):
             arg = self.args[i]
             do_cast = arg.type != tp.Float
@@ -302,14 +334,25 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
     def translate(self, module, builder):
         self.cast(builder)
 
-        tmp = builder.fdiv(self.args[0].llvm, self.args[1].llvm, self.result.name)
-        llvm_floor = llvm.core.Function.intrinsic(module, llvm.core.INTR_FLOOR, [tp.Float.llvmType()])
+        tmp = builder.fdiv(
+            self.args[0].llvm,
+            self.args[1].llvm,
+            self.result.name)
+        llvm_floor = llvm.core.Function.intrinsic(
+            module, llvm.core.INTR_FLOOR, [
+                tp.Float.llvmType()])
         self.result.llvm = builder.call(llvm_floor, [tmp])
 
-        #import pdb; pdb.set_trace()
-        if all([isinstance(a,Cast) and a.obj.type == tp.Int for a in self.args]):
-            # TODO this may be superflous if both args got converted to float in the translation stage -> move toFloat partially to the analysis stage.
-            self.result.llvm = builder.fptosi(self.result.llvm, tp.Int.llvmType(), "(int)"+self.result.name)
+        if all([isinstance(a, Cast) and a.obj.type == tp.Int for a in self.args]):
+            # TODO this may be superflous if both args got converted to float
+            # in the translation stage -> move toFloat partially to the
+            # analysis stage.
+            self.result.llvm = builder.fptosi(
+                self.result.llvm,
+                tp.Int.llvmType(),
+                "(int)" +
+                self.result.name)
+
 
 class BINARY_TRUE_DIVIDE(BinaryOp):
     b_func = {tp.Float: 'fdiv'}
@@ -324,7 +367,7 @@ class BINARY_TRUE_DIVIDE(BinaryOp):
         self.result.type = tp.Float
         super().type_eval(func)
 
-#class InplaceOp(BinaryOp):
+# class InplaceOp(BinaryOp):
 #    @pop_stack(2)
 #    def stack_eval(self, func, stack):
 #        type_ = unify_type(self.args[0].type, self.args[1].type, self.debuginfo)
@@ -340,13 +383,33 @@ class BINARY_TRUE_DIVIDE(BinaryOp):
 #        f = getattr(builder, self.builderFuncName())
 #        self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
 
-# Inplace operators don't have a semantic difference when used on primitive types
-class INPLACE_ADD(BINARY_ADD): pass
-class INPLACE_SUBTRACT(BINARY_SUBTRACT): pass
-class INPLACE_MULTIPLY(BINARY_MULTIPLY): pass
-class INPLACE_TRUE_DIVIDE(BINARY_TRUE_DIVIDE): pass
-class INPLACE_FLOOR_DIVIDE(BINARY_FLOOR_DIVIDE): pass
-class INPLACE_MODULO(BINARY_MODULO): pass
+# Inplace operators don't have a semantic difference when used on
+# primitive types
+
+
+class INPLACE_ADD(BINARY_ADD):
+    pass
+
+
+class INPLACE_SUBTRACT(BINARY_SUBTRACT):
+    pass
+
+
+class INPLACE_MULTIPLY(BINARY_MULTIPLY):
+    pass
+
+
+class INPLACE_TRUE_DIVIDE(BINARY_TRUE_DIVIDE):
+    pass
+
+
+class INPLACE_FLOOR_DIVIDE(BINARY_FLOOR_DIVIDE):
+    pass
+
+
+class INPLACE_MODULO(BINARY_MODULO):
+    pass
+
 
 class COMPARE_OP(Bytecode):
     b_func = {tp.Float: 'fcmp', tp.Int: 'icmp', tp.Bool: 'icmp'}
@@ -380,30 +443,36 @@ class COMPARE_OP(Bytecode):
         stack.push(self.result)
 
     def type_eval(self, func):
-        #func.retype(self.result.unify_type(bool, self.debuginfo))
         self.result.type = tp.Bool
         if (self.args[0].type != self.args[1].type and
                 self.args[0].type != tp.NoType and self.args[1].type != tp.NoType):
-            raise TypingError("Comparing different types ({0} with {1})".format(self.args[0].type, self.args[1].type))
+            raise exc.TypingError(
+                "Comparing different types ({0} with {1})".format(
+                    self.args[0].type,
+                    self.args[1].type))
 
     def translate(self, module, builder):
         # assume both types are the same, see @stack_eval
         type_ = self.args[0].type
         if not self.args[0].type in self.b_func:
-            raise UnimplementedError(type_)
+            raise exc.UnimplementedError(type_)
 
         f = getattr(builder, self.b_func[type_])
         m = getattr(self,    self.b_func[type_])
 
-        self.result.llvm = f(m[self.op], self.args[0].llvm, self.args[1].llvm, self.result.name)
+        self.result.llvm = f(m[self.op],
+                             self.args[0].llvm,
+                             self.args[1].llvm,
+                             self.result.name)
 
-class RETURN_VALUE(BlockTerminal, Bytecode):
+
+class RETURN_VALUE(utils.BlockTerminal, Bytecode):
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
-        #import pdb; pdb.set_trace()
         self.result = self.popFirstArg()
 
     def type_eval(self, func):
@@ -412,16 +481,18 @@ class RETURN_VALUE(BlockTerminal, Bytecode):
 
     def translate(self, module, builder):
         if self.result.type == tp.Void:
-            # return None == void, do not generate a ret instruction as that is invalid
+            # return None == void, do not generate a ret instruction as that is
+            # invalid
             builder.ret_void()
         else:
             builder.ret(self.result.llvm)
 
+
 class HasTarget(object):
     target_label = None
     target_bc = None
+
     def setTargetBytecode(self, bc):
-        #import pdb; pdb.set_trace()
         self.target_bc = bc
 
     def updateTargetBytecode(self, old_bc, new_bc):
@@ -432,12 +503,13 @@ class HasTarget(object):
 
     def __str__(self):
         return "{0} {1} {2}".format(
-                    self.__class__.__name__,
-                    self.target_label,
-                    ", ".join([str(v) for v in self.args]))
+            self.__class__.__name__,
+            self.target_label,
+            ", ".join([str(v) for v in self.args]))
 
 
-class Jump(BlockTerminal, HasTarget, IR):
+class Jump(utils.BlockTerminal, HasTarget, ir.IR):
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
@@ -450,13 +522,15 @@ class Jump(BlockTerminal, HasTarget, IR):
             tos.bc = self
         return [(self.target_bc, stack)]
 
-    def type_eval(self,func):
+    def type_eval(self, func):
         pass
 
     def translate(self, module, builder):
         builder.branch(self.target_bc.block)
 
+
 class Jump_if_X_or_pop(Jump):
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
@@ -489,22 +563,33 @@ class Jump_if_X_or_pop(Jump):
 
         return r
 
+
 class JUMP_IF_FALSE_OR_POP(Jump_if_X_or_pop, Bytecode):
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
     def translate(self, module, builder):
-        #import pdb; pdb.set_trace()
-        builder.cbranch(self.args[0].llvm, self.next.block, self.target_bc.block)
+        builder.cbranch(
+            self.args[0].llvm,
+            self.next.block,
+            self.target_bc.block)
+
 
 class JUMP_IF_TRUE_OR_POP(Jump_if_X_or_pop, Bytecode):
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
     def translate(self, module, builder):
-        builder.cbranch(self.args[0].llvm, self.target_bc.block, self.next.block)
+        builder.cbranch(
+            self.args[0].llvm,
+            self.target_bc.block,
+            self.next.block)
+
 
 class Pop_jump_if_X(Jump):
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
         self.additional_pops = 0
@@ -543,21 +628,32 @@ class Pop_jump_if_X(Jump):
 
         return r
 
+
 class POP_JUMP_IF_FALSE(Pop_jump_if_X, Bytecode):
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
     def translate(self, module, builder):
-        builder.cbranch(self.args[0].llvm, self.next.block, self.target_bc.block)
+        builder.cbranch(
+            self.args[0].llvm,
+            self.next.block,
+            self.target_bc.block)
+
 
 class POP_JUMP_IF_TRUE(Pop_jump_if_X, Bytecode):
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
     def translate(self, module, builder):
-        builder.cbranch(self.args[0].llvm, self.target_bc.block, self.next.block)
+        builder.cbranch(
+            self.args[0].llvm,
+            self.target_bc.block,
+            self.next.block)
 
-class SETUP_LOOP(BlockStart, HasTarget, Bytecode):
+
+class SETUP_LOOP(utils.BlockStart, HasTarget, Bytecode):
     """
     Will either be rewritten (for loop) or has no effect other than mark the
     start of a block (while loop).
@@ -576,7 +672,8 @@ class SETUP_LOOP(BlockStart, HasTarget, Bytecode):
     def type_eval(self, func):
         pass
 
-class POP_BLOCK(BlockEnd, Bytecode):
+
+class POP_BLOCK(utils.BlockEnd, Bytecode):
     discard = True
 
     def __init__(self, func, debuginfo):
@@ -591,6 +688,7 @@ class POP_BLOCK(BlockEnd, Bytecode):
     def type_eval(self, func):
         pass
 
+
 class LOAD_GLOBAL(Bytecode):
     var = None
 
@@ -602,23 +700,27 @@ class LOAD_GLOBAL(Bytecode):
 
     def stack_eval(self, func, stack):
         self.var = func.loadGlobal(self.args[0])
-        # TODO: remove these isinstance checks and just check for GlobalVariable else return directly?
-        if isinstance(self.var, Function):
+        # TODO: remove these isinstance checks and just check for
+        # GlobalVariable else return directly?
+        if isinstance(self.var, ir.Function):
             self.result = self.var
         elif isinstance(self.var, types.ModuleType):
             self.result = self.var
         elif isinstance(self.var, type):
             self.result = self.var
-        elif isinstance(self.var, Intrinsic):
+        elif isinstance(self.var, ir.Intrinsic):
             self.result = self.var
         elif isinstance(self.var, GlobalVariable):
             self.result = Register(func)
         else:
-            raise UnimplementedError("Unknown global type {0}".format(type(self.result)))
+            raise exc.UnimplementedError(
+                "Unknown global type {0}".format(
+                    type(
+                        self.result)))
         stack.push(self.result)
 
     def translate(self, module, builder):
-        if isinstance(self.var, Function):
+        if isinstance(self.var, ir.Function):
             pass
         elif isinstance(self.var, GlobalVariable):
             self.result.llvm = builder.load(self.var.llvm)
@@ -626,6 +728,7 @@ class LOAD_GLOBAL(Bytecode):
     def type_eval(self, func):
         if isinstance(self.var, GlobalVariable):
             self.result.unify_type(self.var.type, self.debuginfo)
+
 
 class LOAD_ATTR(Bytecode):
     discard = True
@@ -642,7 +745,10 @@ class LOAD_ATTR(Bytecode):
         if isinstance(self.args[1], types.ModuleType):
             self.result = func.module.loadExt(self.args[1], self.args[0])
         else:
-            raise UnimplementedError("Cannot load attribute {0} of an object with type {1}".format(self.args[0], type(self.args[1])))
+            raise exc.UnimplementedError(
+                "Cannot load attribute {0} of an object with type {1}".format(
+                    self.args[0], type(
+                        self.args[1])))
         stack.push(self.result)
 
     def translate(self, module, builder):
@@ -650,6 +756,7 @@ class LOAD_ATTR(Bytecode):
 
     def type_eval(self, func):
         pass
+
 
 class CALL_FUNCTION(Bytecode):
 
@@ -665,7 +772,7 @@ class CALL_FUNCTION(Bytecode):
         self.func = self.args[0]
         args = self.args[1:]
 
-        #pdb.set_trace()
+        # pdb.set_trace()
         assert len(args) == self.num_stack_args
 
         self.kw_args = {}
@@ -680,7 +787,7 @@ class CALL_FUNCTION(Bytecode):
         self.args = args
 
     def stack_eval(self, func, stack):
-        for i in range(self.num_pos_args + 2*self.num_kw_args +1):
+        for i in range(self.num_pos_args + 2*self.num_kw_args + 1):
             arg = stack.pop()
             self.args.append(arg)
         self.args.reverse()
@@ -689,7 +796,7 @@ class CALL_FUNCTION(Bytecode):
         self.result = self.func.getResult(func)
         stack.push(self.result)
 
-        if not isinstance(self.func, Intrinsic):
+        if not isinstance(self.func, ir.Intrinsic):
             func.module.functionCall(self.func, self.args, self.kw_args)
 
     def type_eval(self, func):
@@ -697,48 +804,67 @@ class CALL_FUNCTION(Bytecode):
         tp_change = self.result.unify_type(type_, self.debuginfo)
 
         if self.result.type == tp.NoType:
-            func.impl.analyzeAgain() # redo analysis, right now return type is not known
+            # redo analysis, right now return type is not known
+            func.impl.analyzeAgain()
         else:
             func.retype(tp_change)
 
     def translate(self, module, builder):
-        self.result.llvm = self.func.call(module, builder, self.args, self.kw_args)
+        self.result.llvm = self.func.call(
+            module,
+            builder,
+            self.args,
+            self.kw_args)
+
 
 class GET_ITER(Poison, Bytecode):
+
     """WIP"""
     discard = True
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
+
 
 class FOR_ITER(Poison, HasTarget, Bytecode):
+
     """WIP"""
     discard = True
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
+
 class JUMP_ABSOLUTE(Jump, Bytecode):
+
     """WIP"""
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
+
 
 class JUMP_FORWARD(Jump, Bytecode):
+
     """WIP"""
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
 
-class ForLoop(IR):
+class ForLoop(ir.IR):
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
     def setLoopVar(self, loop_var):
         self.loop_var = loop_var
+
     def setLimit(self, limit):
         self.limit = limit
+
     def setEndLoc(self, end_loc):
         self.end_loc = end_loc
+
     def setTestLoc(self, loc):
         self.test_loc = loc
 
@@ -746,9 +872,69 @@ class ForLoop(IR):
         """The location of FOR_ITER which may be referenced as 'restart loop'"""
         self.iter_loc = loc
 
+    def basicSetup(self, bc):
+        iter_loc = bc.loc
+
+        cur = bc.prev
+        if not isinstance(cur, GET_ITER):
+            raise exc.exc.UnimplementedError('unsupported for loop')
+        cur.remove()
+        cur = bc.prev
+        if not isinstance(cur, CALL_FUNCTION):
+            raise exc.exc.UnimplementedError('unsupported for loop')
+        cur.remove()
+        cur = bc.prev
+        # TODO: this if..elif should be more general!
+        if isinstance(cur, LOAD_FAST):
+            limit = cur.args[0]
+            cur.remove()
+        elif isinstance(cur, LOAD_CONST):
+            limit = cur.args[0]
+            cur.remove()
+        elif isinstance(cur, CALL_FUNCTION):
+            cur.remove()
+            limit = [cur]
+            for i in range(cur.num_stack_args+1):  # +1 for the function name
+                cur = cur.prev
+                cur.remove()
+                limit.append(cur)
+        else:
+            raise exc.exc.UnimplementedError(
+                'unsupported for loop: limit {0}'.format(
+                    type(cur)))
+        cur = bc.prev
+
+        if not isinstance(cur, LOAD_GLOBAL):
+            raise exc.exc.UnimplementedError('unsupported for loop')
+        cur.remove()
+        cur = bc.prev
+        if not isinstance(cur, SETUP_LOOP):
+            raise exc.exc.UnimplementedError('unsupported for loop')
+        end_loc = cur.target_label
+
+        self.loc = cur.loc
+        # TODO set location for self and transfer jumps!
+        self.setLimit(limit)
+        self.setEndLoc(end_loc)
+        self.setTestLoc(bc.loc)
+        self.setIterLoc(iter_loc)
+
+        cur.insert_after(self)
+        cur.remove()
+
+        cur = bc.next
+        if not isinstance(cur, STORE_FAST):
+            raise exc.exc.UnimplementedError('unsupported for loop')
+        loop_var = cur.args[0]
+        self.setLoopVar(loop_var)
+        cur.remove()
+
+        bc.remove()
+
     def rewrite(self, func):
         last = self
-        (self.limit_minus_one, _) = func.impl.getOrNewStackLoc(str(self.test_loc) + "__limit")
+        (self.limit_minus_one, _) = func.impl.getOrNewStackLoc(
+            str(self.test_loc) + "__limit")
 
         # init
         b = LOAD_CONST(func.impl, self.debuginfo)
@@ -757,7 +943,7 @@ class ForLoop(IR):
         last = b
 
         b = STORE_FAST(func.impl, self.debuginfo)
-        #import pdb; pdb.set_trace()
+
         b.addArg(self.loop_var)
         b.new_allocate = True
         last.insert_after(b)
@@ -794,7 +980,10 @@ class ForLoop(IR):
             last.insert_after(b)
             last = b
         else:
-            raise UnimplementedError("Unsupported limit type {0}".format(type(self.limit)))
+            raise exc.UnimplementedError(
+                "Unsupported limit type {0}".format(
+                    type(
+                        self.limit)))
 
         b = COMPARE_OP(func.impl, self.debuginfo)
         b.addCmp('>=')
@@ -823,7 +1012,10 @@ class ForLoop(IR):
             # Nothing to do, the value is already on the stack
             pass
         else:
-            raise UnimplementedError("Unsupported limit type {0}".format(type(self.limit)))
+            raise exc.UnimplementedError(
+                "Unsupported limit type {0}".format(
+                    type(
+                        self.limit)))
 
         b = LOAD_CONST(func.impl, self.debuginfo)
         b.addArg(Const(1))
@@ -840,18 +1032,16 @@ class ForLoop(IR):
         last.insert_after(b)
         last = b
 
-
         # $body, keep, find the end of it
         body_loc = b.next.loc
         func.addLabel(b.next)
 
         jump_updates = []
-        while b.next != None:
+        while b.next is not None:
             if isinstance(b, Jump) and b.target_label == self.iter_loc:
                 jump_updates.append(b)
             b = b.next
-        assert isinstance(b, BlockEnd)
-        #import pdb; pdb.set_trace()
+        assert isinstance(b, utils.BlockEnd)
         jump_loc = b.loc
         last = b.prev
         b.remove()
@@ -870,7 +1060,7 @@ class ForLoop(IR):
             last.prev.remove()
 
         # loop test
-        #pdb.set_trace()
+        # pdb.set_trace()
         b = LOAD_FAST(func.impl, self.debuginfo)
         b.addArg(self.loop_var)
         b.loc = loop_test_loc
@@ -888,7 +1078,6 @@ class ForLoop(IR):
         b = POP_JUMP_IF_TRUE(func.impl, self.debuginfo)
         b.setTarget(self.end_loc)
         last.insert_before(b)
-
 
         # increment
         b = LOAD_FAST(func.impl, self.debuginfo)
@@ -909,47 +1098,42 @@ class ForLoop(IR):
         # JUMP to COMPARE_OP is already part of the bytecodes
         last.setTarget(body_loc)
 
-
     def stack_eval(self, func, stack):
-        #self.result = func.getOrNewRegister(self.loop_var)
-        #stack.push(self.result)
+        # self.result = func.getOrNewRegister(self.loop_var)
+        # stack.push(self.result)
         pass
 
     def translate(self, module, builder):
         pass
 
     def type_eval(self, func):
-        #self.result.unify_type(int, self.debuginfo)
+        # self.result.unify_type(int, self.debuginfo)
         pass
 
+
 class STORE_SUBSCR(Bytecode):
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
     @pop_stack(3)
     def stack_eval(self, func, stack):
-        #import pdb; pdb.set_trace()
         self.result = None
 
     def type_eval(self, func):
         pass
 
     def translate(self, module, builder):
-        ## for structs
+        # for structs
         # insert_element(self, vec_val, elt_val, idx_val, name='')¶
-        #builder.insert_element(self.args[1].llvm, self.args[0].llvm, self.args[2].llvm)
-        #builder.insert_value(self.args[1].llvm, self.args[0].llvm, self.args[2].llvm)
-
-        #logging.debug("Args:      {0}".format(self.args))
-        #logging.debug("Arg types: {0}".format([a.type for a in self.args]))
-        #logging.debug("Arg llvm:  {0}".format([str(a.llvm) for a in self.args]))
-        #pdb.set_trace()
-        p = builder.gep(self.args[1].llvm, [tp.Int.constant(0), self.args[2].llvm], inbounds=True)
-        #logging.debug("gep:       {0}".format(str(p)))
-        #builder.store(llvm.core.Type.pointer(self.args[0].llvm), p)
+        p = builder.gep(
+            self.args[1].llvm, [
+                tp.Int.constant(0), self.args[2].llvm], inbounds=True)
         builder.store(self.args[0].llvm, p)
 
+
 class BINARY_SUBSCR(Bytecode):
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
@@ -960,15 +1144,23 @@ class BINARY_SUBSCR(Bytecode):
 
     def type_eval(self, func):
         if not isinstance(self.args[0].type, tp.ArrayType):
-            raise TypingError("Expected an array, but got {0}".format(self.args[0].type))
-        self.result.unify_type(self.args[0].type.getElementType(), self.debuginfo)
+            raise exc.TypingError(
+                "Expected an array, but got {0}".format(
+                    self.args[0].type))
+        self.result.unify_type(
+            self.args[0].type.getElementType(),
+            self.debuginfo)
 
     def translate(self, module, builder):
-        p = builder.gep(self.args[0].llvm, [tp.Int.constant(0), self.args[1].llvm], inbounds=True)
+        p = builder.gep(
+            self.args[0].llvm, [
+                tp.Int.constant(0), self.args[1].llvm], inbounds=True)
         self.result.llvm = builder.load(p)
+
 
 class POP_TOP(Bytecode):
     discard = True
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
@@ -981,9 +1173,11 @@ class POP_TOP(Bytecode):
 
     def translate(self, module, builder):
         pass
+
 
 class DUP_TOP(Bytecode):
     discard = True
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
@@ -998,8 +1192,10 @@ class DUP_TOP(Bytecode):
     def translate(self, module, builder):
         pass
 
+
 class DUP_TOP_TWO(Bytecode):
     discard = True
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
@@ -1016,8 +1212,10 @@ class DUP_TOP_TWO(Bytecode):
     def translate(self, module, builder):
         pass
 
+
 class ROT_THREE(Bytecode, Poison):
     discard = True
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
@@ -1032,6 +1230,7 @@ class ROT_THREE(Bytecode, Poison):
 
     def translate(self, module, builder):
         pass
+
 
 class UNARY_NEGATIVE(Bytecode):
     b_func = {tp.Float: 'fsub', tp.Int: 'sub'}
@@ -1052,13 +1251,18 @@ class UNARY_NEGATIVE(Bytecode):
         try:
             return self.b_func[self.result.type]
         except KeyError:
-            raise TypingError("{0} does not yet implement type {1}".format(self.__class__.__name__, self.result.type))
+            raise exc.TypingError(
+                "{0} does not yet implement type {1}".format(
+                    self.__class__.__name__,
+                    self.result.type))
 
     def translate(self, module, builder):
         self.cast(builder)
         f = getattr(builder, self.builderFuncName())
-        self.result.llvm = f(self.result.type.constant(0), self.args[0].llvm, self.result.name)
-#---
+        self.result.llvm = f(
+            self.result.type.constant(0),
+            self.args[0].llvm,
+            self.result.name)
 
 opconst = {}
 # Get all contrete subclasses of Bytecode and register them
