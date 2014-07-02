@@ -96,20 +96,12 @@ class NumpyArray(Const):
 
 
 class Struct(Const):
-    def __init__(self, array):
-        assert isinstance(array, np.ndarray)
-
-        # TODO: multi-dimensional arrays
-        self.type = tp.ArrayType.fromArray(array)
-        self.value = array
-
-        self.translate()
+    def __init__(self, obj):
+        self.type = tp.StructType.fromObj(obj)
+        self.value = obj
 
     def translate(self):
-        ptr_int = self.value.ctypes.data  # int
-        ptr_int_llvm = tp.Int.constant(ptr_int)
-        type_ = llvm.core.Type.pointer(self.type.llvmType())
-        self.llvm = llvm.core.Constant.inttoptr(ptr_int_llvm, type_)
+        pass
 
     def __str__(self):
         return str(self.type)

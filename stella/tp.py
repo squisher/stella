@@ -154,21 +154,17 @@ class StructType(Type):
 
     @classmethod
     def fromObj(klass, obj):
-        if array.dtype == np.int64:
-            dtype = _pyscalars[int]
-        else:
-            raise exc.UnimplementedError("Numpy array dtype {0} not (yet) supported".format(
-                array.dtype))
+        name_types = []
+        for name in filter(lambda s: not s.startswith('_'), dir(obj)):  # TODO: only exclude __?
+            attrib = getattr(obj, name)
+            # TODO: catch the exception and improve the error message?
+            type_ = tp.get_scalar (type(attrib))
+            name_types.add((name, type))
 
-        # TODO: multidimensional arrays
-        shape = array.shape[0]
+        return ScalarType(name_types)
 
-        return ArrayType(dtype, shape)
-
-    def __init__(self, tp, shape):
-        assert tp in _pyscalars.values()
-        self.tp = tp
-        self.shape = shape
+    def __init__(self, name_types):
+        (self.names, self.types) = zip(*name_attrs)  # <= unzip
 
     def getElementType(self):
         return self.tp
