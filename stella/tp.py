@@ -131,6 +131,23 @@ def get_scalar(obj):
         raise exc.TypingError("Invalid scalar type `{0}'".format(type_))
 
 
+def supported_scalar(type_):
+    """type_ is either a Python type or a stella type!"""
+    try:
+        get_scalar(type_)
+        return True
+    except exc.TypingError:
+        # now check for stella scalar types
+        return type_ in _pyscalars.values()
+
+
+def supported_scalar_name(name):
+    assert type(name) == str
+
+    types = map(lambda x: x.__name__, _pyscalars.keys())
+    return any([name == t for t in types])
+
+
 class StructType(Type):
     types = None
     names = None
@@ -214,17 +231,6 @@ class ArrayType(Type):
 
     def __repr__(self):
         return str(self)
-
-
-def supported_scalar(type_):
-    # TODO: rewrite, not readable enough
-    if type(type_) == str:
-        # it shouldn't be necessary to add the values here, because strings are
-        # only used when parsing the python bytecode.
-        types = map(lambda x: x.__name__, _pyscalars.keys())
-    else:
-        types = list(_pyscalars.keys()) + list(_pyscalars.values())
-    return any([type_ == t for t in types])
 
 
 def llvm_to_py(tp, val):

@@ -488,7 +488,7 @@ class Module(object):
             if key == 'len':
                 item = len
             elif key not in func.f.__globals__:
-                if tp.supported_scalar(key):
+                if tp.supported_scalar_name(key):
                     return __builtins__[key]
                 else:
                     raise exc.UndefinedError("Cannot find global variable `{0}'".format(key))

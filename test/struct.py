@@ -16,6 +16,7 @@ def setAttrib(a):
     a.y -= 1
 
 
+@unimplemented
 def test1():
     b1 = B()
     b2 = B()
