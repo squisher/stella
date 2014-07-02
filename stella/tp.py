@@ -131,6 +131,48 @@ def get_scalar(obj):
         raise exc.TypingError("Invalid scalar type `{0}'".format(type_))
 
 
+class StructType(Type):
+    types = None
+    names = None
+
+    @classmethod
+    def fromObj(klass, obj):
+        if array.dtype == np.int64:
+            dtype = _pyscalars[int]
+        else:
+            raise exc.UnimplementedError("Numpy array dtype {0} not (yet) supported".format(
+                array.dtype))
+
+        # TODO: multidimensional arrays
+        shape = array.shape[0]
+
+        return ArrayType(dtype, shape)
+
+    def __init__(self, tp, shape):
+        assert tp in _pyscalars.values()
+        self.tp = tp
+        self.shape = shape
+
+    def getElementType(self):
+        return self.tp
+
+    def llvmType(self):
+        type_ = llvm.core.Type.array(self.tp.llvmType(), self.shape)
+        if self.ptr:
+            type_ = llvm.core.Type.pointer(type_)
+        return type_
+
+    def __str__(self):
+        if self.ptr:
+            p = '*'
+        else:
+            p = ''
+        return "<{0}{1}*{2}>".format(p, self.tp, self.shape)
+
+    def __repr__(self):
+        return str(self)
+
+
 class ArrayType(Type):
     tp = NoType
     shape = None
@@ -175,6 +217,7 @@ class ArrayType(Type):
 
 
 def supported_scalar(type_):
+    # TODO: rewrite, not readable enough
     if type(type_) == str:
         # it shouldn't be necessary to add the values here, because strings are
         # only used when parsing the python bytecode.

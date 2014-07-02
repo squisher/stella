@@ -95,11 +95,37 @@ class NumpyArray(Const):
         return str(self)
 
 
+class Struct(Const):
+    def __init__(self, array):
+        assert isinstance(array, np.ndarray)
+
+        # TODO: multi-dimensional arrays
+        self.type = tp.ArrayType.fromArray(array)
+        self.value = array
+
+        self.translate()
+
+    def translate(self):
+        ptr_int = self.value.ctypes.data  # int
+        ptr_int_llvm = tp.Int.constant(ptr_int)
+        type_ = llvm.core.Type.pointer(self.type.llvmType())
+        self.llvm = llvm.core.Constant.inttoptr(ptr_int_llvm, type_)
+
+    def __str__(self):
+        return str(self.type)
+
+    def __repr__(self):
+        return str(self)
+
+
 def wrapValue(value):
-    if type(value) == np.ndarray:
+    type_ = type(value)
+    if tp.supported_scalar(type_):
+        return Const(value)
+    elif type_ == np.ndarray:
         return NumpyArray(value)
     else:
-        return Const(value)
+        return Struct(value)
 
 
 class Register(Typable):
