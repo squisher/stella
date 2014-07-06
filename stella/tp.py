@@ -149,22 +149,28 @@ def supported_scalar_name(name):
 
 
 class StructType(Type):
+    # TODO: Refactor into name -> type and a name -> idx dicts
     types = None
     names = None
+    name = None
 
     @classmethod
     def fromObj(klass, obj):
+
         name_types = []
         for name in filter(lambda s: not s.startswith('_'), dir(obj)):  # TODO: only exclude __?
             attrib = getattr(obj, name)
             # TODO: catch the exception and improve the error message?
-            type_ = tp.get_scalar (type(attrib))
-            name_types.add((name, type))
+            type_ = get_scalar (type(attrib))
+            name_types.append((name, type))
 
-        return ScalarType(name_types)
+        # TODO Memoization of the results?
 
-    def __init__(self, name_types):
-        (self.names, self.types) = zip(*name_attrs)  # <= unzip
+        return StructType(type(obj), name_types)
+
+    def __init__(self, type_, name_types):
+        self.name = str(type_)
+        (self.names, self.types) = zip(*name_types)  # <= unzip
 
     def getElementType(self):
         return self.tp
@@ -176,14 +182,18 @@ class StructType(Type):
         return type_
 
     def __str__(self):
-        if self.ptr:
-            p = '*'
-        else:
-            p = ''
-        return "<{0}{1}*{2}>".format(p, self.tp, self.shape)
+        return "<{}: {}>".format(self.name, zip(self.names, self.types))
 
     def __repr__(self):
         return str(self)
+
+    def __eq__(self, other):
+        return (type(self) == type(other)
+                and self.names == other.names
+                and self.types == other.types)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
 class ArrayType(Type):
@@ -250,7 +260,9 @@ def get(obj):
     elif type_ == np.ndarray:
         return ArrayType.fromArray(obj)
     else:
-        raise exc.UnimplementedError("Unknown type {0}".format(type_))
+        return StructType.fromObj(obj)
+        # TODO: How to identify unspported objects?
+        #raise exc.UnimplementedError("Unknown type {0}".format(type_))
 
 _cscalars = {
     ctypes.c_double: Float,

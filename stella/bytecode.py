@@ -732,7 +732,6 @@ class LOAD_GLOBAL(Bytecode):
 
 class LOAD_ATTR(Bytecode):
     discard = True
-    var = None
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
@@ -745,17 +744,52 @@ class LOAD_ATTR(Bytecode):
         if isinstance(self.args[1], types.ModuleType):
             self.result = func.module.loadExt(self.args[1], self.args[0])
         else:
+            self.result = Register(func)
+        stack.push(self.result)
+
+    def translate(self, module, builder):
+        if isinstance(self.args[1], types.ModuleType):
+            return
+        elif (isinstance(self.args[1], tp.Type)
+              and isinstanceself.args[1].type_, tp.StructType):
+            p = builder.gep(
+                self.args[0].llvm, [
+                    tp.Int.constant(0), self.args[1].llvm], inbounds=True)
+            self.result.llvm = builder.load(p)
+
+    def type_eval(self, func):
+        if isinstance(self.args[1], types.ModuleType):
+            pass
+        elif (isinstance(self.args[1], tp.Type)
+              and isinstance(self.args[1].type_, tp.StructType)):
+            self.result.unify_type(self.args[1].type.getMemberType(self.args[0]))
+        else:
             raise exc.UnimplementedError(
                 "Cannot load attribute {0} of an object with type {1}".format(
                     self.args[0], type(
                         self.args[1])))
-        stack.push(self.result)
 
-    def translate(self, module, builder):
-        pass
+
+class STORE_ATTR(Bytecode):
+
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    def addName(self, func, name):
+        self.args.append(name)
+    @pop_stack(2)
+    def stack_eval(self, func, stack):
+        self.result = None
 
     def type_eval(self, func):
         pass
+
+    def translate(self, module, builder):
+        # for structs
+        # insert_element(self, vec_val, elt_val, idx_val, name='')¶
+        builder.insert_element(self.args[0].llvm,
+                               self.args[1].llvm,
+                               self.args[2].llvm)
 
 
 class CALL_FUNCTION(Bytecode):
@@ -1203,6 +1237,24 @@ class DUP_TOP_TWO(Bytecode):
     def stack_eval(self, func, stack):
         stack.push(self.args[0])
         stack.push(self.args[1])
+        stack.push(self.args[0])
+        stack.push(self.args[1])
+
+    def type_eval(self, func):
+        pass
+
+    def translate(self, module, builder):
+        pass
+
+
+class ROT_TWO(Bytecode, Poison):
+    discard = True
+
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    @pop_stack(2)
+    def stack_eval(self, func, stack):
         stack.push(self.args[0])
         stack.push(self.args[1])
 
