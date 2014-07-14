@@ -28,8 +28,12 @@ def wrap(f, debug=True, p=False, ir=False, lazy=False, opt=None, stats=None):
 
         if lazy:
             return prog
-        elif ir:
+        elif ir == True:
             return prog.module.getLlvmIR()
+        elif type(ir) == str:
+            with open(ir, 'w') as fh:
+                fh.write(prog.module.getLlvmIR())
+            return
         elif p:
             print(prog.module.getLlvmIR())
         else:
