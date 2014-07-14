@@ -72,7 +72,6 @@ class Program(object):
 
     def makeStub(self):
         impl = self.module.entry
-        args = [arg.llvm for arg in self.module.entry_args]
         func_tp = llvm.core.Type.function(impl.result.type.llvmType(), [])
         func = self.module.llvm.add_function(func_tp, str(impl)+'__stub__')
         bb = func.append_basic_block("entry")
@@ -80,6 +79,8 @@ class Program(object):
 
         for name, var in self.module.namestore.all(ir.GlobalVariable):
             var.translate(self.module.llvm, builder)
+
+        args = [arg.translate(self.module.llvm, builder) for arg in self.module.entry_args]
 
         call = builder.call(impl.llvm, args)
         if impl.result.type is tp.Void:

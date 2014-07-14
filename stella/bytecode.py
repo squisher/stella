@@ -760,9 +760,9 @@ class LOAD_ATTR(Bytecode):
     def type_eval(self, func):
         if isinstance(self.args[1], types.ModuleType):
             pass
-        elif (isinstance(self.args[1], tp.Type)
-              and isinstance(self.args[1].type_, tp.StructType)):
-            self.result.unify_type(self.args[1].type.getMemberType(self.args[0]))
+        elif (isinstance(self.args[1], ir.Typable)
+              and isinstance(self.args[1].type, tp.StructType)):
+            self.result.unify_type(self.args[1].type.getMemberType(self.args[0]), self.debuginfo)
         else:
             raise exc.UnimplementedError(
                 "Cannot load attribute {0} of an object with type {1}".format(

@@ -1,4 +1,3 @@
-
 import llvm
 import llvm.core
 import llvm.ee
@@ -149,40 +148,42 @@ def supported_scalar_name(name):
 
 
 class StructType(Type):
-    # TODO: Refactor into name -> type and a name -> idx dicts
-    types = None
-    names = None
-    name = None
+    name_type = None
+    name_idx = None
 
     @classmethod
     def fromObj(klass, obj):
-
-        name_types = []
+        name_type = {}
+        name_idx = {}
+        i = 0
         for name in filter(lambda s: not s.startswith('_'), dir(obj)):  # TODO: only exclude __?
             attrib = getattr(obj, name)
             # TODO: catch the exception and improve the error message?
             type_ = get_scalar (type(attrib))
-            name_types.append((name, type))
+            name_type[name] = type_
+            name_idx[name] = i
+            i += 1
 
         # TODO Memoization of the results?
+        return StructType(type(obj), name_type, name_idx)
 
-        return StructType(type(obj), name_types)
-
-    def __init__(self, type_, name_types):
+    def __init__(self, type_, name_type, name_idx):
         self.name = str(type_)
-        (self.names, self.types) = zip(*name_types)  # <= unzip
+        self.name_type = name_type
+        self.name_idx = name_idx
 
-    def getElementType(self):
-        return self.tp
+    def getMemberType(self, name):
+        return self.name_type[name]
 
     def llvmType(self):
-        type_ = llvm.core.Type.array(self.tp.llvmType(), self.shape)
+        type_ = llvm.core.Type.struct([type_.llvmType() for type_ in self.name_type.values()])
         if self.ptr:
-            type_ = llvm.core.Type.pointer(type_)
+            #type_ = llvm.core.Type.pointer(type_)
+            raise exc.UnimplementedError("Pointer to structs not allowed")
         return type_
 
     def __str__(self):
-        return "<{}: {}>".format(self.name, zip(self.names, self.types))
+        return "<{}: {}>".format(self.name, list(self.name_type.keys()))
 
     def __repr__(self):
         return str(self)

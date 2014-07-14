@@ -20,6 +20,7 @@ from .intrinsics import python
 
 class Typable(object):
     type = tp.NoType
+    llvm = None
 
     def unify_type(self, tp2, debuginfo):
         tp1 = self.type
@@ -42,6 +43,8 @@ class Typable(object):
         """Map from Python types to LLVM types."""
         return self.type.llvmType()
 
+    def translate(self, module, builder):
+        return self.llvm
 
 class Const(Typable):
     value = None
@@ -54,16 +57,20 @@ class Const(Typable):
         except exc.TypingError as e:
             self.name = "InvalidConst({0}, type={1})".format(value, type(value))
             raise e
-        self.translate()
+        self.translateConst()
 
-    def translate(self):
+    def translateConst(self):
         self.llvm = self.type.constant(self.value)
 
     def unify_type(self, tp2, debuginfo):
         r = super().unify_type(tp2, debuginfo)
         if r:
-            self.translate()
+            self.translateConst()
         return r
+
+    def translate(self, module, builder):
+        self.translateConst()
+        return self.llvm
 
     def __str__(self):
         return self.name
@@ -72,7 +79,7 @@ class Const(Typable):
         return self.__str__()
 
 
-class NumpyArray(Const):
+class NumpyArray(Typable):
     def __init__(self, array):
         assert isinstance(array, np.ndarray)
 
@@ -80,9 +87,6 @@ class NumpyArray(Const):
         self.type = tp.ArrayType.fromArray(array)
         self.value = array
 
-        self.translate()
-
-    def translate(self):
         ptr_int = self.value.ctypes.data  # int
         ptr_int_llvm = tp.Int.constant(ptr_int)
         type_ = llvm.core.Type.pointer(self.type.llvmType())
@@ -99,9 +103,6 @@ class Struct(Const):
     def __init__(self, obj):
         self.type = tp.StructType.fromObj(obj)
         self.value = obj
-
-    def translate(self):
-        pass
 
     def __str__(self):
         return str(self.type)
@@ -178,7 +179,11 @@ class GlobalVariable(Typable):
 
     def translate(self, module, builder):
         self.llvm = module.add_global_variable(self.llvmType(), self.name)
-        if hasattr(self.initial_value, 'llvm'):
+        # TODO: this condition is too complicated and likely means that my
+        # code is not working consistently with the attribute
+        if (hasattr(self.initial_value, 'llvm')
+                and self.initial_value is not None
+                and self.initial_value.llvm is not None):
             self.llvm.initializer = self.initial_value.llvm
         else:
             self.llvm.initializer = llvm.core.Constant.undef(self.initial_value.type.llvmType())
@@ -780,7 +785,7 @@ class Len(Intrinsic):
         if not isinstance(obj.type, tp.ArrayType):
             raise exc.TypingError("Invalid array type {0}".format(self.obj.type))
         self.result.value = obj.type.shape
-        self.result.translate()
+        self.result.translate(module, builder)
         return self.result.llvm
 
 
