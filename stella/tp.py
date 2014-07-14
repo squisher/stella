@@ -46,7 +46,7 @@ class ScalarType(Type):
     def genericValue(self, value):
         return self.f_generic_value(self._llvm, value)
 
-    def constant(self, value):
+    def constant(self, value, builder):
         return self.f_constant(self._llvm, value)
 
     def __str__(self):
@@ -148,39 +148,54 @@ def supported_scalar_name(name):
 
 
 class StructType(Type):
-    name_type = None
-    name_idx = None
+    attrib_type = None
+    attrib_idx = None
 
     @classmethod
     def fromObj(klass, obj):
-        name_type = {}
-        name_idx = {}
+        attrib_type = {}
+        attrib_idx = {}
+        attrib_names = filter(lambda s: not s.startswith('_'), dir(obj))  # TODO: only exclude __?
         i = 0
-        for name in filter(lambda s: not s.startswith('_'), dir(obj)):  # TODO: only exclude __?
+        for name in attrib_names:
             attrib = getattr(obj, name)
             # TODO: catch the exception and improve the error message?
             type_ = get_scalar (type(attrib))
-            name_type[name] = type_
-            name_idx[name] = i
+            attrib_type[name] = type_
+            attrib_idx[name] = i
             i += 1
 
         # TODO Memoization of the results?
-        return StructType(type(obj), name_type, name_idx)
+        return StructType(type(obj), attrib_names, attrib_type, attrib_idx)
 
-    def __init__(self, type_, name_type, name_idx):
+    def __init__(self, type_, attrib_names, attrib_type, attrib_idx):
         self.name = str(type_)
-        self.name_type = name_type
-        self.name_idx = name_idx
+        self.attrib_names = attrib_names
+        self.attrib_type = attrib_type
+        self.attrib_idx = attrib_idx
 
     def getMemberType(self, name):
-        return self.name_type[name]
+        return self.attrib_type[name]
 
     def llvmType(self):
-        type_ = llvm.core.Type.struct([type_.llvmType() for type_ in self.name_type.values()])
+        type_ = llvm.core.Type.struct([type_.llvmType() for type_ in self.attrib_type.values()])
         if self.ptr:
             #type_ = llvm.core.Type.pointer(type_)
             raise exc.UnimplementedError("Pointer to structs not allowed")
         return type_
+
+    def constant(self, value, builder):
+        type_ = self.llvmType()
+        result_llvm = builder.alloca(type_)
+        # TODO free the memory!!! XXX
+        for name in self.attrib_names:
+            # insert_element(self, vec_val, elt_val, idx_val, name='')¶
+            builder.insert_element(
+                result_llvm,
+                self.getMemberType().llvm,
+                ir.Constant(self.attrib_idx[name]))
+        return result_llvm
+
 
     def __str__(self):
         return "<{}: {}>".format(self.name, list(self.name_type.keys()))
@@ -190,8 +205,8 @@ class StructType(Type):
 
     def __eq__(self, other):
         return (type(self) == type(other)
-                and self.names == other.names
-                and self.types == other.types)
+                and self.attrib_names == other.attrib_names
+                and self.attrib_types == other.attrib_types)
 
     def __ne__(self, other):
         return not self.__eq__(other)
