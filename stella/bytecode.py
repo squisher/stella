@@ -98,7 +98,7 @@ class LOAD_FAST(Bytecode):
     def translate(self, module, builder):
         type_ = type(self.args[0])
         if type_ == StackLoc:
-            self.result.llvm = builder.load(self.args[0].llvm)
+            self.result.llvm = builder.load(self.args[0].translate(module, builder))
         elif type_ == Register:
             # nothing to load, it's a pseudo instruction in this case
             pass
@@ -131,14 +131,14 @@ class STORE_FAST(Bytecode):
                 self.args[0] = Cast(arg, self.result.type)
 
     def translate(self, module, builder):
-        self.cast(builder)
+        self.cast(module, builder)
         if self.new_allocate:
             type_ = self.args[0].llvmType()
             # TODO: is this the right place to make it a pointer?
             if isinstance(self.args[0].type, tp.ArrayType):
                 type_ = llvm.core.Type.pointer(type_)
             self.result.llvm = builder.alloca(type_, name=self.result.name)
-        builder.store(self.args[0].llvm, self.result.llvm)
+        builder.store(self.args[0].translate(module, builder), self.result.translate(module, builder))
 
 
 class STORE_GLOBAL(Bytecode):
@@ -176,8 +176,8 @@ class STORE_GLOBAL(Bytecode):
 
     def translate(self, module, builder):
         # Assume that the global has been allocated already.
-        self.cast(builder)
-        builder.store(self.args[0].llvm, self.result.llvm)
+        self.cast(module, builder)
+        builder.store(self.args[0].translate(module, builder), self.result.translate(module, builder))
 
 
 class LOAD_CONST(Bytecode):
@@ -228,11 +228,11 @@ class BinaryOp(Bytecode):
                     self.result.type))
 
     def translate(self, module, builder):
-        self.cast(builder)
+        self.cast(module, builder)
         f = getattr(builder, self.builderFuncName())
         self.result.llvm = f(
-            self.args[0].llvm,
-            self.args[1].llvm,
+            self.args[0].translate(module, builder),
+            self.args[1].translate(module, builder),
             self.result.name)
 
     @abstractproperty
@@ -276,12 +276,12 @@ class BINARY_POWER(BinaryOp):
         if self.args[0].type == tp.Int:
             self.args[0] = Cast(self.args[0], tp.Float)
 
-        self.cast(builder)
+        self.cast(module, builder)
 
         if self.args[1].type == tp.Int:
             # powi takes a i32 argument
             power = builder.trunc(
-                self.args[1].llvm,
+                self.args[1].translate(module, builder),
                 tp.tp_int32,
                 '(i32)' +
                 self.args[1].name)
@@ -292,7 +292,7 @@ class BINARY_POWER(BinaryOp):
             module, self.b_func[
                 self.args[1].type], [
                 self.args[0].llvmType()])
-        pow_result = builder.call(llvm_pow, [self.args[0].llvm, power])
+        pow_result = builder.call(llvm_pow, [self.args[0].translate(module, builder), power])
 
         if isinstance(self.args[0], Cast) and \
                 self.args[0].obj.type == tp.Int and self.args[1].type == tp.Int:
@@ -332,11 +332,11 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
                 func.retype()
 
     def translate(self, module, builder):
-        self.cast(builder)
+        self.cast(module, builder)
 
         tmp = builder.fdiv(
-            self.args[0].llvm,
-            self.args[1].llvm,
+            self.args[0].translate(module, builder),
+            self.args[1].translate(module, builder),
             self.result.name)
         llvm_floor = llvm.core.Function.intrinsic(
             module, llvm.core.INTR_FLOOR, [
@@ -348,7 +348,7 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
             # in the translation stage -> move toFloat partially to the
             # analysis stage.
             self.result.llvm = builder.fptosi(
-                self.result.llvm,
+                self.result.translate(module, builder),
                 tp.Int.llvmType(),
                 "(int)" +
                 self.result.name)
@@ -461,8 +461,8 @@ class COMPARE_OP(Bytecode):
         m = getattr(self,    self.b_func[type_])
 
         self.result.llvm = f(m[self.op],
-                             self.args[0].llvm,
-                             self.args[1].llvm,
+                             self.args[0].translate(module, builder),
+                             self.args[1].translate(module, builder),
                              self.result.name)
 
 
@@ -485,7 +485,7 @@ class RETURN_VALUE(utils.BlockTerminal, Bytecode):
             # invalid
             builder.ret_void()
         else:
-            builder.ret(self.result.llvm)
+            builder.ret(self.result.translate(module, builder))
 
 
 class HasTarget(object):
@@ -571,7 +571,7 @@ class JUMP_IF_FALSE_OR_POP(Jump_if_X_or_pop, Bytecode):
 
     def translate(self, module, builder):
         builder.cbranch(
-            self.args[0].llvm,
+            self.args[0].translate(module, builder),
             self.next.block,
             self.target_bc.block)
 
@@ -583,7 +583,7 @@ class JUMP_IF_TRUE_OR_POP(Jump_if_X_or_pop, Bytecode):
 
     def translate(self, module, builder):
         builder.cbranch(
-            self.args[0].llvm,
+            self.args[0].translate(module, builder),
             self.target_bc.block,
             self.next.block)
 
@@ -636,7 +636,7 @@ class POP_JUMP_IF_FALSE(Pop_jump_if_X, Bytecode):
 
     def translate(self, module, builder):
         builder.cbranch(
-            self.args[0].llvm,
+            self.args[0].translate(module, builder),
             self.next.block,
             self.target_bc.block)
 
@@ -648,7 +648,7 @@ class POP_JUMP_IF_TRUE(Pop_jump_if_X, Bytecode):
 
     def translate(self, module, builder):
         builder.cbranch(
-            self.args[0].llvm,
+            self.args[0].translate(module, builder),
             self.target_bc.block,
             self.next.block)
 
@@ -723,7 +723,7 @@ class LOAD_GLOBAL(Bytecode):
         if isinstance(self.var, ir.Function):
             pass
         elif isinstance(self.var, GlobalVariable):
-            self.result.llvm = builder.load(self.var.llvm)
+            self.result.llvm = builder.load(self.var.translate(module, builder))
 
     def type_eval(self, func):
         if isinstance(self.var, GlobalVariable):
@@ -753,8 +753,8 @@ class LOAD_ATTR(Bytecode):
         elif (isinstance(self.args[1], tp.Type)
               and isinstanceself.args[1].type_, tp.StructType):
             p = builder.gep(
-                self.args[0].llvm, [
-                    tp.Int.constant(0), self.args[1].llvm], inbounds=True)
+                self.args[0].translate(module, builder), [
+                    tp.Int.constant(0), self.args[1].translate(module, builder)], inbounds=True)
             self.result.llvm = builder.load(p)
 
     def type_eval(self, func):
@@ -787,9 +787,9 @@ class STORE_ATTR(Bytecode):
     def translate(self, module, builder):
         # for structs
         # insert_element(self, vec_val, elt_val, idx_val, name='')¶
-        builder.insert_element(self.args[0].llvm,
-                               self.args[1].llvm,
-                               self.args[2].llvm)
+        builder.insert_element(self.args[0].translate(module, builder),
+                               self.args[1].translate(module, builder),
+                               self.args[2].translate(module, builder))
 
 
 class CALL_FUNCTION(Bytecode):
@@ -1161,9 +1161,9 @@ class STORE_SUBSCR(Bytecode):
         # for structs
         # insert_element(self, vec_val, elt_val, idx_val, name='')¶
         p = builder.gep(
-            self.args[1].llvm, [
-                tp.Int.constant(0), self.args[2].llvm], inbounds=True)
-        builder.store(self.args[0].llvm, p)
+            self.args[1].translate(module, builder), [
+                tp.Int.constant(0), self.args[2].translate(module, builder)], inbounds=True)
+        builder.store(self.args[0].translate(module, builder), p)
 
 
 class BINARY_SUBSCR(Bytecode):
@@ -1187,8 +1187,8 @@ class BINARY_SUBSCR(Bytecode):
 
     def translate(self, module, builder):
         p = builder.gep(
-            self.args[0].llvm, [
-                tp.Int.constant(0), self.args[1].llvm], inbounds=True)
+            self.args[0].translate(module, builder), [
+                tp.Int.constant(0), self.args[1].translate(module, builder)], inbounds=True)
         self.result.llvm = builder.load(p)
 
 
@@ -1309,11 +1309,11 @@ class UNARY_NEGATIVE(Bytecode):
                     self.result.type))
 
     def translate(self, module, builder):
-        self.cast(builder)
+        self.cast(module, builder)
         f = getattr(builder, self.builderFuncName())
         self.result.llvm = f(
             self.result.type.constant(0),
-            self.args[0].llvm,
+            self.args[0].translate(module, builder),
             self.result.name)
 
 opconst = {}

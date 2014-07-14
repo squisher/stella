@@ -46,7 +46,7 @@ class ScalarType(Type):
     def genericValue(self, value):
         return self.f_generic_value(self._llvm, value)
 
-    def constant(self, value, builder):
+    def constant(self, value, builder = None):
         return self.f_constant(self._llvm, value)
 
     def __str__(self):

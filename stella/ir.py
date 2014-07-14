@@ -18,6 +18,7 @@ from . import tp
 from .intrinsics import python
 
 
+# TODO: move to module tp? {
 class Typable(object):
     type = tp.NoType
     llvm = None
@@ -57,19 +58,14 @@ class Const(Typable):
         except exc.TypingError as e:
             self.name = "InvalidConst({0}, type={1})".format(value, type(value))
             raise e
-        self.translateConst()
 
-    def translateConst(self):
-        self.llvm = self.type.constant(self.value)
 
     def unify_type(self, tp2, debuginfo):
         r = super().unify_type(tp2, debuginfo)
-        if r:
-            self.translateConst()
         return r
 
     def translate(self, module, builder):
-        self.translateConst()
+        self.llvm = self.type.constant(self.value, builder)
         return self.llvm
 
     def __str__(self):
@@ -178,15 +174,23 @@ class GlobalVariable(Typable):
         return self.name
 
     def translate(self, module, builder):
+        if self.llvm:
+            return self.llvm
+
         self.llvm = module.add_global_variable(self.llvmType(), self.name)
         # TODO: this condition is too complicated and likely means that my
         # code is not working consistently with the attribute
+        llvm_init = None
         if (hasattr(self.initial_value, 'llvm')
-                and self.initial_value is not None
-                and self.initial_value.llvm is not None):
-            self.llvm.initializer = self.initial_value.llvm
-        else:
+                and self.initial_value is not None):
+            llvm_init = self.initial_value.translate(module, builder)
+
+        if llvm_init == None:
             self.llvm.initializer = llvm.core.Constant.undef(self.initial_value.type.llvmType())
+        else:
+            self.llvm.initializer = llvm_init
+
+        return self.llvm
 
 
 class Cast(Typable):
@@ -199,27 +203,29 @@ class Cast(Typable):
         logging.debug("Casting {0} to {1}".format(self.obj.name, self.type))
         self.name = "({0}){1}".format(self.type, self.obj.name)
 
-    def translate(self, builder):
+    def translate(self, module, builder):
         if self.emitted:
             assert hasattr(self, 'llvm')
-            return
+            return self.llvm
         self.emitted = True
 
         # TODO: HACK: instead of failing, let's make it a noop
         # assert self.obj.type == int and self.type == float
         if self.obj.type == self.type:
             self.llvm = self.obj.llvm
-            return
+            return self.llvm
 
         if isinstance(self.obj, Const):
             value = float(self.obj.value)
             self.llvm = self.obj.type.constant(value)
         else:
             self.llvm = builder.sitofp(self.obj.llvm, tp.Float.llvmType(), self.name)
+        return self.llvm
 
     def __str__(self):
         return self.name
 
+# TODO: move to module tp? }
 
 @utils.linkedlist
 class IR(metaclass=ABCMeta):
@@ -254,10 +260,10 @@ class IR(metaclass=ABCMeta):
         self.args = self.args[1:]
         return first
 
-    def cast(self, builder):
+    def cast(self, module, builder):
         for arg in self.args:
             if isinstance(arg, Cast):
-                arg.translate(builder)
+                arg.translate(module, builder)
 
     @abstractmethod
     def stack_eval(self, func, stack):
@@ -625,7 +631,7 @@ class Callable(metaclass=ABCMeta):
     def call(self, module, builder, args, kw_args):
         args = self.combineAndCheckArgs(args, kw_args)
 
-        return builder.call(self.llvm, [arg.llvm for arg in args])
+        return builder.call(self.llvm, [arg.translate(module, builder) for arg in args])
 
 
 class Function(Callable, Scope):
@@ -807,10 +813,10 @@ class Log(Intrinsic):
     def call(self, module, builder, args, kw_args):
         if args[0].type == tp.Int:
             args[0] = Cast(args[0], tp.Float)
-            args[0].translate(builder)
+            #args[0].translate(module, builder)  # done automatically now?
 
         llvm_f = llvm.core.Function.intrinsic(module, self.intr, [args[0].llvmType()])
-        result = builder.call(llvm_f, [args[0].llvm])
+        result = builder.call(llvm_f, [args[0].translate(module, builder)])
         return result
 
     def getResult(self, func):
@@ -926,7 +932,7 @@ class ExtFunction(Foreign, Callable):
             if arg.type != arg_type:
                 # TODO: trunc is not valid for all type combinations.
                 # Needs to be generalized.
-                llvm = builder.trunc(arg.llvm, arg_type.llvmType(), '({0}){1}'.format(
+                llvm = builder.trunc(arg.translate(module, builder), arg_type.llvmType(), '({0}){1}'.format(
                     arg_type, arg.name))
             else:
                 llvm = arg.llvm
