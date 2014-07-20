@@ -181,7 +181,8 @@ class StructType(Type):
         return self.attrib_idx[name]
 
     def baseType(self):
-        return llvm.core.Type.struct([type_.llvmType() for type_ in self.attrib_type.values()])
+        llvm_types = [type_.llvmType() for type_ in self.attrib_type.values()]
+        return llvm.core.Type.struct(llvm_types)
 
     def llvmType(self):
         type_ = llvm.core.Type.pointer(self.baseType())

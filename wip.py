@@ -11,4 +11,4 @@ a = np.zeros(5, dtype=int)
 b = test.struct.B()
 
 def current_work(run=False):
-    print(stella.wrap(test.struct.setAttrib, ir=not run)(b))
+    print(stella.wrap(test.struct.justPassing, ir=not run)(b))

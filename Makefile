@@ -1,6 +1,6 @@
 CFLAGS:=-Wall -O0
 #CC=gcc
-CC=clang
+CC=~/llvm-3.3/bin/clang
 
 %.s: %.c
 	rm -f $@.tmp

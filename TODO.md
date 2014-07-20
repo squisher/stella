@@ -100,3 +100,9 @@ LLVMException: b'Found return instr that returns non-void in Function of void re
 [master d9c8574] Add void type (WIP)
  3 files changed, 28 insertions(+), 1 deletion(-)
 ```
+
+EuroPython 2014
+---------------
+
+Find a couple of example commits which crash llvm in current_work().
+

@@ -753,11 +753,10 @@ class LOAD_ATTR(Bytecode):
             return
         elif (isinstance(self.args[1], tp.Type)
               and isinstanceself.args[1].type, tp.StructType):
+            struct_llvm = self.args[1].translate(module, builder)
             idx = self.args[1].type.getMemberIdx(self.args[0])
-            p = builder.gep(
-                self.args[1].translate(module, builder), [
-                    tp.Int.constant(0), tp.Int.constant(idx)],
-                     inbounds=True)
+            idx_llvm = tp.Int.constant(idx)
+            p = builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
             self.result.llvm = builder.load(p)
 
     def type_eval(self, func):

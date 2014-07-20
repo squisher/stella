@@ -11,16 +11,25 @@ class B(object):
         return not self.__eq__(other)
 
 
+def justPassing(a):
+    x = 1
+
+
 def setAttrib(a):
     a.x += 1
 
 
+def addAttrib(a):
+    return a.x + a.y
+
+
+@mark.parametrize('f', [justPassing, setAttrib, addAttrib, ])
 @unimplemented
-def test1():
+def test1(f):
     b1 = B()
     b2 = B()
 
-    py = setAttrib(a)
-    st = stella.wrap(setAttrib)(a)
+    py = f(b1)
+    st = stella.wrap(f)(b2)
 
     assert b1 == b2 and py == st

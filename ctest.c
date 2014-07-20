@@ -1,9 +1,13 @@
 #include <stdlib.h>
 
+typedef struct {
+    int x;
+    int y;
+} tCoord;
+
 int main(int argc, char ** argv) {
-    int i;
-    int a[5];
-    for (i=0; i<5; i++)
-        a[i] = 42;
-    return i;
+    tCoord c;
+    c.x = 1;
+    c.y += 2;
+    return 0;
 }
