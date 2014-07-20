@@ -13,7 +13,6 @@ class B(object):
 
 def setAttrib(a):
     a.x += 1
-    a.y -= 1
 
 
 @unimplemented

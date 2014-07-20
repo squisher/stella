@@ -177,15 +177,20 @@ class StructType(Type):
     def getMemberType(self, name):
         return self.attrib_type[name]
 
+    def getMemberIdx(self, name):
+        return self.attrib_idx[name]
+
+    def baseType(self):
+        return llvm.core.Type.struct([type_.llvmType() for type_ in self.attrib_type.values()])
+
     def llvmType(self):
-        type_ = llvm.core.Type.struct([type_.llvmType() for type_ in self.attrib_type.values()])
+        type_ = llvm.core.Type.pointer(self.baseType())
         if self.ptr:
-            #type_ = llvm.core.Type.pointer(type_)
             raise exc.UnimplementedError("Pointer to structs not allowed")
         return type_
 
     def constant(self, value, builder):
-        type_ = self.llvmType()
+        type_ = self.baseType()
         result_llvm = builder.alloca(type_)
         # TODO free the memory!!! XXX
         for name in self.attrib_names:
@@ -198,7 +203,7 @@ class StructType(Type):
 
 
     def __str__(self):
-        return "<{}: {}>".format(self.name, list(self.name_type.keys()))
+        return "<{}: {}>".format(self.name, list(self.attrib_type.keys()))
 
     def __repr__(self):
         return str(self)

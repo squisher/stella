@@ -731,7 +731,7 @@ class LOAD_GLOBAL(Bytecode):
 
 
 class LOAD_ATTR(Bytecode):
-    discard = True
+    #discard = True
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
@@ -743,6 +743,7 @@ class LOAD_ATTR(Bytecode):
     def stack_eval(self, func, stack):
         if isinstance(self.args[1], types.ModuleType):
             self.result = func.module.loadExt(self.args[1], self.args[0])
+            self.discard = True
         else:
             self.result = Register(func)
         stack.push(self.result)
@@ -751,10 +752,12 @@ class LOAD_ATTR(Bytecode):
         if isinstance(self.args[1], types.ModuleType):
             return
         elif (isinstance(self.args[1], tp.Type)
-              and isinstanceself.args[1].type_, tp.StructType):
+              and isinstanceself.args[1].type, tp.StructType):
+            idx = self.args[1].type.getMemberIdx(self.args[0])
             p = builder.gep(
-                self.args[0].translate(module, builder), [
-                    tp.Int.constant(0), self.args[1].translate(module, builder)], inbounds=True)
+                self.args[1].translate(module, builder), [
+                    tp.Int.constant(0), tp.Int.constant(idx)],
+                     inbounds=True)
             self.result.llvm = builder.load(p)
 
     def type_eval(self, func):
