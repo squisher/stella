@@ -169,7 +169,7 @@ class StructType(Type):
         return StructType(type(obj), attrib_names, attrib_type, attrib_idx)
 
     def __init__(self, type_, attrib_names, attrib_type, attrib_idx):
-        self.name = str(type_)
+        self.name = str(type_)[1:-1]
         self.attrib_names = attrib_names
         self.attrib_type = attrib_type
         self.attrib_idx = attrib_idx
@@ -203,10 +203,10 @@ class StructType(Type):
 
 
     def __str__(self):
-        return "<{}: {}>".format(self.name, list(self.attrib_type.keys()))
+        return "{}: {}".format(self.name, list(self.attrib_type.keys()))
 
     def __repr__(self):
-        return str(self)
+        return "<{}>".format(self)
 
     def __eq__(self, other):
         return (type(self) == type(other)
