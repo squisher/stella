@@ -19,11 +19,21 @@ def setAttrib(a):
     a.x += 1
 
 
-def addAttrib(a):
+def addAttribs(a):
     return a.x + a.y
 
 
-@mark.parametrize('f', [justPassing, setAttrib, addAttrib, ])
+@mark.parametrize('f', [justPassing])
+def test1(f):
+    b1 = B()
+    b2 = B()
+
+    py = f(b1)
+    st = stella.wrap(f)(b2)
+
+    assert b1 == b2 and py == st
+
+@mark.parametrize('f', [setAttrib, addAttribs, ])
 @unimplemented
 def test1(f):
     b1 = B()

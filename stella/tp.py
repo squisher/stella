@@ -150,9 +150,16 @@ def supported_scalar_name(name):
 class StructType(Type):
     attrib_type = None
     attrib_idx = None
+    base_type = None
+
+    _singletons = dict()
 
     @classmethod
     def fromObj(klass, obj):
+        type_name = str(type(obj))[1:-1]
+        if type_name in klass._singletons:
+            return klass._singletons[type_name]
+
         attrib_type = {}
         attrib_idx = {}
         attrib_names = filter(lambda s: not s.startswith('_'), dir(obj))  # TODO: only exclude __?
@@ -165,11 +172,12 @@ class StructType(Type):
             attrib_idx[name] = i
             i += 1
 
-        # TODO Memoization of the results?
-        return StructType(type(obj), attrib_names, attrib_type, attrib_idx)
+        type_ = StructType(type_name, attrib_names, attrib_type, attrib_idx)
+        klass._singletons[type_name] = type_
+        return type_
 
-    def __init__(self, type_, attrib_names, attrib_type, attrib_idx):
-        self.name = str(type_)[1:-1]
+    def __init__(self, name, attrib_names, attrib_type, attrib_idx):
+        self.name = name
         self.attrib_names = attrib_names
         self.attrib_type = attrib_type
         self.attrib_idx = attrib_idx
@@ -181,8 +189,10 @@ class StructType(Type):
         return self.attrib_idx[name]
 
     def baseType(self):
-        llvm_types = [type_.llvmType() for type_ in self.attrib_type.values()]
-        return llvm.core.Type.struct(llvm_types)
+        if not self.base_type:
+            llvm_types = [type_.llvmType() for type_ in self.attrib_type.values()]
+            self.base_type = llvm.core.Type.struct(llvm_types, name=self.name)
+        return self.base_type
 
     def llvmType(self):
         type_ = llvm.core.Type.pointer(self.baseType())
