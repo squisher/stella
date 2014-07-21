@@ -161,15 +161,11 @@ class StructType(Type):
     attrib_idx = None
     base_type = None
     on_heap = True
-
-    _singletons = dict()
+    type_store = {}  # Class variable
 
     @classmethod
     def fromObj(klass, obj):
         type_name = str(type(obj))[1:-1]
-        if type_name in klass._singletons:
-            return klass._singletons[type_name]
-
         attrib_type = {}
         attrib_idx = {}
         attrib_names = list(filter(lambda s: not s.startswith('_'), dir(obj)))  # TODO: only exclude __?
@@ -183,7 +179,6 @@ class StructType(Type):
             i += 1
 
         type_ = StructType(type_name, attrib_names, attrib_type, attrib_idx)
-        klass._singletons[type_name] = type_
         return type_
 
     def __init__(self, name, attrib_names, attrib_type, attrib_idx):
@@ -199,15 +194,16 @@ class StructType(Type):
         return self.attrib_idx[name]
 
     def baseType(self):
-        if not self.base_type:
+        if not self.name in self.__class__.type_store:
             llvm_types = [type_.llvmType() for type_ in self.attrib_type.values()]
-            self.base_type = llvm.core.Type.struct(llvm_types, name=self.name)
-        return self.base_type
+            type_ = llvm.core.Type.struct(llvm_types, name=self.name)
+            self.__class__.type_store[self.name] = type_
+        else:
+            return self.__class__.type_store[self.name]
+        return type_
 
     def llvmType(self):
         type_ = llvm.core.Type.pointer(self.baseType())
-        if self.ptr > 1:
-            raise exc.UnimplementedError("Pointer to (pointer of) structs not allowed")
         return type_
 
     def constant(self, value, module, builder):
@@ -269,6 +265,7 @@ class ArrayType(Type):
         type_ = llvm.core.Type.array(self.tp.llvmType(), self.shape)
         if self.ptr:
             type_ = llvm.core.Type.pointer(type_)
+
         return type_
 
     def __str__(self):

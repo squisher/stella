@@ -1,4 +1,5 @@
 from test import *  # noqa
+import stella
 
 class B(object):
     x = 1
@@ -9,6 +10,9 @@ class B(object):
 
     def __ne__(self, other):
         return not self.__eq__(other)
+
+    def __repr__(self):
+        return "{}:{}, {}>".format(str(type(self))[:-1], self.x, self.y)
 
 
 def justPassing(a):
@@ -33,9 +37,9 @@ def test1(f):
 
     assert b1 == b2 and py == st
 
-@mark.parametrize('f', [setAttrib, addAttribs, ])
+@mark.parametrize('f', [addAttribs, setAttrib])
 @unimplemented
-def test1(f):
+def test1b(f):
     b1 = B()
     b2 = B()
 
