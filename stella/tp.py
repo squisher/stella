@@ -32,6 +32,9 @@ class Type(object):
         raise exc.TypingError(
             "Cannot create llvm type for an unknown type. This should have been cought earlier.")
 
+    def copy2Python(self, module, builder):
+        pass
+
 NoType = Type()
 
 
@@ -157,10 +160,12 @@ def supported_scalar_name(name):
 
 
 class StructType(Type):
+
+    on_heap = True
+
     attrib_type = None
     attrib_idx = None
     base_type = None
-    on_heap = True
     type_store = {}  # Class variable
 
     @classmethod
@@ -403,6 +408,21 @@ class Struct(Const):
 
     def __repr__(self):
         return str(self)
+
+    def copy2Python(self, module, builder):
+        for name in self.type.attrib_names:
+            idx_llvm = getIndex(self.type.attrib_idx[name])
+            p_src = builder.gep(self.llvm, [Int.constant(0), idx_llvm], inbounds=True)
+
+            tmp = builder.load(p_src)
+
+            p_dst_int = Int.constant(id(getattr(self.value, name)))
+            #type_ = llvm.core.Type.pointer(self.type.attrib_type[name].llvmType())
+            type_ = llvm.core.Type.pointer(self.type.attrib_type[name].llvmType())
+            base_llvm = llvm.core.Constant.inttoptr(p_dst_int, type_)
+            #p_dst = builder.gep(base_llvm, [getIndex(0)], inbounds=True)
+            #builder.store(tmp, p_dst)
+            builder.store(tmp, base_llvm)
 
 
 def wrapValue(value):

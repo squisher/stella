@@ -83,6 +83,10 @@ class Program(object):
         args = [arg.translate(self.module.llvm, builder) for arg in self.module.entry_args]
 
         call = builder.call(impl.llvm, args)
+
+        for arg in self.module.entry_args:
+            arg.copy2Python(self.module, builder)  # may be a no-op if not necessary
+
         if impl.result.type is tp.Void:
             builder.ret_void()
         else:
