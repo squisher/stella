@@ -8,6 +8,7 @@ Session.vim
 *.o
 ctest
 ctest*.s
+*.llc.cpp
 core.*
 faulthandler.err
 faulthandler.err

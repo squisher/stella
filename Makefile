@@ -1,19 +1,22 @@
 CFLAGS:=-Wall -O0
 #CC=gcc
-CC=~/llvm-3.3/bin/clang
+CC=clang
 
 %.s: %.c
 	rm -f $@.tmp
 	${CC} ${CFLAGS} -O0 -emit-llvm -S $<
-	echo -e "\n\n;;; O0" >> $@.tmp
+	echo "\n\n;;; O0" >> $@.tmp
 	cat $@ >> $@.tmp
 	${CC} ${CFLAGS} -O1 -emit-llvm -S $<
-	echo -e "\n\n;;; O1" >> $@.tmp
+	echo "\n\n;;; O1" >> $@.tmp
 	cat $@ >> $@.tmp
 	${CC} ${CFLAGS} -O2 -emit-llvm -S $<
-	echo -e "\n\n;;; O2" >> $@.tmp
+	echo "\n\n;;; O2" >> $@.tmp
 	cat $@ >> $@.tmp
 	mv $@.tmp $@
+
+%.llc.cpp: %.s
+	llc -march=cpp -o $@ $<
 
 ctest: ctest.o
 ctest.o: ctest.c
