@@ -6,7 +6,7 @@ from llvm.ee import *
 
 import logging
 
-def spawn():
+def playground():
     my_module = Module.new('my_module')
     tp_int = Type.int()   # by default 32 bits
     tp_func = Type.function(tp_int, [])
@@ -21,11 +21,14 @@ def spawn():
     # Q: How to access members of a freshly stack allocated struct?
     tp_struct = Type.struct([tp_int, tp_int], name='test_struct')
     struct = builder.alloca(tp_struct)
+    print (repr(struct))
     p = builder.gep(struct, [Constant.int(tp_int, 0), Constant.int(tp_int, 0)])
-    builder.store(p, tmp)
+    builder.store(tmp, p)
+    tmp2 = builder.load(p)
 
 
-    builder.ret(tmp)
+    print(str(my_module))
+    builder.ret(tmp2)
 
     # Create an execution engine object. This will create a JIT compiler
     # on platforms that support it, or an interpreter otherwise.
@@ -41,4 +44,4 @@ def spawn():
     return retval.as_int()
 
 if __name__ == '__main__':
-    print(spawn())
+    print(playground())
