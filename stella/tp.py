@@ -205,20 +205,14 @@ class StructType(Type):
         return type_
 
     def constant(self, value, module, builder):
-        #type_ = self.baseType()
-        type_ = self.llvmType()
+        type_ = self.baseType()
         result_llvm = builder.alloca(type_)
-        # TODO free the memory!!! XXX At EOP time? Add it at the end of the
-        # stub?
         for name in self.attrib_names:
             type_ = self.getMemberType(name)
-            type_llvm = type_.llvmType()
             idx_llvm = type_.constant(self.attrib_idx[name])
-            # insert_element(self, vec_val, elt_val, idx_val, name='')¶
-            # -> vector?
-            p = builder.gep(result_llvm, [Int.constant(0), idx_llvm], inbounds=True)
             wrapped = wrapValue(getattr(value, name))
             wrapped_llvm = wrapped.translate(module, builder)
+            p = builder.gep(result_llvm, [Int.constant(0), idx_llvm], inbounds=True)
             builder.store(wrapped_llvm, p)
 
         return result_llvm
