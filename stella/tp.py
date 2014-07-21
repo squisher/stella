@@ -11,6 +11,7 @@ class Type(object):
     type_ = None
     _llvm = None
     ptr = 0
+    on_heap = False
 
     def makePointer(self):
         """Note: each subtype must interpret `ptr` itself"""
@@ -151,6 +152,7 @@ class StructType(Type):
     attrib_type = None
     attrib_idx = None
     base_type = None
+    on_heap = True
 
     _singletons = dict()
 
@@ -231,6 +233,7 @@ class StructType(Type):
 class ArrayType(Type):
     tp = NoType
     shape = None
+    on_heap = True
 
     @classmethod
     def fromArray(klass, array):

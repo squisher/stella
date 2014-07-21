@@ -691,7 +691,7 @@ class Function(Callable, Scope):
             else:
                 type_ = tp.get(combined[i])
 
-            if isinstance(type_, tp.ArrayType):
+            if type_.on_heap:
                 # TODO: create superclass for complex types
                 arg = self.getOrNewRegister(self.arg_names[i])
                 arg.type = type_
