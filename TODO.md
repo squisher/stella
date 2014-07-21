@@ -105,4 +105,3 @@ EuroPython 2014
 ---------------
 
 Find a couple of example commits which crash llvm in current_work().
-
