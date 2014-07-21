@@ -17,6 +17,7 @@ class Type(object):
         """Note: each subtype must interpret `ptr` itself"""
         self.ptr += 1
 
+
     def isPointer(self):
         return self.ptr > 0
 
@@ -164,7 +165,7 @@ class StructType(Type):
 
         attrib_type = {}
         attrib_idx = {}
-        attrib_names = filter(lambda s: not s.startswith('_'), dir(obj))  # TODO: only exclude __?
+        attrib_names = list(filter(lambda s: not s.startswith('_'), dir(obj)))  # TODO: only exclude __?
         i = 0
         for name in attrib_names:
             attrib = getattr(obj, name)
@@ -198,25 +199,29 @@ class StructType(Type):
 
     def llvmType(self):
         type_ = llvm.core.Type.pointer(self.baseType())
-        if self.ptr:
-            raise exc.UnimplementedError("Pointer to structs not allowed")
+        if self.ptr > 1:
+            raise exc.UnimplementedError("Pointer to (pointer of) structs not allowed")
         return type_
 
     def constant(self, value, builder):
         type_ = self.baseType()
         result_llvm = builder.alloca(type_)
-        # TODO free the memory!!! XXX
+        # TODO free the memory!!! XXX At EOP time? Add it at the end of the
+        # stub?
         for name in self.attrib_names:
+            type_ = self.getMemberType(name)
+            type_llvm = type_.llvmType()
+            idx_llvm = type_.constant(self.attrib_idx[name])
             # insert_element(self, vec_val, elt_val, idx_val, name='')¶
-            builder.insert_element(
-                result_llvm,
-                self.getMemberType().llvm,
-                ir.Constant(self.attrib_idx[name]))
+            # -> vector?
+            p = builder.gep(result_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
+            builder.store(wrapped, p)
+
         return result_llvm
 
 
     def __str__(self):
-        return "{}: {}".format(self.name, list(self.attrib_type.keys()))
+        return "{}{}: {}".format('*'*self.ptr, self.name, list(self.attrib_type.keys()))
 
     def __repr__(self):
         return "<{}>".format(self)
