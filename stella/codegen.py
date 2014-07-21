@@ -1,155 +1,127 @@
 #!/usr/bin/env python
 
-import llvm
-import llvm.core
-import llvm.ee
-import llvm.passes
+from llvm import *
+from llvm.core import *
+from llvm.ee import *
 
 import logging
-import time
 
-from . import tp
-from . import utils
-from . import ir
-
+from . import analysis
+from .llvm import *
+from .bytecode import *
+from .exc import *
 
 class Program(object):
-    def __init__(self, module):
-        self.module = module
-        self.module.translate()
+    def __init__(self, af, *args):
+        self.af = af
+        self.args = args
+        self.module = Module.new('__stella__')
+        self.arg_types = [py_type_to_llvm(arg.type) for arg in af.args]
+        func_tp = Type.function(py_type_to_llvm(af.result.type), self.arg_types)
+        self.func = self.module.add_function(func_tp, af.getName())
 
-        self.llvm = self.makeStub()
+        for i in range(len(af.args)):
+            self.func.args[i].name = af.args[i].name
+            af.args[i].llvm = self.func.args[i]
 
-        for func in self.module.funcs:
-            self.blockAndCode(func)
-
-    def blockAndCode(self, impl):
-        func = impl.llvm
         # create blocks
-        bb = func.append_basic_block("entry")
+        bb = self.func.append_basic_block("entry")
 
-        for bc in impl.bytecodes:
+        for bc in af.bytecodes:
             if bc.discard:
-                impl.remove(bc)
-                impl.log.debug("BLOCK skipped {0}".format(bc))
+                af.remove(bc)
+                logging.debug("BLOCK skipped {0}".format(bc))
                 continue
 
             newblock = ''
-            if bc in impl.incoming_jumps:
+            if bc in af.incoming_jumps:
                 assert not bc.block
-                bc.block = func.append_basic_block(str(bc.loc))
+                bc.block = self.func.append_basic_block(str(bc.loc))
                 bb = bc.block
                 newblock = ' NEW BLOCK (' + str(bc.loc) + ')'
             else:
                 bc.block = bb
-            impl.log.debug("BLOCK'D {0}{1}".format(bc, newblock))
+            logging.debug("BLOCK'D {0}{1}".format(bc, newblock))
 
-        for ext_module in self.module.getExternalModules():
-            ext_module.translate(self.module.llvm)
+        logging.debug("Printing all bytecodes:")
+        af.bytecodes.printAll()
 
-        impl.log.debug("Printing all bytecodes:")
-        impl.bytecodes.printAll(impl.log)
-
-        impl.log.debug("Emitting code:")
+        logging.debug("Emitting code:")
+        #import pdb; pdb.set_trace()
         bb = None
-        for bc in impl.bytecodes:
+        for bc in af.bytecodes:
             if bb != bc.block:
                 # new basic block, use a new builder
-                builder = llvm.core.Builder.new(bc.block)
+                builder = Builder.new(bc.block)
 
-            bc.translate(self.module.llvm, builder)
-            impl.log.debug("TRANS'D {0}".format(bc))
+            bc.translate(self.module, builder)
+            logging.debug("TRANS'D {0}".format(bc))
             # Note: the `and not' part is a basic form of dead code elimination
             #       This is used to drop unreachable "return None" which are implicitly added
             #       by Python to the end of functions.
             #       TODO is this the proper way to handle those returns? Any side effects?
             #            NEEDS REVIEW
             #       See also analysis.Function.analyze
-            if isinstance(bc, utils.BlockTerminal) and \
-                    bc.next and bc.next not in impl.incoming_jumps:
-                impl.log.debug("TRANS stopping")
+            if isinstance(bc, BlockTerminal) and bc.next and bc.next not in af.incoming_jumps:
+                logging.debug("TRANS stopping")
+                #import pdb; pdb.set_trace()
                 break
 
+        self.func = self.makeStub()
+
     def makeStub(self):
-        impl = self.module.entry
-        func_tp = llvm.core.Type.function(impl.result.type.llvmType(), [])
-        func = self.module.llvm.add_function(func_tp, str(impl)+'__stub__')
+        args = [llvm_constant(arg) for arg in self.args]
+        func_tp = Type.function(py_type_to_llvm(self.af.result.type), [])
+        func = self.module.add_function(func_tp, self.af.getName()+'__stub__')
         bb = func.append_basic_block("entry")
-        builder = llvm.core.Builder.new(bb)
-
-        for name, var in self.module.namestore.all(ir.GlobalVariable):
-            var.translate(self.module.llvm, builder)
-
-        args = [arg.translate(self.module.llvm, builder) for arg in self.module.entry_args]
-
-        call = builder.call(impl.llvm, args)
-        if impl.result.type is tp.Void:
-            builder.ret_void()
-        else:
-            builder.ret(call)
+        builder = Builder.new(bb)
+        call = builder.call(self.func, args)
+        builder.ret(call)
         return func
 
-    def elapsed(self):
-        if self.start is None or self.end is None:
-            return None
-        return self.end - self.start
-
-    def optimize(self, opt):
-        if opt is not None:
-            logging.debug("Running optimizations level {0}... ".format(opt))
-            self.module.llvm.verify()
-
-            tm = llvm.ee.TargetMachine.new(opt=opt)
-            pm = llvm.passes.build_pass_managers(tm, opt=opt, loop_vectorize=True, fpm=False).pm
-            pm.run(self.module.llvm)
-
-    def run(self, stats):
-        logging.debug("Verifying... ")
-        self.module.llvm.verify()
+    def run(self):
+        logging.debug("Verifying...")
+        self.module.verify()
 
         logging.debug("Preparing execution...")
 
-        # m = Module.new('-lm')
-        # fntp = Type.function(Type.float(), [Type.int()])
-        # func = m.add_function(fntp, '__powidf2')
+        #m = Module.new('-lm')
+        #fntp = Type.function(Type.float(), [Type.int()])
+        #func = m.add_function(fntp, '__powidf2')
 
         import ctypes
         from llvmpy import _api
         clib = ctypes.cdll.LoadLibrary(_api.__file__)
         logging.debug(str(clib))
 
+        #import pdb; pdb.set_trace()
+
         # BUG: clib.__powidf2 gets turned into the following bytecode:
-        # 103 LOAD_FAST                3 (clib)
-        # 106 LOAD_ATTR               11 (_Program__powidf2)
-        # 109 STORE_FAST               5 (f)
+        # 103 LOAD_FAST                3 (clib) 
+        # 106 LOAD_ATTR               11 (_Program__powidf2) 
+        # 109 STORE_FAST               5 (f) 
         # which is not correct. I have no idea where _Program is coming from,
         # I'm assuming it is some internal Python magic going wrong
-        f = getattr(clib, '__powidf2')
+        f = getattr(clib,'__powidf2')
 
         logging.debug(str(f))
 
-        llvm.ee.dylib_add_symbol('__powidf2', ctypes.cast(f, ctypes.c_void_p).value)
+        dylib_add_symbol('__powidf2', ctypes.cast(f, ctypes.c_void_p).value)
 
-        # ee = ExecutionEngine.new(self.module)
-        eb = llvm.ee.EngineBuilder.new(self.module.llvm)
+        #ee = ExecutionEngine.new(self.module)
+        eb = EngineBuilder.new(self.module)
 
         logging.debug("Enabling mcjit...")
         eb.mcjit(True)
 
         ee = eb.create()
 
-        entry = self.module.entry
-
-        logging.info("running {0}{1}".format(entry,
-                                             list(zip(entry.arg_types, self.module.entry_args))))
+        logging.debug("Arguments: {0}".format(list(zip(self.arg_types, self.args))))
 
         # Now let's compile and run!
+        logging.debug("Running...")
+        retval = ee.run_function(self.func, [])
 
-        time_start = time.time()
-        retval = ee.run_function(self.llvm, [])
-        stats['elapsed'] = time.time() - time_start
-
+        # The return value is also GenericValue. Let's print it.
         logging.debug("Returning...")
-        self.module.destruct()
-        del (self.module)
-        return tp.llvm_to_py(entry.result.type, retval)
+        return llvm_to_py(self.af.result.type, retval)

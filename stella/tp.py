@@ -3,6 +3,7 @@ import llvm.core
 import llvm.ee
 import numpy as np
 import ctypes
+import logging
 
 from . import exc
 
@@ -48,7 +49,7 @@ class ScalarType(Type):
     def genericValue(self, value):
         return self.f_generic_value(self._llvm, value)
 
-    def constant(self, value, builder = None):
+    def constant(self, value, module = None, builder = None):
         return self.f_constant(self._llvm, value)
 
     def __str__(self):
@@ -203,8 +204,9 @@ class StructType(Type):
             raise exc.UnimplementedError("Pointer to (pointer of) structs not allowed")
         return type_
 
-    def constant(self, value, builder):
-        type_ = self.baseType()
+    def constant(self, value, module, builder):
+        #type_ = self.baseType()
+        type_ = self.llvmType()
         result_llvm = builder.alloca(type_)
         # TODO free the memory!!! XXX At EOP time? Add it at the end of the
         # stub?
@@ -214,8 +216,10 @@ class StructType(Type):
             idx_llvm = type_.constant(self.attrib_idx[name])
             # insert_element(self, vec_val, elt_val, idx_val, name='')¶
             # -> vector?
-            p = builder.gep(result_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
-            builder.store(wrapped, p)
+            p = builder.gep(result_llvm, [Int.constant(0), idx_llvm], inbounds=True)
+            wrapped = wrapValue(getattr(value, name))
+            wrapped_llvm = wrapped.translate(module, builder)
+            builder.store(wrapped_llvm, p)
 
         return result_llvm
 
@@ -314,3 +318,135 @@ _cscalars = {
 def from_ctype(type_):
     assert type(type_) == type(ctypes.c_int) or type(type_) == type(None)  # noqa
     return _cscalars[type_]
+
+
+class Typable(object):
+    type = NoType
+    llvm = None
+
+    def unify_type(self, tp2, debuginfo):
+        tp1 = self.type
+        if tp1 == tp2:
+            pass
+        elif tp1 == NoType:
+            self.type = tp2
+        elif tp2 == NoType:
+            pass
+        elif (tp1 == Int and tp2 == Float) or (tp1 == Float and tp2 == Int):
+            self.type = Float
+            return True
+        else:
+            raise exc.TypingError("Unifying of types {} and {} (not yet) implemented".format(
+                tp1, tp2), debuginfo)
+
+        return False
+
+    def llvmType(self):
+        """Map from Python types to LLVM types."""
+        return self.type.llvmType()
+
+    def translate(self, module, builder):
+        return self.llvm
+
+
+class Const(Typable):
+    value = None
+
+    def __init__(self, value):
+        self.value = value
+        try:
+            self.type = get_scalar(value)
+            self.name = str(value)
+        except exc.TypingError as e:
+            self.name = "InvalidConst({0}, type={1})".format(value, type(value))
+            raise e
+
+
+    def unify_type(self, tp2, debuginfo):
+        r = super().unify_type(tp2, debuginfo)
+        return r
+
+    def translate(self, module, builder):
+        self.llvm = self.type.constant(self.value, module, builder)
+        return self.llvm
+
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return self.__str__()
+
+
+class NumpyArray(Typable):
+    def __init__(self, array):
+        assert isinstance(array, np.ndarray)
+
+        # TODO: multi-dimensional arrays
+        self.type = ArrayType.fromArray(array)
+        self.value = array
+
+        ptr_int = self.value.ctypes.data  # int
+        ptr_int_llvm = Int.constant(ptr_int)
+        type_ = llvm.core.Type.pointer(self.type.llvmType())
+        self.llvm = llvm.core.Constant.inttoptr(ptr_int_llvm, type_)
+
+    def __str__(self):
+        return str(self.type)
+
+    def __repr__(self):
+        return str(self)
+
+
+class Struct(Const):
+    def __init__(self, obj):
+        self.type = StructType.fromObj(obj)
+        self.value = obj
+
+    def __str__(self):
+        return str(self.type)
+
+    def __repr__(self):
+        return str(self)
+
+
+def wrapValue(value):
+    type_ = type(value)
+    if supported_scalar(type_):
+        return Const(value)
+    elif type_ == np.ndarray:
+        return NumpyArray(value)
+    else:
+        return Struct(value)
+
+
+class Cast(Typable):
+    def __init__(self, obj, tp):
+        assert obj.type != tp
+        self.obj = obj
+        self.type = tp
+        self.emitted = False
+
+        logging.debug("Casting {0} to {1}".format(self.obj.name, self.type))
+        self.name = "({0}){1}".format(self.type, self.obj.name)
+
+    def translate(self, module, builder):
+        if self.emitted:
+            assert hasattr(self, 'llvm')
+            return self.llvm
+        self.emitted = True
+
+        # TODO: HACK: instead of failing, let's make it a noop
+        # assert self.obj.type == int and self.type == float
+        if self.obj.type == self.type:
+            self.llvm = self.obj.llvm
+            return self.llvm
+
+        if isinstance(self.obj, Const):
+            value = float(self.obj.value)
+            self.llvm = self.obj.type.constant(value)
+        else:
+            self.llvm = builder.sitofp(self.obj.llvm, Float.llvmType(), self.name)
+        return self.llvm
+
+    def __str__(self):
+        return self.name

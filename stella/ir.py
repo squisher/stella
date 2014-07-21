@@ -18,106 +18,7 @@ from . import tp
 from .intrinsics import python
 
 
-# TODO: move to module tp? {
-class Typable(object):
-    type = tp.NoType
-    llvm = None
-
-    def unify_type(self, tp2, debuginfo):
-        tp1 = self.type
-        if tp1 == tp2:
-            pass
-        elif tp1 == tp.NoType:
-            self.type = tp2
-        elif tp2 == tp.NoType:
-            pass
-        elif (tp1 == tp.Int and tp2 == tp.Float) or (tp1 == tp.Float and tp2 == tp.Int):
-            self.type = tp.Float
-            return True
-        else:
-            raise exc.TypingError("Unifying of types {} and {} (not yet) implemented".format(
-                tp1, tp2), debuginfo)
-
-        return False
-
-    def llvmType(self):
-        """Map from Python types to LLVM types."""
-        return self.type.llvmType()
-
-    def translate(self, module, builder):
-        return self.llvm
-
-class Const(Typable):
-    value = None
-
-    def __init__(self, value):
-        self.value = value
-        try:
-            self.type = tp.get_scalar(value)
-            self.name = str(value)
-        except exc.TypingError as e:
-            self.name = "InvalidConst({0}, type={1})".format(value, type(value))
-            raise e
-
-
-    def unify_type(self, tp2, debuginfo):
-        r = super().unify_type(tp2, debuginfo)
-        return r
-
-    def translate(self, module, builder):
-        self.llvm = self.type.constant(self.value, builder)
-        return self.llvm
-
-    def __str__(self):
-        return self.name
-
-    def __repr__(self):
-        return self.__str__()
-
-
-class NumpyArray(Typable):
-    def __init__(self, array):
-        assert isinstance(array, np.ndarray)
-
-        # TODO: multi-dimensional arrays
-        self.type = tp.ArrayType.fromArray(array)
-        self.value = array
-
-        ptr_int = self.value.ctypes.data  # int
-        ptr_int_llvm = tp.Int.constant(ptr_int)
-        type_ = llvm.core.Type.pointer(self.type.llvmType())
-        self.llvm = llvm.core.Constant.inttoptr(ptr_int_llvm, type_)
-
-    def __str__(self):
-        return str(self.type)
-
-    def __repr__(self):
-        return str(self)
-
-
-class Struct(Const):
-    def __init__(self, obj):
-        self.type = tp.StructType.fromObj(obj)
-        self.value = obj
-
-    def __str__(self):
-        return str(self.type)
-
-    def __repr__(self):
-        return str(self)
-
-
-def wrapValue(value):
-    type_ = type(value)
-    if tp.supported_scalar(type_):
-        return Const(value)
-    elif type_ == np.ndarray:
-        return NumpyArray(value)
-    else:
-        return Struct(value)
-
-
-class Register(Typable):
+class Register(tp.Typable):
     name = None
 
     def __init__(self, func, name=None):
@@ -135,7 +36,7 @@ class Register(Typable):
         return self.name
 
 
-class StackLoc(Typable):
+class StackLoc(tp.Typable):
     name = None
 
     def __init__(self, func, name):
@@ -149,7 +50,7 @@ class StackLoc(Typable):
         return self.name
 
 
-class GlobalVariable(Typable):
+class GlobalVariable(tp.Typable):
     name = None
     initial_value = None
 
@@ -160,10 +61,10 @@ class GlobalVariable(Typable):
             self.setInitialValue(initial_value)
 
     def setInitialValue(self, initial_value):
-        if isinstance(initial_value, Typable):
+        if isinstance(initial_value, tp.Typable):
             self.initial_value = initial_value
         else:
-            self.initial_value = wrapValue(initial_value)
+            self.initial_value = tp.wrapValue(initial_value)
         self.type = self.initial_value.type
         self.type.makePointer()
 
@@ -193,40 +94,6 @@ class GlobalVariable(Typable):
         return self.llvm
 
 
-class Cast(Typable):
-    def __init__(self, obj, tp):
-        assert obj.type != tp
-        self.obj = obj
-        self.type = tp
-        self.emitted = False
-
-        logging.debug("Casting {0} to {1}".format(self.obj.name, self.type))
-        self.name = "({0}){1}".format(self.type, self.obj.name)
-
-    def translate(self, module, builder):
-        if self.emitted:
-            assert hasattr(self, 'llvm')
-            return self.llvm
-        self.emitted = True
-
-        # TODO: HACK: instead of failing, let's make it a noop
-        # assert self.obj.type == int and self.type == float
-        if self.obj.type == self.type:
-            self.llvm = self.obj.llvm
-            return self.llvm
-
-        if isinstance(self.obj, Const):
-            value = float(self.obj.value)
-            self.llvm = self.obj.type.constant(value)
-        else:
-            self.llvm = builder.sitofp(self.obj.llvm, tp.Float.llvmType(), self.name)
-        return self.llvm
-
-    def __str__(self):
-        return self.name
-
-# TODO: move to module tp? }
-
 @utils.linkedlist
 class IR(metaclass=ABCMeta):
     args = None
@@ -242,7 +109,7 @@ class IR(metaclass=ABCMeta):
         self.args = []
 
     def addConst(self, arg):
-        self.addArg(wrapValue(arg))
+        self.addArg(tp.wrapValue(arg))
 
     def addArg(self, arg):
         self.args.append(arg)
@@ -262,7 +129,7 @@ class IR(metaclass=ABCMeta):
 
     def cast(self, module, builder):
         for arg in self.args:
-            if isinstance(arg, Cast):
+            if isinstance(arg, tp.Cast):
                 arg.translate(module, builder)
 
     @abstractmethod
@@ -589,7 +456,7 @@ class Callable(metaclass=ABCMeta):
             return
         argspec = inspect.getargspec(f)
         self.arg_names = argspec.args
-        self.arg_defaults = [Const(default) for default in argspec.defaults or []]
+        self.arg_defaults = [tp.Const(default) for default in argspec.defaults or []]
 
     def combineAndCheckArgs(self, args, kwargs):
         num_args = len(args)
@@ -686,7 +553,7 @@ class Function(Callable, Scope):
         for i in range(len(combined)):
             # TODO: I don't particularly like this isinstance check here but it seems the easiest
             #       way to also handle the initial entry function
-            if isinstance(combined[i], Typable):
+            if isinstance(combined[i], tp.Typable):
                 type_ = combined[i].type
             else:
                 type_ = tp.get(combined[i])
@@ -783,7 +650,7 @@ class Len(Intrinsic):
 
     def getResult(self, func):
         # we need the reference to back-patch
-        self.result = Const(0)
+        self.result = tp.Const(0)
         return self.result
 
     def call(self, module, builder, args, kw_args):
@@ -812,7 +679,7 @@ class Log(Intrinsic):
 
     def call(self, module, builder, args, kw_args):
         if args[0].type == tp.Int:
-            args[0] = Cast(args[0], tp.Float)
+            args[0] = tp.Cast(args[0], tp.Float)
             #args[0].translate(module, builder)  # done automatically now?
 
         llvm_f = llvm.core.Function.intrinsic(module, self.intr, [args[0].llvmType()])

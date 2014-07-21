@@ -11,7 +11,8 @@ from . import tp
 from . import exc
 from . import utils
 from . import ir
-from .ir import Register, StackLoc, Cast, GlobalVariable, Const
+from .ir import Register, StackLoc, GlobalVariable
+from .tp import Cast, Const
 
 
 def pop_stack(n):
@@ -762,7 +763,7 @@ class LOAD_ATTR(Bytecode):
     def type_eval(self, func):
         if isinstance(self.args[1], types.ModuleType):
             pass
-        elif (isinstance(self.args[1], ir.Typable)
+        elif (isinstance(self.args[1], tp.Typable)
               and isinstance(self.args[1].type, tp.StructType)):
             self.result.unify_type(self.args[1].type.getMemberType(self.args[0]), self.debuginfo)
         else:

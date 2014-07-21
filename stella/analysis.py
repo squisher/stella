@@ -1,10 +1,10 @@
 import dis
-
 import logging
 
 from . import exc
 from . import bytecode
 from . import ir
+from . import tp
 from . import utils
 
 
@@ -373,8 +373,8 @@ def main(f, args, kwargs):
 
     const_kw = {}
     for k, v in kwargs.items():
-        const_kw[k] = ir.Const(v)
-    impl.makeEntry(list(map(ir.wrapValue, args)), const_kw)
+        const_kw[k] = tp.Const(v)
+    impl.makeEntry(list(map(tp.wrapValue, args)), const_kw)
     module.addFunc(impl)
 
     f = Function.get(impl, module)
