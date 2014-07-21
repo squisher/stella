@@ -8,7 +8,7 @@ import logging
 
 def playground():
     my_module = Module.new('my_module')
-    tp_int = Type.int()   # by default 32 bits
+    tp_int = Type.int(64)   # By default 32bit, indices MUST be 64bit
     tp_func = Type.function(tp_int, [])
     f_sum = my_module.add_function(tp_func, "sum")
     bb = f_sum.append_basic_block("entry")
@@ -21,7 +21,7 @@ def playground():
     # Q: How to access members of a freshly stack allocated struct?
     tp_struct = Type.struct([tp_int, tp_int], name='test_struct')
     struct = builder.alloca(tp_struct)
-    print (repr(struct))
+    print (str(struct) + '; ' + repr(struct))
     p = builder.gep(struct, [Constant.int(tp_int, 0), Constant.int(tp_int, 0)])
     builder.store(tmp, p)
     tmp2 = builder.load(p)

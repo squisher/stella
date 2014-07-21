@@ -752,19 +752,19 @@ class LOAD_ATTR(Bytecode):
     def translate(self, module, builder):
         if isinstance(self.args[1], types.ModuleType):
             return
-        elif (isinstance(self.args[1], tp.Type)
-              and isinstanceself.args[1].type, tp.StructType):
+        elif isinstance(self.args[1].type, tp.StructType):
             struct_llvm = self.args[1].translate(module, builder)
             idx = self.args[1].type.getMemberIdx(self.args[0])
-            idx_llvm = tp.Int.constant(idx)
+            idx_llvm = tp.getIndex(idx)
             p = builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
             self.result.llvm = builder.load(p)
+        else:
+            raise UnimplementedError(type(self.args[1]))
 
     def type_eval(self, func):
         if isinstance(self.args[1], types.ModuleType):
             pass
-        elif (isinstance(self.args[1], tp.Typable)
-              and isinstance(self.args[1].type, tp.StructType)):
+        elif isinstance(self.args[1].type, tp.StructType):
             self.result.unify_type(self.args[1].type.getMemberType(self.args[0]), self.debuginfo)
         else:
             raise exc.UnimplementedError(
@@ -780,19 +780,32 @@ class STORE_ATTR(Bytecode):
 
     def addName(self, func, name):
         self.args.append(name)
+
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        self.result = None
+        self.result = Register(func)
 
     def type_eval(self, func):
-        pass
+        if isinstance(self.args[1].type, tp.StructType):
+            self.result.unify_type(self.args[1].type.getMemberType(self.args[0]), self.debuginfo)
+        else:
+            raise exc.UnimplementedError(
+                "Cannot store attribute {0} of an object with type {1}".format(
+                    self.args[0],
+                    type(self.args[1])))
 
     def translate(self, module, builder):
-        # for structs
-        # insert_element(self, vec_val, elt_val, idx_val, name='')¶
-        builder.insert_element(self.args[0].translate(module, builder),
-                               self.args[1].translate(module, builder),
-                               self.args[2].translate(module, builder))
+        if isinstance(self.args[1], types.ModuleType):
+            return
+        elif (isinstance(self.args[1], tp.Typable)
+              and isinstance(self.args[1].type, tp.StructType)):
+            struct_llvm = self.args[1].translate(module, builder)
+            idx = self.args[1].type.getMemberIdx(self.args[0])
+            idx_llvm = tp.getIndex(idx)
+            p = builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
+            self.result.llvm = builder.load(p)
+        else:
+            raise UnimplementedError(type(self.args[1]))
 
 
 class CALL_FUNCTION(Bytecode):

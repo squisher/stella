@@ -90,6 +90,12 @@ Bool = ScalarType(
     llvm.core.Constant.int
 )
 
+def getIndex(i):
+    if type(i) == int:
+        return llvm.core.Constant.int(tp_int32, i)
+    else:
+        raise UnimplementedError("Unsupported index type {}".format(type(i)))
+
 
 def invalid_none_use(msg):
     raise exc.StellaException(msg)
@@ -208,11 +214,10 @@ class StructType(Type):
         type_ = self.baseType()
         result_llvm = builder.alloca(type_)
         for name in self.attrib_names:
-            type_ = self.getMemberType(name)
-            idx_llvm = type_.constant(self.attrib_idx[name])
+            idx_llvm = getIndex(self.attrib_idx[name])
             wrapped = wrapValue(getattr(value, name))
             wrapped_llvm = wrapped.translate(module, builder)
-            p = builder.gep(result_llvm, [Int.constant(0), idx_llvm], inbounds=True)
+            p = builder.gep(result_llvm, [getIndex(0), idx_llvm], inbounds=True)
             builder.store(wrapped_llvm, p)
 
         return result_llvm
