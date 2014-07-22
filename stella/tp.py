@@ -39,7 +39,7 @@ NoType = Type()
 
 
 class ScalarType(Type):
-    def __init__(self, name, type_, llvm, f_generic_value, f_constant):
+    def __init__(self, name, type_, llvm, ctype, f_generic_value, f_constant):
         self.name = name
         self.type_ = type_
         self._llvm = llvm
@@ -61,6 +61,7 @@ class ScalarType(Type):
     def __repr__(self):
         return "<{0}:{1}>".format(str(type(self))[8:-2], self.name)
 
+
 tp_int = llvm.core.Type.int(64)
 tp_int32 = llvm.core.Type.int(32)  # needed for llvm operators
 # tp_float = llvm.core.Type.float() # Python always works with double precision
@@ -70,25 +71,25 @@ tp_void = llvm.core.Type.void()
 
 Int = ScalarType(
     "Int",
-    int, tp_int,
+    int, tp_int, ctypes.c_int64,
     llvm.ee.GenericValue.int_signed,
     llvm.core.Constant.int
 )
 uInt = ScalarType(  # TODO: unclear whether this is correct or not
     "uInt",
-    int, tp_int32,
+    int, tp_int32, ctypes.c_int32,
     llvm.ee.GenericValue.int,
     llvm.core.Constant.int
 )
 Float = ScalarType(
     "Float",
-    float, tp_double,
+    float, tp_double, ctypes.c_double,
     llvm.ee.GenericValue.real,
     llvm.core.Constant.real
 )
 Bool = ScalarType(
     "Bool",
-    bool, tp_bool,
+    bool, tp_bool, ctypes.c_bool,
     llvm.ee.GenericValue.int,
     llvm.core.Constant.int
 )
