@@ -74,17 +74,17 @@ class GlobalVariable(tp.Typable):
     def __repr__(self):
         return self.name
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         if self.llvm:
             return self.llvm
 
-        self.llvm = module.add_global_variable(self.llvmType(), self.name)
+        self.llvm = cge.module.llvm.add_global_variable(self.llvmType(), self.name)
         # TODO: this condition is too complicated and likely means that my
         # code is not working consistently with the attribute
         llvm_init = None
         if (hasattr(self.initial_value, 'llvm')
                 and self.initial_value is not None):
-            llvm_init = self.initial_value.translate(module, builder)
+            llvm_init = self.initial_value.translate(cge)
 
         if llvm_init == None:
             self.llvm.initializer = llvm.core.Constant.undef(self.initial_value.type.llvmType())
@@ -127,17 +127,17 @@ class IR(metaclass=ABCMeta):
         self.args = self.args[1:]
         return first
 
-    def cast(self, module, builder):
+    def cast(self, cge):
         for arg in self.args:
             if isinstance(arg, tp.Cast):
-                arg.translate(module, builder)
+                arg.translate(cge)
 
     @abstractmethod
     def stack_eval(self, func, stack):
         pass
 
     @abstractmethod
-    def translate(self, module, builder):
+    def translate(self, cge):
         pass
 
     @abstractmethod
@@ -205,10 +205,10 @@ class PhiNode(IR):
         for arg in self.args:
             self.result.unify_type(arg.type, self.debuginfo)
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         if len(self.args) == 0:
             return
-        phi = builder.phi(self.result.llvmType(), self.result.name)
+        phi = cge.builder.phi(self.result.llvmType(), self.result.name)
         for arg in self.args:
             phi.add_incoming(arg.llvm, arg.bc.block)
 
@@ -495,10 +495,10 @@ class Callable(metaclass=ABCMeta):
 
         return r
 
-    def call(self, module, builder, args, kw_args):
+    def call(self, cge, args, kw_args):
         args = self.combineAndCheckArgs(args, kw_args)
 
-        return builder.call(self.llvm, [arg.translate(module, builder) for arg in args])
+        return cge.builder.call(self.llvm, [arg.translate(cge) for arg in args])
 
 
 class Function(Callable, Scope):
@@ -612,7 +612,7 @@ class Intrinsic(Foreign, Callable):
     py_func = None
 
     @abstractmethod
-    def call(self, module, builder, args, kw_args):
+    def call(self, cge, args, kw_args):
         """args and kw_args are already added by a call through addArgs()"""
         pass
 
@@ -631,9 +631,9 @@ class Zeros(Intrinsic):
             raise exc.TypingError("Invalid array element type {0}".format(type_))
         return tp.ArrayType(type_, shape)
 
-    def call(self, module, builder, args, kw_args):
+    def call(self, cge, args, kw_args):
         type_ = self.getReturnType(args, kw_args).llvmType()
-        return builder.alloca(type_)
+        return cge.builder.alloca(type_)
 
 
 class Len(Intrinsic):
@@ -653,12 +653,12 @@ class Len(Intrinsic):
         self.result = tp.Const(0)
         return self.result
 
-    def call(self, module, builder, args, kw_args):
+    def call(self, cge, args, kw_args):
         obj = args[0]
         if not isinstance(obj.type, tp.ArrayType):
             raise exc.TypingError("Invalid array type {0}".format(self.obj.type))
         self.result.value = obj.type.shape
-        self.result.translate(module, builder)
+        self.result.translate(cge)
         return self.result.llvm
 
 
@@ -677,13 +677,13 @@ class Log(Intrinsic):
     def getReturnType(self, args, kw_args):
         return tp.Float
 
-    def call(self, module, builder, args, kw_args):
+    def call(self, cge, args, kw_args):
         if args[0].type == tp.Int:
             args[0] = tp.Cast(args[0], tp.Float)
-            #args[0].translate(module, builder)  # done automatically now?
+            #args[0].translate(cge)  # done automatically now?
 
-        llvm_f = llvm.core.Function.intrinsic(module, self.intr, [args[0].llvmType()])
-        result = builder.call(llvm_f, [args[0].translate(module, builder)])
+        llvm_f = llvm.core.Function.intrinsic(cge.module.llvm, self.intr, [args[0].llvmType()])
+        result = cge.builder.call(llvm_f, [args[0].translate(cge)])
         return result
 
     def getResult(self, func):
@@ -791,7 +791,7 @@ class ExtFunction(Foreign, Callable):
         func_tp = llvm.core.Type.function(self.return_type.llvmType(), llvm_arg_types)
         self.llvm = module.add_function(func_tp, self.name)
 
-    def call(self, module, builder, args, kw_args):
+    def call(self, cge, args, kw_args):
         args = self.combineAndCheckArgs(args, kw_args)
 
         args_llvm = []
@@ -799,10 +799,10 @@ class ExtFunction(Foreign, Callable):
             if arg.type != arg_type:
                 # TODO: trunc is not valid for all type combinations.
                 # Needs to be generalized.
-                llvm = builder.trunc(arg.translate(module, builder), arg_type.llvmType(), '({0}){1}'.format(
+                llvm = cge.builder.trunc(arg.translate(cge), arg_type.llvmType(), '({0}){1}'.format(
                     arg_type, arg.name))
             else:
                 llvm = arg.llvm
             args_llvm.append(llvm)
 
-        return builder.call(self.llvm, args_llvm)
+        return cge.builder.call(self.llvm, args_llvm)

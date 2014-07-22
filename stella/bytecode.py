@@ -51,7 +51,7 @@ class Poison(object):
             "{0} must be rewritten".format(
                 self.__class__.__name__))
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         raise exc.UnimplementedError(
             "{0} must be rewritten".format(
                 self.__class__.__name__))
@@ -96,10 +96,10 @@ class LOAD_FAST(Bytecode):
     def type_eval(self, func):
         self.result.type = self.args[0].type
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         type_ = type(self.args[0])
         if type_ == StackLoc:
-            self.result.llvm = builder.load(self.args[0].translate(module, builder))
+            self.result.llvm = cge.builder.load(self.args[0].translate(cge))
         elif type_ == Register:
             # nothing to load, it's a pseudo instruction in this case
             pass
@@ -131,15 +131,15 @@ class STORE_FAST(Bytecode):
             if self.result.type != arg.type:
                 self.args[0] = Cast(arg, self.result.type)
 
-    def translate(self, module, builder):
-        self.cast(module, builder)
+    def translate(self, cge):
+        self.cast(cge)
         if self.new_allocate:
             type_ = self.args[0].llvmType()
             # TODO: is this the right place to make it a pointer?
             if isinstance(self.args[0].type, tp.ArrayType):
                 type_ = llvm.core.Type.pointer(type_)
-            self.result.llvm = builder.alloca(type_, name=self.result.name)
-        builder.store(self.args[0].translate(module, builder), self.result.translate(module, builder))
+            self.result.llvm = cge.builder.alloca(type_, name=self.result.name)
+        cge.builder.store(self.args[0].translate(cge), self.result.translate(cge))
 
 
 class STORE_GLOBAL(Bytecode):
@@ -175,10 +175,10 @@ class STORE_GLOBAL(Bytecode):
             if self.result.type != arg.type:
                 self.args[0] = Cast(arg, self.result.type)
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         # Assume that the global has been allocated already.
-        self.cast(module, builder)
-        builder.store(self.args[0].translate(module, builder), self.result.translate(module, builder))
+        self.cast(cge)
+        cge.builder.store(self.args[0].translate(cge), self.result.translate(cge))
 
 
 class LOAD_CONST(Bytecode):
@@ -195,7 +195,7 @@ class LOAD_CONST(Bytecode):
     def type_eval(self, func):
         pass
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         pass
 
 
@@ -228,12 +228,12 @@ class BinaryOp(Bytecode):
                     self.__class__.__name__,
                     self.result.type))
 
-    def translate(self, module, builder):
-        self.cast(module, builder)
-        f = getattr(builder, self.builderFuncName())
+    def translate(self, cge):
+        self.cast(cge)
+        f = getattr(cge.builder, self.builderFuncName())
         self.result.llvm = f(
-            self.args[0].translate(module, builder),
-            self.args[1].translate(module, builder),
+            self.args[0].translate(cge),
+            self.args[1].translate(cge),
             self.result.name)
 
     @abstractproperty
@@ -272,17 +272,17 @@ class BINARY_POWER(BinaryOp):
         # TODO if args[1] is int but negative, then the result will be float, too!
         super().type_eval(func)
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         # llvm.pow[i]'s first argument always has to be float
         if self.args[0].type == tp.Int:
             self.args[0] = Cast(self.args[0], tp.Float)
 
-        self.cast(module, builder)
+        self.cast(cge)
 
         if self.args[1].type == tp.Int:
             # powi takes a i32 argument
-            power = builder.trunc(
-                self.args[1].translate(module, builder),
+            power = cge.builder.trunc(
+                self.args[1].translate(cge),
                 tp.tp_int32,
                 '(i32)' +
                 self.args[1].name)
@@ -290,15 +290,15 @@ class BINARY_POWER(BinaryOp):
             power = self.args[1].llvm
 
         llvm_pow = llvm.core.Function.intrinsic(
-            module, self.b_func[
+           cge.module.llvm, self.b_func[
                 self.args[1].type], [
                 self.args[0].llvmType()])
-        pow_result = builder.call(llvm_pow, [self.args[0].translate(module, builder), power])
+        pow_result =cge.builder.call(llvm_pow, [self.args[0].translate(cge), power])
 
         if isinstance(self.args[0], Cast) and \
                 self.args[0].obj.type == tp.Int and self.args[1].type == tp.Int:
             # cast back to an integer
-            self.result.llvm = builder.fptosi(pow_result, tp.Int.llvmType())
+            self.result.llvm =cge.builder.fptosi(pow_result, tp.Int.llvmType())
         else:
             self.result.llvm = pow_result
 
@@ -332,24 +332,24 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
                 self.args[i] = Cast(arg, tp.Float)
                 func.retype()
 
-    def translate(self, module, builder):
-        self.cast(module, builder)
+    def translate(self, cge):
+        self.cast(cge)
 
-        tmp = builder.fdiv(
-            self.args[0].translate(module, builder),
-            self.args[1].translate(module, builder),
+        tmp =cge.builder.fdiv(
+            self.args[0].translate(cge),
+            self.args[1].translate(cge),
             self.result.name)
         llvm_floor = llvm.core.Function.intrinsic(
-            module, llvm.core.INTR_FLOOR, [
+           cge.module.llvm, llvm.core.INTR_FLOOR, [
                 tp.Float.llvmType()])
-        self.result.llvm = builder.call(llvm_floor, [tmp])
+        self.result.llvm =cge.builder.call(llvm_floor, [tmp])
 
         if all([isinstance(a, Cast) and a.obj.type == tp.Int for a in self.args]):
             # TODO this may be superflous if both args got converted to float
             # in the translation stage -> move toFloat partially to the
             # analysis stage.
-            self.result.llvm = builder.fptosi(
-                self.result.translate(module, builder),
+            self.result.llvm =cge.builder.fptosi(
+                self.result.translate(cge),
                 tp.Int.llvmType(),
                 "(int)" +
                 self.result.name)
@@ -379,9 +379,9 @@ class BINARY_TRUE_DIVIDE(BinaryOp):
 #            self.result = self.args[0]
 #        stack.push(self.result)
 #
-#    def translate(self, module, builder):
-#        self.floatArg(builder)
-#        f = getattr(builder, self.builderFuncName())
+#    def translate(self, cge):
+#        self.floatArg(cge.builder)
+#        f = getattr(cge.builder, self.builderFuncName())
 #        self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
 
 # Inplace operators don't have a semantic difference when used on
@@ -452,18 +452,18 @@ class COMPARE_OP(Bytecode):
                     self.args[0].type,
                     self.args[1].type))
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         # assume both types are the same, see @stack_eval
         type_ = self.args[0].type
         if not self.args[0].type in self.b_func:
             raise exc.UnimplementedError(type_)
 
-        f = getattr(builder, self.b_func[type_])
+        f = getattr(cge.builder, self.b_func[type_])
         m = getattr(self,    self.b_func[type_])
 
         self.result.llvm = f(m[self.op],
-                             self.args[0].translate(module, builder),
-                             self.args[1].translate(module, builder),
+                             self.args[0].translate(cge),
+                             self.args[1].translate(cge),
                              self.result.name)
 
 
@@ -480,13 +480,13 @@ class RETURN_VALUE(utils.BlockTerminal, Bytecode):
         for arg in self.args:
             func.retype(self.result.unify_type(arg.type, self.debuginfo))
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         if self.result.type == tp.Void:
             # return None == void, do not generate a ret instruction as that is
             # invalid
-            builder.ret_void()
+           cge.builder.ret_void()
         else:
-            builder.ret(self.result.translate(module, builder))
+           cge.builder.ret(self.result.translate(cge))
 
 
 class HasTarget(object):
@@ -526,8 +526,8 @@ class Jump(utils.BlockTerminal, HasTarget, ir.IR):
     def type_eval(self, func):
         pass
 
-    def translate(self, module, builder):
-        builder.branch(self.target_bc.block)
+    def translate(self, cge):
+       cge.builder.branch(self.target_bc.block)
 
 
 class Jump_if_X_or_pop(Jump):
@@ -570,9 +570,9 @@ class JUMP_IF_FALSE_OR_POP(Jump_if_X_or_pop, Bytecode):
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
-    def translate(self, module, builder):
-        builder.cbranch(
-            self.args[0].translate(module, builder),
+    def translate(self, cge):
+       cge.builder.cbranch(
+            self.args[0].translate(cge),
             self.next.block,
             self.target_bc.block)
 
@@ -582,9 +582,9 @@ class JUMP_IF_TRUE_OR_POP(Jump_if_X_or_pop, Bytecode):
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
-    def translate(self, module, builder):
-        builder.cbranch(
-            self.args[0].translate(module, builder),
+    def translate(self, cge):
+       cge.builder.cbranch(
+            self.args[0].translate(cge),
             self.target_bc.block,
             self.next.block)
 
@@ -635,9 +635,9 @@ class POP_JUMP_IF_FALSE(Pop_jump_if_X, Bytecode):
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
-    def translate(self, module, builder):
-        builder.cbranch(
-            self.args[0].translate(module, builder),
+    def translate(self, cge):
+       cge.builder.cbranch(
+            self.args[0].translate(cge),
             self.next.block,
             self.target_bc.block)
 
@@ -647,9 +647,9 @@ class POP_JUMP_IF_TRUE(Pop_jump_if_X, Bytecode):
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
-    def translate(self, module, builder):
-        builder.cbranch(
-            self.args[0].translate(module, builder),
+    def translate(self, cge):
+       cge.builder.cbranch(
+            self.args[0].translate(cge),
             self.target_bc.block,
             self.next.block)
 
@@ -667,7 +667,7 @@ class SETUP_LOOP(utils.BlockStart, HasTarget, Bytecode):
     def stack_eval(self, func, stack):
         pass
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         pass
 
     def type_eval(self, func):
@@ -683,7 +683,7 @@ class POP_BLOCK(utils.BlockEnd, Bytecode):
     def stack_eval(self, func, stack):
         pass
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         pass
 
     def type_eval(self, func):
@@ -720,11 +720,11 @@ class LOAD_GLOBAL(Bytecode):
                         self.result)))
         stack.push(self.result)
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         if isinstance(self.var, ir.Function):
             pass
         elif isinstance(self.var, GlobalVariable):
-            self.result.llvm = builder.load(self.var.translate(module, builder))
+            self.result.llvm =cge.builder.load(self.var.translate(cge))
 
     def type_eval(self, func):
         if isinstance(self.var, GlobalVariable):
@@ -749,15 +749,15 @@ class LOAD_ATTR(Bytecode):
             self.result = Register(func)
         stack.push(self.result)
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         if isinstance(self.args[1], types.ModuleType):
             return
         elif isinstance(self.args[1].type, tp.StructType):
-            struct_llvm = self.args[1].translate(module, builder)
+            struct_llvm = self.args[1].translate(cge)
             idx = self.args[1].type.getMemberIdx(self.args[0])
             idx_llvm = tp.getIndex(idx)
-            p = builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
-            self.result.llvm = builder.load(p)
+            p =cge.builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
+            self.result.llvm =cge.builder.load(p)
         else:
             raise UnimplementedError(type(self.args[1]))
 
@@ -794,16 +794,16 @@ class STORE_ATTR(Bytecode):
                     self.args[0],
                     type(self.args[1])))
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         if isinstance(self.args[1], types.ModuleType):
             return
         elif (isinstance(self.args[1], tp.Typable)
               and isinstance(self.args[1].type, tp.StructType)):
-            struct_llvm = self.args[1].translate(module, builder)
+            struct_llvm = self.args[1].translate(cge)
             idx = self.args[1].type.getMemberIdx(self.args[0])
             idx_llvm = tp.getIndex(idx)
-            p = builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
-            self.result.llvm = builder.store(self.args[2].translate(module, builder), p)
+            p =cge.builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
+            self.result.llvm =cge.builder.store(self.args[2].translate(cge), p)
         else:
             raise UnimplementedError(type(self.args[1]))
 
@@ -859,10 +859,9 @@ class CALL_FUNCTION(Bytecode):
         else:
             func.retype(tp_change)
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         self.result.llvm = self.func.call(
-            module,
-            builder,
+            cge,
             self.args,
             self.kw_args)
 
@@ -1153,7 +1152,7 @@ class ForLoop(ir.IR):
         # stack.push(self.result)
         pass
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         pass
 
     def type_eval(self, func):
@@ -1173,13 +1172,13 @@ class STORE_SUBSCR(Bytecode):
     def type_eval(self, func):
         pass
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         # for structs
         # insert_element(self, vec_val, elt_val, idx_val, name='')¶
-        p = builder.gep(
-            self.args[1].translate(module, builder), [
-                tp.Int.constant(0), self.args[2].translate(module, builder)], inbounds=True)
-        builder.store(self.args[0].translate(module, builder), p)
+        p = cge.builder.gep(
+            self.args[1].translate(cge), [
+                tp.Int.constant(0), self.args[2].translate(cge)], inbounds=True)
+        cge.builder.store(self.args[0].translate(cge), p)
 
 
 class BINARY_SUBSCR(Bytecode):
@@ -1201,11 +1200,11 @@ class BINARY_SUBSCR(Bytecode):
             self.args[0].type.getElementType(),
             self.debuginfo)
 
-    def translate(self, module, builder):
-        p = builder.gep(
-            self.args[0].translate(module, builder), [
-                tp.Int.constant(0), self.args[1].translate(module, builder)], inbounds=True)
-        self.result.llvm = builder.load(p)
+    def translate(self, cge):
+        p = cge.builder.gep(
+            self.args[0].translate(cge), [
+                tp.Int.constant(0), self.args[1].translate(cge)], inbounds=True)
+        self.result.llvm = cge.builder.load(p)
 
 
 class POP_TOP(Bytecode):
@@ -1221,7 +1220,7 @@ class POP_TOP(Bytecode):
     def type_eval(self, func):
         pass
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         pass
 
 
@@ -1239,7 +1238,7 @@ class DUP_TOP(Bytecode):
     def type_eval(self, func):
         pass
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         pass
 
 
@@ -1259,7 +1258,7 @@ class DUP_TOP_TWO(Bytecode):
     def type_eval(self, func):
         pass
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         pass
 
 
@@ -1277,7 +1276,7 @@ class ROT_TWO(Bytecode, Poison):
     def type_eval(self, func):
         pass
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         pass
 
 
@@ -1296,7 +1295,7 @@ class ROT_THREE(Bytecode, Poison):
     def type_eval(self, func):
         pass
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         pass
 
 
@@ -1324,12 +1323,12 @@ class UNARY_NEGATIVE(Bytecode):
                     self.__class__.__name__,
                     self.result.type))
 
-    def translate(self, module, builder):
-        self.cast(module, builder)
-        f = getattr(builder, self.builderFuncName())
+    def translate(self, cge):
+        self.cast(cge)
+        f = getattr(cge.builder, self.builderFuncName())
         self.result.llvm = f(
             self.result.type.constant(0),
-            self.args[0].translate(module, builder),
+            self.args[0].translate(cge),
             self.result.name)
 
 opconst = {}

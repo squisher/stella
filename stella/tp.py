@@ -32,8 +32,6 @@ class Type(object):
         raise exc.TypingError(
             "Cannot create llvm type for an unknown type. This should have been cought earlier.")
 
-    def copy2Python(self, module, builder):
-        pass
 
 NoType = Type()
 
@@ -52,7 +50,7 @@ class ScalarType(Type):
     def genericValue(self, value):
         return self.f_generic_value(self._llvm, value)
 
-    def constant(self, value, module = None, builder = None):
+    def constant(self, value, cge = None):
         return self.f_constant(self._llvm, value)
 
     def __str__(self):
@@ -105,14 +103,14 @@ def invalid_none_use(msg):
     raise exc.StellaException(msg)
 None_ = ScalarType(
     "NONE",
-    type(None), tp_void,
+    type(None), tp_void, ctypes.c_void_p,
     lambda t, v: invalid_none_use("Can't create a generic value ({0},{1}) for void".format(t, v)),
     lambda t, v: None  # Constant, needed for constructing `RETURN None'
 )
 Void = None_  # TODO: Could there be differences later?
 Str = ScalarType(
     "Str",
-    str, None,
+    str, None, ctypes.c_char_p,
     lambda t, v: None,
     lambda t, v: None
 )
@@ -212,15 +210,15 @@ class StructType(Type):
         type_ = llvm.core.Type.pointer(self.baseType())
         return type_
 
-    def constant(self, value, module, builder):
+    def constant(self, value, cge):
         type_ = self.baseType()
-        result_llvm = builder.alloca(type_)
+        result_llvm = cge.builder.alloca(type_)
         for name in self.attrib_names:
             idx_llvm = getIndex(self.attrib_idx[name])
             wrapped = wrapValue(getattr(value, name))
-            wrapped_llvm = wrapped.translate(module, builder)
-            p = builder.gep(result_llvm, [getIndex(0), idx_llvm], inbounds=True)
-            builder.store(wrapped_llvm, p)
+            wrapped_llvm = wrapped.translate(cge)
+            p = cge.builder.gep(result_llvm, [getIndex(0), idx_llvm], inbounds=True)
+            cge.builder.store(wrapped_llvm, p)
 
         return result_llvm
 
@@ -347,8 +345,11 @@ class Typable(object):
         """Map from Python types to LLVM types."""
         return self.type.llvmType()
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         return self.llvm
+
+    def copy2Python(self, cge):
+        pass
 
 
 class Const(Typable):
@@ -368,8 +369,8 @@ class Const(Typable):
         r = super().unify_type(tp2, debuginfo)
         return r
 
-    def translate(self, module, builder):
-        self.llvm = self.type.constant(self.value, module, builder)
+    def translate(self, cge):
+        self.llvm = self.type.constant(self.value, cge)
         return self.llvm
 
     def __str__(self):
@@ -410,20 +411,10 @@ class Struct(Const):
     def __repr__(self):
         return str(self)
 
-    def copy2Python(self, module, builder):
+    def copy2Python(self, cge):
         for name in self.type.attrib_names:
-            idx_llvm = getIndex(self.type.attrib_idx[name])
-            p_src = builder.gep(self.llvm, [Int.constant(0), idx_llvm], inbounds=True)
+            ptrtoint = cge.builder.ptrtoint(self.llvm, tp_int)
 
-            tmp = builder.load(p_src)
-
-            p_dst_int = Int.constant(id(getattr(self.value, name)))
-            #type_ = llvm.core.Type.pointer(self.type.attrib_type[name].llvmType())
-            type_ = llvm.core.Type.pointer(self.type.attrib_type[name].llvmType())
-            base_llvm = llvm.core.Constant.inttoptr(p_dst_int, type_)
-            #p_dst = builder.gep(base_llvm, [getIndex(0)], inbounds=True)
-            #builder.store(tmp, p_dst)
-            builder.store(tmp, base_llvm)
 
 
 def wrapValue(value):
@@ -446,7 +437,7 @@ class Cast(Typable):
         logging.debug("Casting {0} to {1}".format(self.obj.name, self.type))
         self.name = "({0}){1}".format(self.type, self.obj.name)
 
-    def translate(self, module, builder):
+    def translate(self, cge):
         if self.emitted:
             assert hasattr(self, 'llvm')
             return self.llvm
@@ -462,7 +453,7 @@ class Cast(Typable):
             value = float(self.obj.value)
             self.llvm = self.obj.type.constant(value)
         else:
-            self.llvm = builder.sitofp(self.obj.llvm, Float.llvmType(), self.name)
+            self.llvm = cge.builder.sitofp(self.obj.llvm, Float.llvmType(), self.name)
         return self.llvm
 
     def __str__(self):

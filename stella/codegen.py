@@ -12,11 +12,18 @@ from . import tp
 from . import utils
 from . import ir
 
+class CGEnv(object):
+    module = None
+    builder = None
+
 
 class Program(object):
     def __init__(self, module):
         self.module = module
         self.module.translate()
+
+        self.cge = CGEnv()
+        self.cge.module = module
 
         self.llvm = self.makeStub()
 
@@ -52,12 +59,13 @@ class Program(object):
 
         impl.log.debug("Emitting code:")
         bb = None
+        cge = self.cge
         for bc in impl.bytecodes:
             if bb != bc.block:
                 # new basic block, use a new builder
-                builder = llvm.core.Builder.new(bc.block)
+                cge.builder = llvm.core.Builder.new(bc.block)
 
-            bc.translate(self.module.llvm, builder)
+            bc.translate(cge)
             impl.log.debug("TRANS'D {0}".format(bc))
             # Note: the `and not' part is a basic form of dead code elimination
             #       This is used to drop unreachable "return None" which are implicitly added
@@ -78,14 +86,14 @@ class Program(object):
         builder = llvm.core.Builder.new(bb)
 
         for name, var in self.module.namestore.all(ir.GlobalVariable):
-            var.translate(self.module.llvm, builder)
+            var.translate(self.cge)
 
-        args = [arg.translate(self.module.llvm, builder) for arg in self.module.entry_args]
+        args = [arg.translate(self.cge) for arg in self.module.entry_args]
 
         call = builder.call(impl.llvm, args)
 
         for arg in self.module.entry_args:
-            arg.copy2Python(self.module, builder)  # may be a no-op if not necessary
+            arg.copy2Python(self.cge)  # may be a no-op if not necessary
 
         if impl.result.type is tp.Void:
             builder.ret_void()
