@@ -84,6 +84,7 @@ class Program(object):
         func = self.module.llvm.add_function(func_tp, str(impl)+'__stub__')
         bb = func.append_basic_block("entry")
         builder = llvm.core.Builder.new(bb)
+        self.cge.builder = builder
 
         for name, var in self.module.namestore.all(ir.GlobalVariable):
             var.translate(self.cge)
