@@ -40,6 +40,7 @@ class ScalarType(Type):
     def __init__(self, name, type_, llvm, ctype, f_generic_value, f_constant):
         self.name = name
         self.type_ = type_
+        self.ctype = ctype
         self._llvm = llvm
         self.f_generic_value = f_generic_value
         self.f_constant = f_constant
@@ -210,17 +211,26 @@ class StructType(Type):
         type_ = llvm.core.Type.pointer(self.baseType())
         return type_
 
+    def ctypes(self):
+        fields = []
+        for name in self.attrib_names:
+            fields.append((name, self.attrib_type[name].ctype))
+        ctype = type("_" + self.name + "_transfer", (ctypes.Structure, ), {'_fields_': fields})
+        return ctype
+
     def constant(self, value, cge):
         type_ = self.baseType()
-        result_llvm = cge.builder.alloca(type_)
-        for name in self.attrib_names:
-            idx_llvm = getIndex(self.attrib_idx[name])
-            wrapped = wrapValue(getattr(value, name))
-            wrapped_llvm = wrapped.translate(cge)
-            p = cge.builder.gep(result_llvm, [getIndex(0), idx_llvm], inbounds=True)
-            cge.builder.store(wrapped_llvm, p)
 
-        return result_llvm
+        ctype = self.ctypes()
+        transfer_value = ctype()
+
+        for name in self.attrib_names:
+            setattr(transfer_value, name, getattr(value, name))
+
+        addr_llvm = Int.constant(int(ctypes.addressof(transfer_value)))
+        result_llvm = cge.builder.inttoptr(addr_llvm,
+                                           self.llvmType())
+        return (result_llvm, transfer_value)
 
 
     def __str__(self):
@@ -370,7 +380,10 @@ class Const(Typable):
         return r
 
     def translate(self, cge):
-        self.llvm = self.type.constant(self.value, cge)
+        if self.type.on_heap:
+            (self.llvm, self.transfer_value) = self.type.constant(self.value, cge)
+        else:
+            self.llvm = self.type.constant(self.value, cge)
         return self.llvm
 
     def __str__(self):
@@ -413,8 +426,8 @@ class Struct(Const):
 
     def copy2Python(self, cge):
         for name in self.type.attrib_names:
-            ptrtoint = cge.builder.ptrtoint(self.llvm, tp_int)
-
+            setattr(self.value, name, getattr(self.transfer_value, name))
+        del self.transfer_value
 
 
 def wrapValue(value):

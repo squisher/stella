@@ -8,7 +8,7 @@ import logging
 import ctypes
 import cffi
 
-def playground():
+def playground(point):
     my_module = Module.new('my_module')
     tp_int = Type.int(64)
     tp_idx = Type.int()
@@ -18,28 +18,31 @@ def playground():
     f_sum = my_module.add_function(tp_func, "sum")
     bb = f_sum.append_basic_block("entry")
     builder = Builder.new(bb)
-    tmp = builder.add(Constant.int(tp_int, 42),
-                      Constant.int(tp_int, 0),
-                      "tmp")
 
+    addr = ctypes.addressof(point)
+    addr_llvm = Constant.int(tp_int, int(addr))
+    struct = builder.inttoptr(addr_llvm, Type.pointer(tp_struct))
+    #print(str(struct))
 
-    #struct = builder.alloca(tp_struct)
-    struct = builder.malloc(tp_struct)
-    p = builder.gep(struct, [Constant.int(tp_idx, 0), Constant.int(tp_idx, 0)])
-    builder.store(tmp, p)
-    p = builder.gep(struct, [Constant.int(tp_idx, 0), Constant.int(tp_idx, 1)])
-    builder.store(Constant.int(tp_int, 43), p)
-    p = builder.gep(struct, [Constant.int(tp_idx, 0), Constant.int(tp_idx, 2)])
-    builder.store(Constant.int(tp_int, 44), p)
-    p = builder.gep(struct, [Constant.int(tp_idx, 0), Constant.int(tp_idx, 3)])
-    builder.store(Constant.int(tp_int, 45), p)
-    tmp2 = builder.ptrtoint(struct, tp_int)
+    ione = Constant.int(tp_idx, 1)
+    izero = Constant.int(tp_idx, 0)
+    one = Constant.int(tp_int, 1)
+
+    p = builder.gep(struct, [izero, izero])
+    tmp = builder.load(p)
+    res = builder.add(tmp, one)
+    builder.store(res, p)
+
+    p = builder.gep(struct, [izero, ione])
+    tmp = builder.load(p)
+    res = builder.add(tmp, one)
+    builder.store(res, p)
 
     #p = builder.gep(struct, [Constant.int(tp_idx, 0), Constant.int(tp_idx, 0)])
     #tmp3 = builder.load(p)
 
     #builder.ret(struct)
-    builder.ret(tmp2)
+    builder.ret(res)
     #builder.ret(tmp3)
 
     print(str(my_module))
@@ -61,20 +64,10 @@ class Point(ctypes.Structure):
     ]
 
 if __name__ == '__main__':
-    p = playground()
+    point = Point(1,2,3,4)
+    p = playground(point)
     print("Returned: " + str(p))
-    #cast_p = ctypes.cast(p, ctypes.POINTER(ctypes.c_long))
+    print(point, point.x, point.y, point.z, point.r)
 
-    ffi = cffi.FFI()
-    ffi.cdef("""typedef struct {
-        int64_t x;
-        int64_t y;
-        int64_t z;
-        int64_t r;
-    } sFoo;""")
-    x = ffi.cast("sFoo *", p)
-    print("cffi:", x, x.x, x.y, x.z, x.r)
-
-    cast_p = ctypes.cast(p, ctypes.POINTER(Point))
-    #import pdb; pdb.set_trace()
-    print("ctypes:", cast_p[0], cast_p[0].x, cast_p[0].y, cast_p[0].z, cast_p[0].r)
+    #cast_p = ctypes.cast(p, ctypes.POINTER(Point))
+    #print("ctypes:", cast_p[0], cast_p[0].x, cast_p[0].y, cast_p[0].z, cast_p[0].r)

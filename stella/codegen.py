@@ -93,9 +93,6 @@ class Program(object):
 
         call = builder.call(impl.llvm, args)
 
-        for arg in self.module.entry_args:
-            arg.copy2Python(self.cge)  # may be a no-op if not necessary
-
         if impl.result.type is tp.Void:
             builder.ret_void()
         else:
@@ -161,6 +158,9 @@ class Program(object):
         time_start = time.time()
         retval = ee.run_function(self.llvm, [])
         stats['elapsed'] = time.time() - time_start
+
+        for arg in self.module.entry_args:
+            arg.copy2Python(self.cge)  # may be a no-op if not necessary
 
         logging.debug("Returning...")
         self.module.destruct()

@@ -35,7 +35,7 @@ def addAttribs(a):
     return a.x + a.y
 
 
-@mark.parametrize('f', [justPassing])
+@mark.parametrize('f', [justPassing, setAttrib])
 def test1(f):
     b1 = B()
     b2 = B()
@@ -47,7 +47,7 @@ def test1(f):
     assert b1 == b2 and py == st
 
 
-@mark.parametrize('f', [addAttribs, setAttrib])
+@mark.parametrize('f', [addAttribs])
 @unimplemented
 def test1u(f):
     b1 = B()
