@@ -90,7 +90,7 @@ def test_modulo(args):
 
 
 @mark.parametrize('args', filter(lambda e: e[0] < 0, arglist2))
-@mark.xfail()
+@mark.xfail(raises=AssertionError)
 def test_semantics_modulo(args):
     """Semantic difference:
     Modulo always has the sign of the divisor in Python, unlike C where it is
@@ -108,7 +108,7 @@ def test3(f, args):
 
 
 @mark.parametrize('args', [(4, -2)])
-@mark.xfail()
+@mark.xfail(raises=AssertionError)
 def test_semantics_power(args):
     """Semantic difference:
     4**2 returns an integer, but 4**-2 returns a float.
