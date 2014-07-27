@@ -793,7 +793,14 @@ class STORE_ATTR(Bytecode):
 
     def type_eval(self, func):
         if isinstance(self.args[2].type, tp.StructType):
-            self.result.unify_type(self.args[2].type.getMemberType(self.args[0]), self.debuginfo)
+            member_type = self.args[2].type.getMemberType(self.args[0])
+            arg_type = self.args[1].type
+            if member_type != arg_type:
+                if member_type == tp.Float and arg_type == tp.Int:
+                    self.args[1] = tp.Cast(self.args[1], tp.Float)
+                    return
+                raise TypingError("Argument type {} incompatible with member type {}".format(
+                    arg_type, member_type))
         else:
             raise exc.UnimplementedError(
                 "Cannot store attribute {0} of an object with type {1}".format(
@@ -806,8 +813,9 @@ class STORE_ATTR(Bytecode):
             struct_llvm = self.args[2].translate(cge)
             idx = self.args[2].type.getMemberIdx(self.args[0])
             idx_llvm = tp.getIndex(idx)
-            p =cge.builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
-            self.result.llvm =cge.builder.store(self.args[1].translate(cge), p)
+            val_llvm = self.args[1].translate(cge)
+            p = cge.builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
+            self.result.llvm = cge.builder.store(val_llvm, p)
         else:
             raise UnimplementedError(type(self.args[2]))
 

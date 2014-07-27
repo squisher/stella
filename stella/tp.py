@@ -465,7 +465,7 @@ class Cast(Typable):
 
         if isinstance(self.obj, Const):
             value = float(self.obj.value)
-            self.llvm = self.obj.type.constant(value)
+            self.llvm = self.type.constant(value)
         else:
             self.llvm = cge.builder.sitofp(self.obj.llvm, Float.llvmType(), self.name)
         return self.llvm

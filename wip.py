@@ -14,6 +14,6 @@ b2 = test.struct.B(0.0, 1.0)
 
 def current_work(run=False):
     print(b)
-    print(stella.wrap(test.struct.setAttrib, ir=not run)(b))
+    print(stella.wrap(test.struct.setAttrib, ir=not run)(b2))
     if run:
         print(b)
