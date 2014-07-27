@@ -104,30 +104,35 @@ int main(int argc, char ** argv) {
     return bench_it('fib', fib_c, args, stella_f=fib_harness)
 
 
-def bench_si1l1s():
-    import test.si1l1s
+def bench_si1l1s(module, suffix):
     args = [('seed_init', 'seed=42'),
             ('rununtiltime_init', 'rununtiltime=1e9')]
-    name = 'si1l1s'
-    fn = "{}/template.{}.{}.c".format(os.path.dirname(__file__), os.path.basename(__file__), name)
+    name = 'si1l1s_' + suffix
+    fn = "{}/template.{}.{}.c".format(os.path.dirname(__file__),
+                                      os.path.basename(__file__),
+                                      name)
     with open(fn) as f:
         src = f.read()
 
     def run_si1l1s(args, stats):
         params = [v for k, v in args]
-        s = test.si1l1s.Settings(params)
-        test.si1l1s.prepare(s)
+        s = module.Settings(params)
+        module.prepare(s)
 
         time_start = time()
-        stella.wrap(test.si1l1s.run, debug=False, opt=opt, stats=stats)()
+        stella.wrap(module.run, debug=False, opt=opt, stats=stats)()
         elapsed_stella = time() - time_start
-        print(test.si1l1s.observations)
+        print(module.observations)
 
         return elapsed_stella
 
     return bench_it(name, src, args, flags=['-lm'], full_f=run_si1l1s)
 
+def bench_si1l1s_globals():
+    import test.si1l1s_globals
+    return bench_si1l1s(test.si1l1s_globals, 'globals')
+
 if __name__ == '__main__':
     print_it(bench_fib)
     print('----------------------------------------')
-    print_it(bench_si1l1s)
+    print_it(bench_si1l1s_globals)
