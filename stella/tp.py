@@ -268,6 +268,8 @@ class ArrayType(Type):
         # TODO support more types
         if array.dtype == np.int64:
             dtype = _pyscalars[int]
+        elif array.dtype == np.float64:
+            dtype = _pyscalars[float]
         else:
             raise exc.UnimplementedError("Numpy array dtype {0} not (yet) supported".format(
                 array.dtype))
@@ -436,7 +438,9 @@ class Struct(Const):
 
     def copy2Python(self, cge):
         for name in self.type.attrib_names:
-            setattr(self.value, name, getattr(self.transfer_value, name))
+            item = getattr(self.transfer_value, name)
+            if not self.type.attrib_type[name].on_heap:
+                setattr(self.value, name, item)
         del self.transfer_value
 
 

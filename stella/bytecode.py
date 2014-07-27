@@ -938,11 +938,11 @@ class ForLoop(ir.IR):
 
         cur = bc.prev
         if not isinstance(cur, GET_ITER):
-            raise exc.exc.UnimplementedError('unsupported for loop')
+            raise exc.UnimplementedError('unsupported for loop')
         cur.remove()
         cur = bc.prev
         if not isinstance(cur, CALL_FUNCTION):
-            raise exc.exc.UnimplementedError('unsupported for loop')
+            raise exc.UnimplementedError('unsupported for loop')
         cur.remove()
         cur = bc.prev
         # TODO: this if..elif should be more general!
@@ -960,17 +960,17 @@ class ForLoop(ir.IR):
                 cur.remove()
                 limit.append(cur)
         else:
-            raise exc.exc.UnimplementedError(
+            raise exc.UnimplementedError(
                 'unsupported for loop: limit {0}'.format(
                     type(cur)))
         cur = bc.prev
 
         if not isinstance(cur, LOAD_GLOBAL):
-            raise exc.exc.UnimplementedError('unsupported for loop')
+            raise exc.UnimplementedError('unsupported for loop')
         cur.remove()
         cur = bc.prev
         if not isinstance(cur, SETUP_LOOP):
-            raise exc.exc.UnimplementedError('unsupported for loop')
+            raise exc.UnimplementedError('unsupported for loop')
         end_loc = cur.target_label
 
         self.loc = cur.loc
@@ -985,7 +985,7 @@ class ForLoop(ir.IR):
 
         cur = bc.next
         if not isinstance(cur, STORE_FAST):
-            raise exc.exc.UnimplementedError('unsupported for loop')
+            raise exc.UnimplementedError('unsupported for loop')
         loop_var = cur.args[0]
         self.setLoopVar(loop_var)
         cur.remove()

@@ -27,12 +27,15 @@ class C(object):
     %"class 'test.objects.C'_<Int*6>_Int" = type { [6 x i64]*, i64 }
     """
     i = 0
-    def __init__(self, n=6):
-        self.a = np.zeros(shape=n, dtype=int)
-        self.a[0] = 42
+    def __init__(self, obj):
+        if isinstance(obj, int):
+            self.a = np.zeros(shape=obj, dtype=int)
+            self.a[0] = 42
+        else:
+            self.a = np.array(obj)
 
     def __eq__(self, other):
-        return self.i == other.i and all(self.a == other.a)
+        return self.i == other.i and (self.a == other.a).all()
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -83,8 +86,14 @@ def getAndSetAttrib2(a):
 
 args1 = [(1,1), (24, 42), (0.0, 1.0), (1.0, 1.0), (3.0, 0.0)]
 
-def getArrayValue(c):
+def getFirstArrayValue(c):
     return c.a[0]
+
+
+def sumC(c):
+    for i in range(len(c.a)):
+        c.i += c.a[i]
+
 
 @mark.parametrize('f', [justPassing, addAttribs, getAttrib])
 @mark.parametrize('args', args1)
@@ -171,6 +180,36 @@ def test_mutation2_u(f, args):
 def test_mutation2_f(f):
     b1 = B()
     b2 = B()
+
+    assert b1 == b2
+    py = f(b1)
+    st = stella.wrap(f)(b2)
+
+    assert b1 == b2 and py == st
+
+
+args2 = [(1,2,3,4), (1.0, 2.0, 3.0)]
+
+
+@mark.parametrize('f', [getFirstArrayValue])
+@mark.parametrize('args', args2)
+def test_no_mutation2(f, args):
+    b1 = C(args)
+    b2 = C(args)
+
+    assert b1 == b2
+    py = f(b1)
+    st = stella.wrap(f)(b2)
+
+    assert b1 == b2 and py == st
+
+
+@mark.parametrize('f', [sumC])
+@mark.parametrize('args', args2)
+@unimplemented
+def test_no_mutation2_f(f, args):
+    b1 = C(args)
+    b2 = C(args)
 
     assert b1 == b2
     py = f(b1)
