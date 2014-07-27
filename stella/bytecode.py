@@ -223,7 +223,7 @@ class BinaryOp(Bytecode):
         try:
             return self.b_func[self.result.type]
         except KeyError:
-            raise exc.TypingError(
+            raise exc.TypeError(
                 "{0} does not yet implement type {1}".format(
                     self.__class__.__name__,
                     self.result.type))
@@ -447,7 +447,7 @@ class COMPARE_OP(Bytecode):
         self.result.type = tp.Bool
         if (self.args[0].type != self.args[1].type and
                 self.args[0].type != tp.NoType and self.args[1].type != tp.NoType):
-            raise exc.TypingError(
+            raise exc.TypeError(
                 "Comparing different types ({0} with {1})".format(
                     self.args[0].type,
                     self.args[1].type))
@@ -799,7 +799,7 @@ class STORE_ATTR(Bytecode):
                 if member_type == tp.Float and arg_type == tp.Int:
                     self.args[1] = tp.Cast(self.args[1], tp.Float)
                     return
-                raise TypingError("Argument type {} incompatible with member type {}".format(
+                raise exc.TypeError("Argument type {} incompatible with member type {}".format(
                     arg_type, member_type))
         else:
             raise exc.UnimplementedError(
@@ -1205,7 +1205,7 @@ class BINARY_SUBSCR(Bytecode):
 
     def type_eval(self, func):
         if not isinstance(self.args[0].type, tp.ArrayType):
-            raise exc.TypingError(
+            raise exc.TypeError(
                 "Expected an array, but got {0}".format(
                     self.args[0].type))
         self.result.unify_type(
@@ -1330,7 +1330,7 @@ class UNARY_NEGATIVE(Bytecode):
         try:
             return self.b_func[self.result.type]
         except KeyError:
-            raise exc.TypingError(
+            raise exc.TypeError(
                 "{0} does not yet implement type {1}".format(
                     self.__class__.__name__,
                     self.result.type))

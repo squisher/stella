@@ -32,6 +32,10 @@ def setAttrib(a):
     a.x = 42
 
 
+def setAttribFloat(a):
+    a.x = 42.0
+
+
 def setUnknownAttrib(a):
     a.z = 42
 
@@ -86,6 +90,23 @@ def test_no_mutation_u(f):
 
 @mark.parametrize('f', [setAttrib])
 def test_mutation(f):
+    b1 = B()
+    b2 = B()
+
+    assert b1 == b2
+    py = f(b1)
+    st = stella.wrap(f)(b2)
+
+    assert b1 != B() and b1 == b2 and py == st
+
+
+@mark.parametrize('f', [setAttribFloat])
+@mark.xfail(raises=TypeError)
+def test_mutation_f(f):
+    """
+    The opposite, setting an int when the struct member is float does not
+    raise a TypeError since the int will be promoted to a float.
+    """
     b1 = B()
     b2 = B()
 

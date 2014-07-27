@@ -462,10 +462,10 @@ class Callable(metaclass=ABCMeta):
         num_args = len(args)
         # TODO: is this the right place to check number of arguments?
         if num_args+len(kwargs) < len(self.arg_names)-len(self.arg_defaults):
-            raise exc.TypingError("takes at least {0} argument(s) ({1} given)".format(
+            raise exc.TypeError("takes at least {0} argument(s) ({1} given)".format(
                 len(self.arg_names)-len(self.arg_defaults), len(args)+len(kwargs)))
         if num_args+len(kwargs) > len(self.arg_names):
-            raise exc.TypingError("takes at most {0} argument(s) ({1} given)".format(
+            raise exc.TypeError("takes at most {0} argument(s) ({1} given)".format(
                 len(self.arg_names), len(args)))
 
         # just initialize r to a list of the correct length
@@ -487,11 +487,11 @@ class Callable(metaclass=ABCMeta):
             try:
                 idx = self.arg_names.index(k)
                 if idx < num_args:
-                    raise exc.TypingError("got multiple values for keyword argument '{0}'".format(
+                    raise exc.TypeError("got multiple values for keyword argument '{0}'".format(
                         self.arg_names[idx]))
                 r[idx] = v
             except ValueError:
-                raise exc.TypingError("Function does not take an {0} argument".format(k))
+                raise exc.TypeError("Function does not take an {0} argument".format(k))
 
         return r
 
@@ -628,7 +628,7 @@ class Zeros(Intrinsic):
         shape = combined[0].value
         type_ = tp.get_scalar(combined[1])
         if not tp.supported_scalar(type_):
-            raise exc.TypingError("Invalid array element type {0}".format(type_))
+            raise exc.TypeError("Invalid array element type {0}".format(type_))
         return tp.ArrayType(type_, shape)
 
     def call(self, cge, args, kw_args):
@@ -656,7 +656,7 @@ class Len(Intrinsic):
     def call(self, cge, args, kw_args):
         obj = args[0]
         if not isinstance(obj.type, tp.ArrayType):
-            raise exc.TypingError("Invalid array type {0}".format(self.obj.type))
+            raise exc.TypeError("Invalid array type {0}".format(self.obj.type))
         self.result.value = obj.type.shape
         self.result.translate(cge)
         return self.result.llvm

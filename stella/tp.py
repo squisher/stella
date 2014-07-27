@@ -29,7 +29,7 @@ class Type(object):
     _ptr = None
 
     def llvmType(self):
-        raise exc.TypingError(
+        raise exc.TypeError(
             "Cannot create llvm type for an unknown type. This should have been cought earlier.")
 
 
@@ -139,7 +139,7 @@ def get_scalar(obj):
     try:
         return _pyscalars[type_]
     except KeyError:
-        raise exc.TypingError("Invalid scalar type `{0}'".format(type_))
+        raise exc.TypeError("Invalid scalar type `{0}'".format(type_))
 
 
 def supported_scalar(type_):
@@ -147,7 +147,7 @@ def supported_scalar(type_):
     try:
         get_scalar(type_)
         return True
-    except exc.TypingError:
+    except exc.TypeError:
         # now check for stella scalar types
         return type_ in _pyscalars.values()
 
@@ -304,7 +304,7 @@ def llvm_to_py(tp, val):
     elif tp is None_:
         return None
     else:
-        raise exc.TypingError("Unknown type {0}".format(tp))
+        raise exc.TypeError("Unknown type {0}".format(tp))
 
 
 def get(obj):
@@ -347,7 +347,7 @@ class Typable(object):
             self.type = Float
             return True
         else:
-            raise exc.TypingError("Unifying of types {} and {} (not yet) implemented".format(
+            raise exc.TypeError("Unifying of types {} and {} (not yet) implemented".format(
                 tp1, tp2), debuginfo)
 
         return False
@@ -371,7 +371,7 @@ class Const(Typable):
         try:
             self.type = get_scalar(value)
             self.name = str(value)
-        except exc.TypingError as e:
+        except exc.TypeError as e:
             self.name = "InvalidConst({0}, type={1})".format(value, type(value))
             raise e
 

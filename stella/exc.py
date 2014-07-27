@@ -24,8 +24,11 @@ class UnsupportedOpcode(StellaException):
         self.addDebug(debuginfo)
 
 
-class TypingError(StellaException):
-    pass
+class TypeError(StellaException, TypeError):
+    def __init__(self, msg, debuginfo=None):
+        super().__init__(msg)
+
+        self.addDebug(debuginfo)
 
 
 class UnimplementedError(StellaException):
