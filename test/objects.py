@@ -1,3 +1,5 @@
+import numpy as np
+
 from test import *  # noqa
 import stella
 from stella import exc
@@ -18,6 +20,21 @@ class B(object):
 
     def __repr__(self):
         return "{}:{}, {}>".format(str(type(self))[:-1], self.x, self.y)
+
+
+class C(object):
+    i = 0
+    def __init__(self, n=6):
+        self.a = np.zeros(shape=n, dtype=int)
+
+    def __eq__(self, other):
+        return self.i == other.i and all(self.a == other.a)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __repr__(self):
+        return "{}:{}, {}>".format(str(type(self))[:-1], self.i, self.a)
 
 
 def justPassing(a):
@@ -62,6 +79,8 @@ def getAndSetAttrib2(a):
 
 args1 = [(1,1), (24, 42), (0.0, 1.0), (1.0, 1.0), (3.0, 0.0)]
 
+def getArrayValue(c):
+    return c.a[0]
 
 @mark.parametrize('f', [justPassing, addAttribs, getAttrib])
 @mark.parametrize('args', args1)
