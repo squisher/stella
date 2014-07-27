@@ -7,6 +7,7 @@ from stella import exc
 #args_mod = list(filter(lambda e: e[0] >= 0, arglist2))
 import numpy as np
 import mtpy
+import ctypes
 
 a = np.zeros(5, dtype=int)
 b = test.objects.B()

@@ -178,7 +178,7 @@ class StructType(Type):
         for name in attrib_names:
             attrib = getattr(obj, name)
             # TODO: catch the exception and improve the error message?
-            type_ = get_scalar (type(attrib))
+            type_ = get (attrib)
             attrib_type[name] = type_
             attrib_idx[name] = i
             i += 1
@@ -201,7 +201,11 @@ class StructType(Type):
     def baseType(self):
         mangled_name = '_'.join([self.name] + [str(t) for t in self.attrib_type.values()])
         if not mangled_name in self.__class__.type_store:
-            llvm_types = [type_.llvmType() for type_ in self.attrib_type.values()]
+            llvm_types = []
+            for type_ in self.attrib_type.values():
+                if type_.on_heap:
+                    type_.makePointer()
+                llvm_types.append(type_.llvmType())
             type_ = llvm.core.Type.struct(llvm_types, name=mangled_name)
             self.__class__.type_store[mangled_name] = type_
         else:
@@ -220,13 +224,17 @@ class StructType(Type):
         return ctype
 
     def constant(self, value, cge):
+        """Transfer values Python -> Stella"""
         type_ = self.baseType()
 
         ctype = self.ctypes()
         transfer_value = ctype()
 
         for name in self.attrib_names:
-            setattr(transfer_value, name, getattr(value, name))
+            item = getattr(value, name)
+            if isinstance(item, np.ndarray):
+                item = ctypes.cast(item.ctypes.data, ctypes.POINTER(ctypes.c_int))
+            setattr(transfer_value, name, item)
 
         addr_llvm = Int.constant(int(ctypes.addressof(transfer_value)))
         result_llvm = cge.builder.inttoptr(addr_llvm,
@@ -253,6 +261,7 @@ class ArrayType(Type):
     tp = NoType
     shape = None
     on_heap = True
+    ctype = ctypes.POINTER(ctypes.c_int)  # TODO why is ndarray.ctypes.data of type int?
 
     @classmethod
     def fromArray(klass, array):

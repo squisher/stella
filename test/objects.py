@@ -23,9 +23,13 @@ class B(object):
 
 
 class C(object):
+    """
+    %"class 'test.objects.C'_<Int*6>_Int" = type { [6 x i64]*, i64 }
+    """
     i = 0
     def __init__(self, n=6):
         self.a = np.zeros(shape=n, dtype=int)
+        self.a[0] = 42
 
     def __eq__(self, other):
         return self.i == other.i and all(self.a == other.a)
