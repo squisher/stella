@@ -44,7 +44,11 @@ def bench_it(name, c_src, args, stella_f=None, full_f=None, flags=[]):
             "Either need to specify stella_f(*arg_value) or full_f(args, stats)")
 
     print("Doing {0}({1})".format(name, args))
-    src = pystache.render(c_src, **dict(args))
+    extra_args = []
+    for k,v in args:
+        if k.endswith('_init'):
+            extra_args.append((k[:-5]+'_decl', v.split('=')[0]))
+    src = pystache.render(c_src, **dict(args+extra_args))
     exe = ccompile(__file__ + "." + name + ".c", src, flags)
 
     cmd = ['./' + exe]
@@ -106,7 +110,8 @@ int main(int argc, char ** argv) {
 
 def bench_si1l1s(module, suffix):
     args = [('seed_init', 'seed=42'),
-            ('rununtiltime_init', 'rununtiltime=1e9')]
+            ('rununtiltime_init', 'rununtiltime=1e6'),
+            ]
     name = 'si1l1s_' + suffix
     fn = "{}/template.{}.{}.c".format(os.path.dirname(__file__),
                                       os.path.basename(__file__),
@@ -132,7 +137,14 @@ def bench_si1l1s_globals():
     import test.si1l1s_globals
     return bench_si1l1s(test.si1l1s_globals, 'globals')
 
+
+def bench_si1l1s_struct():
+    import test.si1l1s_struct
+    return bench_si1l1s(test.si1l1s_struct, 'struct')
+
 if __name__ == '__main__':
     print_it(bench_fib)
     print('----------------------------------------')
     print_it(bench_si1l1s_globals)
+    #print('----------------------------------------')
+    #print_it(bench_si1l1s_struct)
