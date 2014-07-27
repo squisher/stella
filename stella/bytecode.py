@@ -765,7 +765,13 @@ class LOAD_ATTR(Bytecode):
         if isinstance(self.args[1], types.ModuleType):
             pass
         elif isinstance(self.args[1].type, tp.StructType):
-            self.result.unify_type(self.args[1].type.getMemberType(self.args[0]), self.debuginfo)
+            try:
+                type_ = self.args[1].type.getMemberType(self.args[0])
+                self.result.unify_type(type_, self.debuginfo)
+            except KeyError:
+                raise exc.AttributeError("Unknown field {} of type {}".format(self.args[0],
+                                                                              self.args[1].type),
+                                         self.debuginfo)
         else:
             raise exc.UnimplementedError(
                 "Cannot load attribute {0} of an object with type {1}".format(
@@ -786,26 +792,24 @@ class STORE_ATTR(Bytecode):
         self.result = Register(func)
 
     def type_eval(self, func):
-        if isinstance(self.args[1].type, tp.StructType):
-            self.result.unify_type(self.args[1].type.getMemberType(self.args[0]), self.debuginfo)
+        if isinstance(self.args[2].type, tp.StructType):
+            self.result.unify_type(self.args[2].type.getMemberType(self.args[0]), self.debuginfo)
         else:
             raise exc.UnimplementedError(
                 "Cannot store attribute {0} of an object with type {1}".format(
                     self.args[0],
-                    type(self.args[1])))
+                    type(self.args[2])))
 
     def translate(self, cge):
-        if isinstance(self.args[1], types.ModuleType):
-            return
-        elif (isinstance(self.args[1], tp.Typable)
-              and isinstance(self.args[1].type, tp.StructType)):
-            struct_llvm = self.args[1].translate(cge)
-            idx = self.args[1].type.getMemberIdx(self.args[0])
+        if (isinstance(self.args[2], tp.Typable)
+              and isinstance(self.args[2].type, tp.StructType)):
+            struct_llvm = self.args[2].translate(cge)
+            idx = self.args[2].type.getMemberIdx(self.args[0])
             idx_llvm = tp.getIndex(idx)
             p =cge.builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
-            self.result.llvm =cge.builder.store(self.args[2].translate(cge), p)
+            self.result.llvm =cge.builder.store(self.args[1].translate(cge), p)
         else:
-            raise UnimplementedError(type(self.args[1]))
+            raise UnimplementedError(type(self.args[2]))
 
 
 class CALL_FUNCTION(Bytecode):
@@ -1270,8 +1274,8 @@ class ROT_TWO(Bytecode, Poison):
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        stack.push(self.args[0])
         stack.push(self.args[1])
+        stack.push(self.args[0])
 
     def type_eval(self, func):
         pass
