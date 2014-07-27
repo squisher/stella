@@ -35,8 +35,8 @@ def addAttribs(a):
     return a.x + a.y
 
 
-@mark.parametrize('f', [justPassing, setAttrib])
-def test1(f):
+@mark.parametrize('f', [justPassing, addAttribs])
+def test_no_mutation(f):
     b1 = B()
     b2 = B()
 
@@ -47,9 +47,9 @@ def test1(f):
     assert b1 == b2 and py == st
 
 
-@mark.parametrize('f', [addAttribs])
+@mark.parametrize('f', [])
 @unimplemented
-def test1u(f):
+def test_no_mutation_u(f):
     b1 = B()
     b2 = B()
 
@@ -59,10 +59,21 @@ def test1u(f):
 
     assert b1 == b2 and py == st
 
+@mark.parametrize('f', [setAttrib])
+def test_mutation(f):
+    b1 = B()
+    b2 = B()
 
-@mark.parametrize('args', [(1,1), (24, 42)])
+    assert b1 == b2
+    py = f(b1)
+    st = stella.wrap(f)(b2)
+
+    assert b1 != B() and b1 == b2 and py == st
+
+
+@mark.parametrize('args', [(1,1), (24, 42), (0.0, 1.0), (1.0, 1.0), (3.0, 0.0)])
 @mark.parametrize('f', [cmpAttrib])
-def test2(f, args):
+def test_mutation2(f, args):
     b1 = B(*args)
     b2 = B(*args)
 
@@ -73,10 +84,10 @@ def test2(f, args):
     assert b1 == b2 and py == st
 
 
-@mark.parametrize('args', [(0.0, 1.0)])
+@mark.parametrize('args', [])
 @mark.parametrize('f', [cmpAttrib])
 @unimplemented
-def test2u(f, args):
+def test_mutation2_u(f, args):
     b1 = B(*args)
     b2 = B(*args)
 

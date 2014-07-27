@@ -199,12 +199,13 @@ class StructType(Type):
         return self.attrib_idx[name]
 
     def baseType(self):
-        if not self.name in self.__class__.type_store:
+        mangled_name = '_'.join([self.name] + [str(t) for t in self.attrib_type.values()])
+        if not mangled_name in self.__class__.type_store:
             llvm_types = [type_.llvmType() for type_ in self.attrib_type.values()]
-            type_ = llvm.core.Type.struct(llvm_types, name=self.name)
-            self.__class__.type_store[self.name] = type_
+            type_ = llvm.core.Type.struct(llvm_types, name=mangled_name)
+            self.__class__.type_store[mangled_name] = type_
         else:
-            return self.__class__.type_store[self.name]
+            return self.__class__.type_store[mangled_name]
         return type_
 
     def llvmType(self):

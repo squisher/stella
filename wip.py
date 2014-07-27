@@ -9,6 +9,10 @@ import mtpy
 
 a = np.zeros(5, dtype=int)
 b = test.struct.B()
+b2 = test.struct.B(0.0, 1.0)
 
 def current_work(run=False):
-    print(stella.wrap(test.struct.setAttrib, ir=not run)(b))
+    print(b)
+    print(stella.wrap(test.struct.cmpAttrib, ir=not run)(b))
+    if run:
+        print(b)
