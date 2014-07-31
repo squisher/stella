@@ -25,6 +25,11 @@ class Spider(object):
         # TODO: Static analysis could discover the use in the original location
         self.t = 0.0
         self.next_obs_time = 0.0
+    def __eq__(self, other):
+        return ((self.observations == other.observations).all() and
+                self.obs_i == other.obs_i and
+                self.t == other.t and
+                self.next_obs_time == other.next_obs_time)
 
 
 def uniform():
@@ -155,15 +160,15 @@ def prototype(params):
     s = Settings(params)
 
     py = np.zeros(shape=s['K'], dtype=int)
-    sp = Spider(s, py)
-    run(sp)
+    sp_py = Spider(s, py)
+    run(sp_py)
 
     st = np.zeros(shape=s['K'], dtype=int)
-    sp = Spider(s, st)
-    stella.wrap(run)(sp)
+    sp_st = Spider(s, st)
+    stella.wrap(run)(sp_st)
 
-    assert id(py) != id(observations)
-    assert all(py == st)
+    assert id(sp_py.observations) != id(sp_st.observations)
+    assert sp_py == sp_st
 
 
 @mark.parametrize('args', [['seed=42'], ['seed=63'], ['seed=123456'],
