@@ -44,7 +44,7 @@ class StackLoc(tp.Typable):
         self.name = name
 
     def __str__(self):
-        return "*{0}<{1}>".format(self.name, self.type)
+        return "#{0}<{1}>".format(self.name, self.type)
 
     def __repr__(self):
         return self.name

@@ -756,7 +756,7 @@ class LOAD_ATTR(Bytecode):
             struct_llvm = self.args[1].translate(cge)
             idx = self.args[1].type.getMemberIdx(self.args[0])
             idx_llvm = tp.getIndex(idx)
-            p =cge.builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
+            p = cge.builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
             self.result.llvm =cge.builder.load(p)
         else:
             raise UnimplementedError(type(self.args[1]))

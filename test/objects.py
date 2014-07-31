@@ -44,6 +44,28 @@ class C(object):
         return "{}:{}, {}>".format(str(type(self))[:-1], self.i, self.a)
 
 
+class D(object):
+    z = 0
+    a = 0
+    y = 0.0
+    g = 0.0
+
+    def __init__(self):
+        pass
+
+    def __eq__(self, other):
+        return (self.z == other.z and
+                self.a == other.a and
+                self.y == other.y and
+                self.g == other.g)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __repr__(self):
+        return "{}:{}, {}>".format(str(type(self))[:-1], self.x, self.y)
+
+
 def justPassing(a):
     x = 1
 
@@ -232,5 +254,24 @@ def test_no_mutation3(f, args):
     assert b1 == b2
     py = f(b1, 1)
     st = stella.wrap(f)(b2, 1)
+
+    assert b1 == b2 and py == st
+
+
+def manipulate_d1(d):
+    d.z = 1
+    d.a = 2
+    d.y = 3.0
+    d.g = 4.0
+
+
+@mark.parametrize('f', [manipulate_d1])
+def test_mutation3(f):
+    b1 = D()
+    b2 = D()
+
+    assert b1 == b2
+    py = f(b1)
+    st = stella.wrap(f)(b2)
 
     assert b1 == b2 and py == st

@@ -16,7 +16,10 @@ class Type(object):
 
     def makePointer(self):
         """Note: each subtype must interpret `ptr` itself"""
-        self.ptr += 1
+        # TODO: clean up calling of makePointer; it happes too frequently
+        #self.ptr += 1
+        if self.on_heap:
+            self.ptr = 1
 
 
     def isPointer(self):
@@ -209,7 +212,8 @@ class StructType(Type):
 
         if not mangled_name in self.__class__.type_store:
             llvm_types = []
-            for type_ in self.attrib_type.values():
+            for name, idx in sorted(self.attrib_idx.items(), key=lambda a: a[1]):
+                type_ = self.attrib_type[name]
                 llvm_types.append(type_.llvmType())
             type_ = llvm.core.Type.struct(llvm_types, name=mangled_name)
             ptype_ = llvm.core.Type.pointer(type_)
@@ -295,11 +299,7 @@ class ArrayType(Type):
         return type_
 
     def __str__(self):
-        if self.ptr:
-            p = '*'
-        else:
-            p = ''
-        return "<{0}{1}*{2}>".format(p, self.tp, self.shape)
+        return "<{}{}*{}>".format('*'*self.ptr, self.tp, self.shape)
 
     def __repr__(self):
         return str(self)
