@@ -12,10 +12,10 @@ import ctypes
 a = np.zeros(5, dtype=int)
 b = test.objects.B()
 b2 = test.objects.B(0.0, 1.0)
-c = test.objects.C()
+c = test.objects.C(np.array([1,2,3,42]))
 
 def current_work(run=False):
     print(c)
-    print(stella.wrap(test.objects.getArrayValue, ir=not run)(c))
+    print(stella.wrap(test.objects.sumC, ir=not run)(c))
     if run:
         print(c)

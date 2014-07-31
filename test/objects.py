@@ -90,6 +90,10 @@ def getFirstArrayValue(c):
     return c.a[0]
 
 
+def getSomeArrayValue(c, i):
+    return c.a[i]
+
+
 def sumC(c):
     for i in range(len(c.a)):
         c.i += c.a[i]
@@ -214,5 +218,18 @@ def test_no_mutation2_f(f, args):
     assert b1 == b2
     py = f(b1)
     st = stella.wrap(f)(b2)
+
+    assert b1 == b2 and py == st
+
+
+@mark.parametrize('f', [getSomeArrayValue])
+@mark.parametrize('args', args2)
+def test_no_mutation3(f, args):
+    b1 = C(args)
+    b2 = C(args)
+
+    assert b1 == b2
+    py = f(b1, 1)
+    st = stella.wrap(f)(b2, 1)
 
     assert b1 == b2 and py == st
