@@ -955,10 +955,20 @@ class ForLoop(ir.IR):
         elif isinstance(cur, CALL_FUNCTION):
             cur.remove()
             limit = [cur]
-            for i in range(cur.num_stack_args+1):  # +1 for the function name
+            num_args = cur.num_stack_args+1  # +1 for the function name
+            i = 0
+            while i < num_args:
                 cur = cur.prev
+                # TODO: HACK. How to make this general and avoid duplicating
+                # stack_eval() knowledge?
+                if isinstance(cur, LOAD_ATTR):
+                    # LOAD_ATTR has an argument; num_args is stack values NOT
+                    # the number of bytecodes which i is counting
+                    num_args +=1
                 cur.remove()
                 limit.append(cur)
+
+                i += 1
         else:
             raise exc.UnimplementedError(
                 'unsupported for loop: limit {0}'.format(

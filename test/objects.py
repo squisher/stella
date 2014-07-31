@@ -26,13 +26,13 @@ class C(object):
     """
     %"class 'test.objects.C'_<Int*6>_Int" = type { [6 x i64]*, i64 }
     """
-    i = 0
-    def __init__(self, obj):
+    def __init__(self, obj, i=0):
         if isinstance(obj, int):
             self.a = np.zeros(shape=obj, dtype=int)
             self.a[0] = 42
         else:
             self.a = np.array(obj)
+        self.i = i
 
     def __eq__(self, other):
         return self.i == other.i and (self.a == other.a).all()
@@ -193,13 +193,14 @@ def test_mutation2_f(f):
 
 
 args2 = [(1,2,3,4), (1.0, 2.0, 3.0)]
+args3 = list(zip(args2, [0, 0.0]))
 
 
-@mark.parametrize('f', [getFirstArrayValue])
-@mark.parametrize('args', args2)
+@mark.parametrize('f', [getFirstArrayValue, sumC])
+@mark.parametrize('args', args3)
 def test_no_mutation2(f, args):
-    b1 = C(args)
-    b2 = C(args)
+    b1 = C(*args)
+    b2 = C(*args)
 
     assert b1 == b2
     py = f(b1)
@@ -208,7 +209,7 @@ def test_no_mutation2(f, args):
     assert b1 == b2 and py == st
 
 
-@mark.parametrize('f', [sumC])
+@mark.parametrize('f', [])
 @mark.parametrize('args', args2)
 @unimplemented
 def test_no_mutation2_f(f, args):
