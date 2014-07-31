@@ -21,6 +21,10 @@ class Spider(object):
         self.substrate = 0
         self.obs_i = 0
         self.observations = observations
+        # LANG: Init below required before entering stella!
+        # TODO: Static analysis could discover the use in the original location
+        self.t = 0.0
+        self.next_obs_time = 0.0
 
 
 def uniform():
@@ -69,7 +73,8 @@ def isNextObservation(sp):
 
 
 def run(sp):
-    sp.t = 0.0
+    # LANG: Init below moved to Spider.__init__
+    #sp.t = 0.0
     sp.next_obs_time = getNextObsTime(sp)
 
     # TODO: Declaring R here is not necessary in Python! But llvm needs a

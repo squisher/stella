@@ -198,23 +198,25 @@ class StructType(Type):
     def getMemberIdx(self, name):
         return self.attrib_idx[name]
 
-    def baseType(self):
+    def llvmType(self):
+        # TODO find a more efficient place where the pointer values are created
+        # This needs to be done before the cache look up because it will
+        # affect mangled_name.
+        for type_ in self.attrib_type.values():
+            if type_.on_heap:
+                type_.makePointer()
         mangled_name = '_'.join([self.name] + [str(t) for t in self.attrib_type.values()])
+
         if not mangled_name in self.__class__.type_store:
             llvm_types = []
             for type_ in self.attrib_type.values():
-                if type_.on_heap:
-                    type_.makePointer()
                 llvm_types.append(type_.llvmType())
             type_ = llvm.core.Type.struct(llvm_types, name=mangled_name)
-            self.__class__.type_store[mangled_name] = type_
+            ptype_ = llvm.core.Type.pointer(type_)
+            self.__class__.type_store[mangled_name] = ptype_
+            return ptype_
         else:
             return self.__class__.type_store[mangled_name]
-        return type_
-
-    def llvmType(self):
-        type_ = llvm.core.Type.pointer(self.baseType())
-        return type_
 
     def ctypes(self):
         fields = []
@@ -225,8 +227,6 @@ class StructType(Type):
 
     def constant(self, value, cge):
         """Transfer values Python -> Stella"""
-        type_ = self.baseType()
-
         ctype = self.ctypes()
         transfer_value = ctype()
 

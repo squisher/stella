@@ -799,6 +799,11 @@ class STORE_ATTR(Bytecode):
                 if member_type == tp.Float and arg_type == tp.Int:
                     self.args[1] = tp.Cast(self.args[1], tp.Float)
                     return
+                # TODO would it speed up the algorithm if arg_type is set to be
+                # member_type here?
+                if arg_type == tp.NoType:
+                    # will be retyped anyway
+                    return
                 raise exc.TypeError("Argument type {} incompatible with member type {}".format(
                     arg_type, member_type))
         else:
