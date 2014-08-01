@@ -122,12 +122,14 @@ def bench_si1l1s(module, suffix):
     def run_si1l1s(args, stats):
         params = [v for k, v in args]
         s = module.Settings(params)
-        module.prepare(s)
+        transfer = module.prepare(s)
+        if transfer is None:
+            transfer = []
 
         time_start = time()
-        stella.wrap(module.run, debug=False, opt=opt, stats=stats)()
+        stella.wrap(module.run, debug=False, opt=opt, stats=stats)(*transfer)
         elapsed_stella = time() - time_start
-        print(module.observations)
+        print(module.result(*transfer))
 
         return elapsed_stella
 
@@ -146,5 +148,5 @@ if __name__ == '__main__':
     print_it(bench_fib)
     print('----------------------------------------')
     print_it(bench_si1l1s_globals)
-    #print('----------------------------------------')
-    #print_it(bench_si1l1s_struct)
+    print('----------------------------------------')
+    print_it(bench_si1l1s_struct)

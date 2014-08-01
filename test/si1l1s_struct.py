@@ -171,6 +171,14 @@ def prototype(params):
     assert sp_py == sp_st
 
 
+def prepare(params):
+    sp_py = Spider(params, np.zeros(shape=params['K'], dtype=int))
+    return (sp_py,)
+
+def result(sp):
+    return sp
+
+
 @mark.parametrize('args', [['seed=42'], ['seed=63'], ['seed=123456'],
                            ['rununtiltime=1e4', 'seed=494727']])
 def test1(args):
