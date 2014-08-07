@@ -53,6 +53,15 @@ unimplemented = mark.xfail(reason="Unimplemented", run=False)
 bench = mark.bench
 
 
+@pytest.fixture
+def bench_opt(request):
+    opt = request.config.getoption("--bench")
+    if opt in ('l', 'long'):
+        return 1
+    else:
+        return 0
+
+
 def timeit(f):
     @wraps(f)
     def wrapper(*args, **kw_args):

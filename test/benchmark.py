@@ -6,12 +6,12 @@ from subprocess import call
 import time
 
 import pystache
-import pytest
 
 from test import *  # noqa
 import stella
 
 opt = 3
+min_speedup = 0.8
 
 
 def ccompile(fn, src, flags=[]):
@@ -71,17 +71,19 @@ def bench_it(name, c_src, args, stella_f=None, full_f=None, flags=[]):
     return (elapsed_c, stats['elapsed'], elapsed_stella)
 
 
-def print_it(f):
+def print_it(f, arg=None):
     print("Benchmarking {0} -O{1}".format(f.__name__, opt))
-    (time_c, time_stella, time_stella_whole) = f()
+    (time_c, time_stella, time_stella_whole) = f(arg)
+    speedup = time_c / time_stella
     print("Elapsed C: {0:2.2f}s\t Elapsed Stella: {1:2.2f}s\t Speed-Up: {2:2.2f}\t (Stella+Compile: {3:2.2f}s)".format(  # noqa
-        time_c, time_stella, time_c / time_stella, time_stella_whole))
+        time_c, time_stella, speedup, time_stella_whole))
+    return speedup
 
 
-def bench_fib():
+def bench_fib(duration):
     from test.langconstr import fib_harness
 
-    args = [('n', 4), ('x', 47)]
+    args = [('n', duration), ('x', 47)]
     fib_c = """
 #include <stdio.h>
 #include <stdlib.h>
@@ -110,9 +112,9 @@ int main(int argc, char ** argv) {
     return bench_it('fib', fib_c, args, stella_f=fib_harness)
 
 
-def bench_si1l1s(module, suffix):
+def bench_si1l1s(module, suffix, duration):
     args = [('seed_init', 'seed=42'),
-            ('rununtiltime_init', 'rununtiltime=1e8'),
+            ('rununtiltime_init', 'rununtiltime=' + duration),
             ]
     name = 'si1l1s_' + suffix
     fn = "{}/template.{}.{}.c".format(os.path.dirname(__file__),
@@ -138,23 +140,32 @@ def bench_si1l1s(module, suffix):
     return bench_it(name, src, args, flags=['-lm'], full_f=run_si1l1s)
 
 
-def bench_si1l1s_globals():
+def bench_si1l1s_globals(duration):
     import test.si1l1s_globals
-    return bench_si1l1s(test.si1l1s_globals, 'globals')
+    return bench_si1l1s(test.si1l1s_globals, 'globals', duration)
 
 
-def bench_si1l1s_struct():
+def bench_si1l1s_struct(duration):
     import test.si1l1s_struct
-    return bench_si1l1s(test.si1l1s_struct, 'struct')
+    return bench_si1l1s(test.si1l1s_struct, 'struct', duration)
+
 
 @bench
-def test_fib():
-    print_it(bench_fib)
+def test_fib(bench_opt):
+    duration = [1, 4][bench_opt]
+    speedup = print_it(bench_fib, duration)
+    assert speedup >= min_speedup
+
 
 @bench
-def test_si1l1s_globals():
-    print_it(bench_si1l1s_globals)
+def test_si1l1s_globals(bench_opt):
+    duration = ['1e6', '1e8'][bench_opt]
+    speedup = print_it(bench_si1l1s_globals, duration)
+    assert speedup >= min_speedup
+
 
 @bench
-def test_si1l1s_struct():
-    print_it(bench_si1l1s_struct)
+def test_si1l1s_struct(bench_opt):
+    duration = ['1e6', '1e8'][bench_opt]
+    speedup = print_it(bench_si1l1s_struct, duration)
+    assert speedup >= min_speedup
