@@ -3,10 +3,12 @@
 import os
 import os.path
 from subprocess import call
-from time import time
+import time
 
 import pystache
+import pytest
 
+from test import *  # noqa
 import stella
 
 opt = 3
@@ -45,25 +47,25 @@ def bench_it(name, c_src, args, stella_f=None, full_f=None, flags=[]):
 
     print("Doing {0}({1})".format(name, args))
     extra_args = []
-    for k,v in args:
+    for k, v in args:
         if k.endswith('_init'):
             extra_args.append((k[:-5]+'_decl', v.split('=')[0]))
     src = pystache.render(c_src, **dict(args+extra_args))
     exe = ccompile(__file__ + "." + name + ".c", src, flags)
 
-    cmd = ['./' + exe]
+    cmd = [exe]
     print("Running C:", " ".join(cmd))
-    time_start = time()
+    time_start = time.time()
     call(cmd)
-    elapsed_c = time() - time_start
+    elapsed_c = time.time() - time_start
 
     print("Running Stella:")
     stats = {}
     if stella_f:
-        time_start = time()
+        time_start = time.time()
         print(stella.wrap(stella_f, debug=False, opt=opt, stats=stats)
               (*[v for k, v in args]))
-        elapsed_stella = time() - time_start
+        elapsed_stella = time.time() - time_start
     else:
         elapsed_stella = full_f(args, stats)
     return (elapsed_c, stats['elapsed'], elapsed_stella)
@@ -110,7 +112,7 @@ int main(int argc, char ** argv) {
 
 def bench_si1l1s(module, suffix):
     args = [('seed_init', 'seed=42'),
-            ('rununtiltime_init', 'rununtiltime=1e6'),
+            ('rununtiltime_init', 'rununtiltime=1e8'),
             ]
     name = 'si1l1s_' + suffix
     fn = "{}/template.{}.{}.c".format(os.path.dirname(__file__),
@@ -126,14 +128,15 @@ def bench_si1l1s(module, suffix):
         if transfer is None:
             transfer = []
 
-        time_start = time()
+        time_start = time.time()
         stella.wrap(module.run, debug=False, opt=opt, stats=stats)(*transfer)
-        elapsed_stella = time() - time_start
+        elapsed_stella = time.time() - time_start
         print(module.result(*transfer))
 
         return elapsed_stella
 
     return bench_it(name, src, args, flags=['-lm'], full_f=run_si1l1s)
+
 
 def bench_si1l1s_globals():
     import test.si1l1s_globals
@@ -144,9 +147,14 @@ def bench_si1l1s_struct():
     import test.si1l1s_struct
     return bench_si1l1s(test.si1l1s_struct, 'struct')
 
-if __name__ == '__main__':
+@bench
+def test_fib():
     print_it(bench_fib)
-    print('----------------------------------------')
+
+@bench
+def test_si1l1s_globals():
     print_it(bench_si1l1s_globals)
-    print('----------------------------------------')
+
+@bench
+def test_si1l1s_struct():
     print_it(bench_si1l1s_struct)

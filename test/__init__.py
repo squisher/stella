@@ -3,6 +3,7 @@ from functools import wraps
 import time
 
 from stella import wrap
+import pytest
 from pytest import mark
 from pytest import raises
 
@@ -47,7 +48,9 @@ def make_exc_test(f, args, py_exc, stella_exc):
 
     assert True
 
+
 unimplemented = mark.xfail(reason="Unimplemented", run=False)
+bench = mark.bench
 
 
 def timeit(f):
@@ -60,3 +63,8 @@ def timeit(f):
             f.__name__, args, kw_args, end - start))
         return r
     return wrapper
+
+
+@pytest.fixture
+def report():
+    pass
