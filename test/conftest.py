@@ -2,7 +2,7 @@ import pytest
 
 
 def pytest_addoption(parser):
-    parser.addoption("--bench", action="store",
+    parser.addoption('-B', "--bench", action="store",
                      type=str, default=False,
                      help="run benchmark tests: short, or long")
 
