@@ -18,55 +18,6 @@ Questions to ask
 Current Work
 ------------
 
-Stella:
-```
-define i64 @array_allocation() {
-entry:
-  %0 = alloca [5 x i64]
-  %a = alloca [5 x i64]*
-  store [5 x i64]* %0, [5 x i64]** %a
-  ret i64 0
-}
-```
-
-clang O0
-```
-define i32 @main(i32 %argc, i8** %argv) #0 {
-entry:
-  %retval = alloca i32, align 4
-  %argc.addr = alloca i32, align 4
-  %argv.addr = alloca i8**, align 8
-  %i = alloca i32, align 4
-  %a = alloca [5 x i32], align 16
-  store i32 0, i32* %retval
-  store i32 %argc, i32* %argc.addr, align 4
-  store i8** %argv, i8*** %argv.addr, align 8
-  store i32 0, i32* %i, align 4
-  br label %for.cond
-
-for.cond:                                         ; preds = %for.inc, %entry
-  %0 = load i32* %i, align 4
-  %cmp = icmp slt i32 %0, 5
-  br i1 %cmp, label %for.body, label %for.end
-
-for.body:                                         ; preds = %for.cond
-  %1 = load i32* %i, align 4
-  %idxprom = sext i32 %1 to i64
-  %arrayidx = getelementptr inbounds [5 x i32]* %a, i32 0, i64 %idxprom
-  store i32 42, i32* %arrayidx, align 4
-  br label %for.inc
-
-for.inc:                                          ; preds = %for.body
-  %2 = load i32* %i, align 4
-  %inc = add nsw i32 %2, 1
-  store i32 %inc, i32* %i, align 4
-  br label %for.cond
-
-for.end:                                          ; preds = %for.cond
-  %3 = load i32* %i, align 4
-  ret i32 %3
-}
-```
 
 LLVMpy
 ------
@@ -105,3 +56,16 @@ EuroPython 2014
 ---------------
 
 Find a couple of example commits which crash llvm in current_work().
+
+Papers
+------
+
+* The "cut" of python: what features the language has and how it fits the structure of certain programs
+    * certain -> kmc simulations, what else? It needs to be broader, better defined.
+    * "simple" programs?
+    * it's not a DSL. But it's also not completely general. What's the right name for it?
+        * it is "restricted", but I need to make sure it doesn't sound like "rpy"
+* More is less - how less integration features better performing programs
+    * easier to implement
+    * is this big enough for a paper on its own or merge with next?
+* OO features with zero run-time overhead for better structuring of high performance code
