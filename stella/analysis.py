@@ -62,6 +62,9 @@ class Function(object):
 
     def retype(self, go=True):
         """Immediately retype this function if go is True"""
+        if isinstance(go, tuple):
+            # extract the widening
+            go = go[0]
         if go:
             self.analyze_again = True
 
@@ -147,7 +150,9 @@ class Function(object):
 
         # For the STORE_FAST of the argument(s)
         for arg in reversed(self.impl.arg_transfer):
-            stack.push(self.impl.getRegister('__param_' + arg))
+            arg_bc = bytecode.ResultOnlyBytecode(self.impl, None)
+            arg_bc.result = self.impl.getRegister('__param_' + arg)
+            stack.push(arg_bc)
 
         while not self.todo.empty():
             (bc, stack) = self.todo.pop()

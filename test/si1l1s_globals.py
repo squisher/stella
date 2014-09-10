@@ -24,6 +24,7 @@ def prepare(params):
     obs_i = 0
     observations = np.zeros(shape=K, dtype=int)
 
+
 def result():
     return observations
 

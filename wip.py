@@ -4,11 +4,11 @@ import test.langconstr
 import test.objects
 import test.si1l1s_struct
 import stella
-from stella import exc
+from stella import exc  # noqa
 #args_mod = list(filter(lambda e: e[0] >= 0, arglist2))
 import numpy as np
-import mtpy
-import ctypes
+import mtpy  # noqa
+import ctypes  # noqa
 
 a = np.zeros(5, dtype=int)
 b = test.objects.B()
@@ -18,4 +18,4 @@ settings = test.si1l1s_struct.Settings(['seed=42'])
 sp = test.si1l1s_struct.Spider(settings, np.zeros(shape=settings['K'], dtype=int))
 
 def current_work(run=False):
-    print(stella.wrap(test.si1l1s_struct.run, ir=not run)(sp))
+    print(stella.wrap(test.langconstr.and_, ir=not run)(True, True))

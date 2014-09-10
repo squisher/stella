@@ -27,10 +27,7 @@ def pop_stack(n):
                 args.append(stack.pop())
             args.reverse()
 
-            if self.args is None:
-                self.args = args
-            else:
-                self.args.extend(args)
+            self.stack_args = args
             return f(self, func, stack)
         return extract_from_stack
     return extract_n
@@ -70,6 +67,15 @@ class Bytecode(ir.IR):
     pass
 
 
+class ResultOnlyBytecode(Poison, ir.IR):
+    """Only use this to inject values on the stack which did not originate from
+    any real bytecode. This will only work at the beginning of a program
+    because otherwise the bytecode may be used as the origin of a branch.
+    """
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+
 class LOAD_FAST(Bytecode):
 
     def __init__(self, func, debuginfo):
@@ -83,18 +89,20 @@ class LOAD_FAST(Bytecode):
             self.args.append(func.getStackLoc(name))
 
     def stack_eval(self, func, stack):
-        type_ = type(self.args[0])
-        if type_ == StackLoc:
-            self.result = Register(func)
-        elif type_ == Register:
-            self.result = self.args[0]
-        else:
-            raise exc.StellaException(
-                "Invalid LOAD_FAST argument type `{0}'".format(type_))
-        stack.push(self.result)
+        stack.push(self)
 
     def type_eval(self, func):
-        self.result.type = self.args[0].type
+        self.grab_stack()
+        if self.result is None:
+            type_ = type(self.args[0])
+            if type_ == StackLoc:
+                self.result = Register(func.impl)
+            elif type_ == Register:
+                self.result = self.args[0]
+            else:
+                raise exc.StellaException(
+                    "Invalid LOAD_FAST argument type `{0}'".format(type_))
+        self.result.unify_type(self.args[0].type, self.debuginfo)
 
     def translate(self, cge):
         type_ = type(self.args[0])
@@ -119,27 +127,32 @@ class STORE_FAST(Bytecode):
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
-        self.result = self.popFirstArg()
+        pass
 
     def type_eval(self, func):
+        self.grab_stack()
         # func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
+        if self.result is None:
+            self.result = self.popFirstArg()
+
         arg = self.args[0]
-        tp_changed = self.result.unify_type(arg.type, self.debuginfo)
-        if tp_changed:
+        widened, needs_cast = self.result.unify_type(arg.type, self.debuginfo)
+        if widened:
             # TODO: can I avoid a retype in some cases?
             func.retype()
-            if self.result.type != arg.type:
-                self.args[0] = Cast(arg, self.result.type)
+        if needs_cast:
+            self.args[0] = Cast(arg, self.result.type)
 
     def translate(self, cge):
         self.cast(cge)
+        arg = self.args[0]
         if self.new_allocate:
-            type_ = self.args[0].llvmType()
+            type_ = arg.llvmType()
             # TODO: is this the right place to make it a pointer?
-            if isinstance(self.args[0].type, tp.ArrayType):
+            if isinstance(arg.type, tp.ArrayType):
                 type_ = llvm.core.Type.pointer(type_)
             self.result.llvm = cge.builder.alloca(type_, name=self.result.name)
-        cge.builder.store(self.args[0].translate(cge), self.result.translate(cge))
+        cge.builder.store(arg.translate(cge), self.result.translate(cge))
 
 
 class STORE_GLOBAL(Bytecode):
@@ -158,22 +171,26 @@ class STORE_GLOBAL(Bytecode):
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
-        self.result = self.popFirstArg()
+        pass
 
     def type_eval(self, func):
+        self.grab_stack()
         # func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
+        if self.result is None:
+            self.result = self.popFirstArg()
         arg = self.args[0]
 
         if self.result.initial_value is None:
             # This means we're defining a new variable
             self.result.setInitialValue(arg)
 
-        tp_changed = self.result.unify_type(arg.type, self.debuginfo)
-        if tp_changed:
+        widened, needs_cast = self.result.unify_type(arg.type, self.debuginfo)
+        if widened:
             # TODO: can I avoid a retype in some cases?
             func.retype()
-            if self.result.type != arg.type:
-                self.args[0] = Cast(arg, self.result.type)
+        if needs_cast:
+            # TODO: side effect! Maybe that's for the best.
+            self.args[0] = Cast(arg, self.result.type)
 
     def translate(self, cge):
         # Assume that the global has been allocated already.
@@ -188,12 +205,12 @@ class LOAD_CONST(Bytecode):
         super().__init__(func, debuginfo)
 
     def stack_eval(self, func, stack):
-        if self.result is None:
-            self.result = self.popFirstArg()
-        stack.push(self.result)
+        stack.push(self)
 
     def type_eval(self, func):
-        pass
+        self.grab_stack()
+        if self.result is None:
+            self.result = self.popFirstArg()
 
     def translate(self, cge):
         pass
@@ -207,17 +224,20 @@ class BinaryOp(Bytecode):
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        stack.push(self.result)
+        stack.push(self)
 
     def type_eval(self, func):
+        self.grab_stack()
         for i in range(len(self.args)):
             arg = self.args[i]
-            tp_changed = self.result.unify_type(arg.type, self.debuginfo)
-            if tp_changed:
-                if self.result.type != arg.type:
-                    self.args[i] = Cast(arg, self.result.type)
+            widened, needs_cast = self.result.unify_type(arg.type, self.debuginfo)
+            if widened:
                 # TODO: can I avoid a retype in some cases?
+                # It could definitely be smarter and retype the other parameter
+                # directly if need be.
                 func.retype()
+            if needs_cast:
+                self.args[i] = Cast(arg, self.result.type)
 
     def builderFuncName(self):
         try:
@@ -262,20 +282,22 @@ class BINARY_POWER(BinaryOp):
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
+        self.result = Register(func)
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        self.result = Register(func)
-        stack.push(self.result)
+        stack.push(self)
 
     def type_eval(self, func):
+        self.grab_stack()
         # TODO if args[1] is int but negative, then the result will be float, too!
         super().type_eval(func)
 
     def translate(self, cge):
         # llvm.pow[i]'s first argument always has to be float
-        if self.args[0].type == tp.Int:
-            self.args[0] = Cast(self.args[0], tp.Float)
+        arg = self.args[0]
+        if arg.type == tp.Int:
+            self.args[0] = Cast(arg, tp.Float)
 
         self.cast(cge)
 
@@ -291,14 +313,14 @@ class BINARY_POWER(BinaryOp):
 
         llvm_pow = llvm.core.Function.intrinsic(
            cge.module.llvm, self.b_func[
-                self.args[1].type], [
-                self.args[0].llvmType()])
+               self.args[1].type], [
+               self.args[0].llvmType()])
         pow_result =cge.builder.call(llvm_pow, [self.args[0].translate(cge), power])
 
         if isinstance(self.args[0], Cast) and \
                 self.args[0].obj.type == tp.Int and self.args[1].type == tp.Int:
             # cast back to an integer
-            self.result.llvm =cge.builder.fptosi(pow_result, tp.Int.llvmType())
+            self.result.llvm = cge.builder.fptosi(pow_result, tp.Int.llvmType())
         else:
             self.result.llvm = pow_result
 
@@ -315,6 +337,7 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
         super().__init__(func, debuginfo)
 
     def type_eval(self, func):
+        self.grab_stack()
         for arg in self.args:
             # TODO: this is a HACK
             if isinstance(arg, Cast):
@@ -335,20 +358,21 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
     def translate(self, cge):
         self.cast(cge)
 
-        tmp =cge.builder.fdiv(
+        tmp = cge.builder.fdiv(
             self.args[0].translate(cge),
             self.args[1].translate(cge),
             self.result.name)
         llvm_floor = llvm.core.Function.intrinsic(
            cge.module.llvm, llvm.core.INTR_FLOOR, [
                 tp.Float.llvmType()])
-        self.result.llvm =cge.builder.call(llvm_floor, [tmp])
+        self.result.llvm = cge.builder.call(llvm_floor, [tmp])
 
+        # TODO this is peaking too deeply into the cast
         if all([isinstance(a, Cast) and a.obj.type == tp.Int for a in self.args]):
             # TODO this may be superflous if both args got converted to float
             # in the translation stage -> move toFloat partially to the
             # analysis stage.
-            self.result.llvm =cge.builder.fptosi(
+            self.result.llvm = cge.builder.fptosi(
                 self.result.translate(cge),
                 tp.Int.llvmType(),
                 "(int)" +
@@ -358,34 +382,19 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
 class BINARY_TRUE_DIVIDE(BinaryOp):
     b_func = {tp.Float: 'fdiv'}
 
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+        self.result = Register(func)
+
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        self.result = Register(func)
-        stack.push(self.result)
+        stack.push(self)
 
     def type_eval(self, func):
+        self.grab_stack()
         # The result of `/', true division, is always a float
         self.result.type = tp.Float
         super().type_eval(func)
-
-# class InplaceOp(BinaryOp):
-#    @pop_stack(2)
-#    def stack_eval(self, func, stack):
-#        type_ = unify_type(self.args[0].type, self.args[1].type, self.debuginfo)
-#        if type_ != self.args[0].type:
-#            self.result = Local.tmp(self.args[0])
-#            self.result.type = tp
-#        else:
-#            self.result = self.args[0]
-#        stack.push(self.result)
-#
-#    def translate(self, cge):
-#        self.floatArg(cge.builder)
-#        f = getattr(cge.builder, self.builderFuncName())
-#        self.result.llvm = f(self.args[0].llvm, self.args[1].llvm, self.result.name)
-
-# Inplace operators don't have a semantic difference when used on
-# primitive types
 
 
 class INPLACE_ADD(BINARY_ADD):
@@ -434,16 +443,17 @@ class COMPARE_OP(Bytecode):
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
+        self.result = Register(func)
 
     def addCmp(self, op):
         self.op = op
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        self.result = Register(func)
-        stack.push(self.result)
+        stack.push(self)
 
     def type_eval(self, func):
+        self.grab_stack()
         self.result.type = tp.Bool
         if (self.args[0].type != self.args[1].type and
                 self.args[0].type != tp.NoType and self.args[1].type != tp.NoType):
@@ -474,9 +484,12 @@ class RETURN_VALUE(utils.BlockTerminal, Bytecode):
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
-        self.result = self.popFirstArg()
+        pass
 
     def type_eval(self, func):
+        self.grab_stack()
+        if self.result is None:
+            self.result = self.popFirstArg()
         for arg in self.args:
             func.retype(self.result.unify_type(arg.type, self.debuginfo))
 
@@ -518,12 +531,10 @@ class Jump(utils.BlockTerminal, HasTarget, ir.IR):
         return False
 
     def stack_eval(self, func, stack):
-        tos = stack.peek()
-        if tos:
-            tos.bc = self
         return [(self.target_bc, stack)]
 
     def type_eval(self, func):
+        self.grab_stack()
         pass
 
     def translate(self, cge):
@@ -551,15 +562,9 @@ class Jump_if_X_or_pop(Jump):
         stack2 = stack.clone()
         r = []
         # if X, push back onto stack and jump:
-        self.args[0].bc = self
-        stack.push(self.args[0])
+        stack.push(self.stack_args[0])
         r.append((self.target_bc, stack))
         # else continue with the next instruction (and keep the popped value)
-        if not stack2.empty():
-            # TODO: is stack2 always empty?
-            tos = stack2.peek()
-            if tos:
-                tos.bc = self
         r.append((self.next, stack2))
 
         return r
@@ -617,8 +622,6 @@ class Pop_jump_if_X(Jump):
     def stack_eval(self, func, stack):
         r = []
         # if X, jump
-        self.args[0].bc = self
-
         jump_stack = stack.clone()
         for i in range(self.additional_pops):
             jump_stack.pop()
@@ -700,26 +703,7 @@ class LOAD_GLOBAL(Bytecode):
         self.args.append(name)
 
     def stack_eval(self, func, stack):
-        self.var = func.loadGlobal(self.args[0])
-        # TODO: remove these isinstance checks and just check for
-        # GlobalVariable else return directly?
-        if isinstance(self.var, ir.Function):
-            self.result = self.var
-        elif isinstance(self.var, types.ModuleType):
-            self.result = self.var
-        elif isinstance(self.var, type):
-            self.result = self.var
-        elif isinstance(self.var, ir.Intrinsic):
-            self.result = self.var
-        elif isinstance(self.var, GlobalVariable):
-            self.result = Register(func)
-        else:
-            raise exc.UnimplementedError(
-                "Unknown global type {0}".format(
-                    type(
-                        self.result)))
-        stack.push(self.result)
-
+        stack.push(self)
     def translate(self, cge):
         if isinstance(self.var, ir.Function):
             pass
@@ -727,13 +711,32 @@ class LOAD_GLOBAL(Bytecode):
             self.result.llvm =cge.builder.load(self.var.translate(cge))
 
     def type_eval(self, func):
+        self.grab_stack()
+        if self.result is None:
+            self.var = func.impl.loadGlobal(self.args[0])
+            # TODO: remove these isinstance checks and just check for
+            # GlobalVariable else return directly?
+            if isinstance(self.var, ir.Function):
+                self.result = self.var
+            elif isinstance(self.var, types.ModuleType):
+                self.result = self.var
+            elif isinstance(self.var, type):
+                self.result = tp.PyWrapper(self.var)
+            elif isinstance(self.var, ir.Intrinsic):
+                self.result = self.var
+            elif isinstance(self.var, GlobalVariable):
+                self.result = Register(func.impl)
+            else:
+                raise exc.UnimplementedError(
+                    "Unknown global type {0}".format(
+                        type(
+                            self.result)))
+
         if isinstance(self.var, GlobalVariable):
             self.result.unify_type(self.var.type, self.debuginfo)
 
 
 class LOAD_ATTR(Bytecode):
-    #discard = True
-
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
@@ -742,56 +745,64 @@ class LOAD_ATTR(Bytecode):
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
-        if isinstance(self.args[1], types.ModuleType):
-            self.result = func.module.loadExt(self.args[1], self.args[0])
-            self.discard = True
-        else:
-            self.result = Register(func)
-        stack.push(self.result)
+        stack.push(self)
 
     def translate(self, cge):
-        if isinstance(self.args[1], types.ModuleType):
+        arg1 = self.args[1]
+        if isinstance(arg1, types.ModuleType):
             return
-        elif isinstance(self.args[1].type, tp.StructType):
-            struct_llvm = self.args[1].translate(cge)
-            idx = self.args[1].type.getMemberIdx(self.args[0])
+        elif isinstance(arg1.type, tp.StructType):
+            struct_llvm = arg1.translate(cge)
+            idx = arg1.type.getMemberIdx(self.args[0])
             idx_llvm = tp.getIndex(idx)
             p = cge.builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
-            self.result.llvm =cge.builder.load(p)
+            self.result.llvm = cge.builder.load(p)
         else:
-            raise UnimplementedError(type(self.args[1]))
+            raise exc.UnimplementedError(type(arg1))
 
     def type_eval(self, func):
-        if isinstance(self.args[1], types.ModuleType):
+        self.grab_stack()
+        arg1 = self.args[1]
+        if self.result is None:
+            if isinstance(arg1, types.ModuleType):
+                self.result = func.module.loadExt(arg1, self.args[0])
+                self.discard = True
+            else:
+                self.result = Register(func.impl)
+
+        if isinstance(arg1, types.ModuleType):
             pass
-        elif isinstance(self.args[1].type, tp.StructType):
+        elif isinstance(arg1.type, tp.StructType):
             try:
-                type_ = self.args[1].type.getMemberType(self.args[0])
+                type_ = arg1.type.getMemberType(self.args[0])
                 self.result.unify_type(type_, self.debuginfo)
             except KeyError:
                 raise exc.AttributeError("Unknown field {} of type {}".format(self.args[0],
-                                                                              self.args[1].type),
+                                                                              arg1.type),
                                          self.debuginfo)
         else:
             raise exc.UnimplementedError(
                 "Cannot load attribute {0} of an object with type {1}".format(
-                    self.args[0], type(
-                        self.args[1])))
+                    self.args[0], type(arg1)))
 
 
 class STORE_ATTR(Bytecode):
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
+        # TODO: Does the result have to be a register? Don't I only need it for
+        # the llvm propagation?
+        self.result = Register(func)
 
     def addName(self, func, name):
         self.args.append(name)
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        self.result = Register(func)
+        pass
 
     def type_eval(self, func):
+        self.grab_stack()
         if isinstance(self.args[2].type, tp.StructType):
             member_type = self.args[2].type.getMemberType(self.args[0])
             arg_type = self.args[1].type
@@ -822,7 +833,7 @@ class STORE_ATTR(Bytecode):
             p = cge.builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
             self.result.llvm = cge.builder.store(val_llvm, p)
         else:
-            raise UnimplementedError(type(self.args[2]))
+            raise exc.UnimplementedError(type(self.args[2]))
 
 
 class CALL_FUNCTION(Bytecode):
@@ -854,19 +865,24 @@ class CALL_FUNCTION(Bytecode):
         self.args = args
 
     def stack_eval(self, func, stack):
+        self.stack_args = []
         for i in range(self.num_pos_args + 2*self.num_kw_args + 1):
             arg = stack.pop()
-            self.args.append(arg)
-        self.args.reverse()
-        self.separateArgs()
+            self.stack_args.append(arg)
+        self.stack_args.reverse()
 
-        self.result = self.func.getResult(func)
-        stack.push(self.result)
-
-        if not isinstance(self.func, ir.Intrinsic):
-            func.module.functionCall(self.func, self.args, self.kw_args)
+        stack.push(self)
 
     def type_eval(self, func):
+        self.grab_stack()
+        if self.result is None:
+            self.separateArgs()
+
+            self.result = self.func.getResult(func.impl)
+
+            if not isinstance(self.func, ir.Intrinsic):
+                func.module.functionCall(self.func, self.args, self.kw_args)
+
         type_ = self.func.getReturnType(self.args, self.kw_args)
         tp_change = self.result.unify_type(type_, self.debuginfo)
 
@@ -1183,6 +1199,7 @@ class ForLoop(ir.IR):
         pass
 
     def type_eval(self, func):
+        self.grab_stack()
         # self.result.unify_type(int, self.debuginfo)
         pass
 
@@ -1197,7 +1214,7 @@ class STORE_SUBSCR(Bytecode):
         self.result = None
 
     def type_eval(self, func):
-        pass
+        self.grab_stack()
 
     def translate(self, cge):
         # for structs
@@ -1212,13 +1229,14 @@ class BINARY_SUBSCR(Bytecode):
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
+        self.result = Register(func)
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        self.result = Register(func)
-        stack.push(self.result)
+        stack.push(self)
 
     def type_eval(self, func):
+        self.grab_stack()
         if not isinstance(self.args[0].type, tp.ArrayType):
             raise exc.TypeError(
                 "Expected an array, but got {0}".format(
@@ -1245,7 +1263,7 @@ class POP_TOP(Bytecode):
         pass
 
     def type_eval(self, func):
-        pass
+        self.grab_stack()
 
     def translate(self, cge):
         pass
@@ -1259,11 +1277,11 @@ class DUP_TOP(Bytecode):
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
-        stack.push(self.args[0])
-        stack.push(self.args[0])
+        stack.push(self.stack_args[0])
+        stack.push(self.stack_args[0])
 
     def type_eval(self, func):
-        pass
+        self.grab_stack()
 
     def translate(self, cge):
         pass
@@ -1277,13 +1295,13 @@ class DUP_TOP_TWO(Bytecode):
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        stack.push(self.args[0])
-        stack.push(self.args[1])
-        stack.push(self.args[0])
-        stack.push(self.args[1])
+        stack.push(self.stack_args[0])
+        stack.push(self.stack_args[1])
+        stack.push(self.stack_args[0])
+        stack.push(self.stack_args[1])
 
     def type_eval(self, func):
-        pass
+        self.grab_stack()
 
     def translate(self, cge):
         pass
@@ -1297,11 +1315,11 @@ class ROT_TWO(Bytecode, Poison):
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        stack.push(self.args[1])
-        stack.push(self.args[0])
+        stack.push(self.stack_args[1])
+        stack.push(self.stack_args[0])
 
     def type_eval(self, func):
-        pass
+        self.grab_stack()
 
     def translate(self, cge):
         pass
@@ -1315,12 +1333,12 @@ class ROT_THREE(Bytecode, Poison):
 
     @pop_stack(3)
     def stack_eval(self, func, stack):
-        stack.push(self.args[2])
-        stack.push(self.args[0])
-        stack.push(self.args[1])
+        stack.push(self.stack_args[2])
+        stack.push(self.stack_args[0])
+        stack.push(self.stack_args[1])
 
     def type_eval(self, func):
-        pass
+        self.grab_stack()
 
     def translate(self, cge):
         pass
@@ -1335,9 +1353,10 @@ class UNARY_NEGATIVE(Bytecode):
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
-        stack.push(self.result)
+        stack.push(self)
 
     def type_eval(self, func):
+        self.grab_stack()
         arg = self.args[0]
         self.result.unify_type(arg.type, self.debuginfo)
 

@@ -39,6 +39,28 @@ class Type(object):
 NoType = Type()
 
 
+class PyWrapper(Type):
+    """This wrapper class can only be used for situations when the Python type
+    is consumed during the translation process, e.g. for intrinsics.
+    """
+    def __init__(self, py):
+        self.py = py
+        self.bc = None
+
+    def makePointer(self):
+        raise exc.TypeError("Cannot make a pointer of Python type {}".format(self.py))
+
+    def isPointer(self):
+        raise exc.TypeError("Cannot check pointer status of Python type {}".format(self.py))
+
+    def __str__(self):
+        return str(self.py)
+
+    def llvmType(self):
+        raise exc.TypeError("Cannot create an LLVM type for Python type {}".format(self.py))
+
+
+
 class ScalarType(Type):
     def __init__(self, name, type_, llvm, ctype, f_generic_value, f_constant):
         self.name = name
@@ -100,7 +122,7 @@ def getIndex(i):
     if type(i) == int:
         return llvm.core.Constant.int(tp_int32, i)
     else:
-        raise UnimplementedError("Unsupported index type {}".format(type(i)))
+        raise exc.UnimplementedError("Unsupported index type {}".format(type(i)))
 
 
 def invalid_none_use(msg):
@@ -131,6 +153,8 @@ def get_scalar(obj):
     type_ = type(obj)
     if type_ == type(int):
         type_ = obj
+    elif type_ == PyWrapper:
+        type_ = obj.py
 
     # HACK {
     if type_ == type(None):  # noqa
@@ -255,7 +279,7 @@ class StructType(Type):
     def __eq__(self, other):
         return (type(self) == type(other)
                 and self.attrib_names == other.attrib_names
-                and self.attrib_types == other.attrib_types)
+                and self.attrib_type == other.attrib_type)
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -347,6 +371,10 @@ class Typable(object):
     llvm = None
 
     def unify_type(self, tp2, debuginfo):
+        """Returns: widened:bool, needs_cast:bool
+        widened: this type changed
+        needs_cast: tp2 needs to be cast to this type
+        """
         tp1 = self.type
         if tp1 == tp2:
             pass
@@ -354,14 +382,18 @@ class Typable(object):
             self.type = tp2
         elif tp2 == NoType:
             pass
-        elif (tp1 == Int and tp2 == Float) or (tp1 == Float and tp2 == Int):
+        elif tp1 == Int and tp2 == Float:
             self.type = Float
-            return True
+            return True, False
+        elif tp1 == Float and tp2 == Int:
+            # Note that the type does not have to change here because Float is
+            # already wider than Int
+            return False, True
         else:
             raise exc.TypeError("Unifying of types {} and {} (not yet) implemented".format(
                 tp1, tp2), debuginfo)
 
-        return False
+        return False, False
 
     def llvmType(self):
         """Map from Python types to LLVM types."""
@@ -465,13 +497,17 @@ class Cast(Typable):
         self.name = "({0}){1}".format(self.type, self.obj.name)
 
     def translate(self, cge):
+        """This is a special case:
+        The .llvm attribute is set by bytecode that is being cast here.
+        So save it in obj, and generate our own .llvm
+        """
         if self.emitted:
-            assert hasattr(self, 'llvm')
             return self.llvm
         self.emitted = True
 
         # TODO: HACK: instead of failing, let's make it a noop
-        # assert self.obj.type == int and self.type == float
+        # I need to check WHY these casts are being created and if I can avoid
+        # them
         if self.obj.type == self.type:
             self.llvm = self.obj.llvm
             return self.llvm

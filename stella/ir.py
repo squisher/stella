@@ -97,6 +97,7 @@ class GlobalVariable(tp.Typable):
 @utils.linkedlist
 class IR(metaclass=ABCMeta):
     args = None
+    stack_args = None
     result = None
     debuginfo = None
     llvm = None
@@ -131,6 +132,17 @@ class IR(metaclass=ABCMeta):
         for arg in self.args:
             if isinstance(arg, tp.Cast):
                 arg.translate(cge)
+
+    def grab_stack(self):
+        """
+        Call first during type evaluation. Gets the results from the stack and
+        adds them to args.
+        """
+        if self.stack_args:
+            for arg in self.stack_args:
+                arg.result.bc = arg
+                self.args.append(arg.result)
+            self.stack_args = None
 
     @abstractmethod
     def stack_eval(self, func, stack):
@@ -179,6 +191,7 @@ class PhiNode(IR):
 
         self.blocks = []
         self.stacked = False
+        self.stack_args = []
 
     def stack_eval(self, func, stack):
         tos = stack.peek()
@@ -193,13 +206,14 @@ class PhiNode(IR):
         if tos:
             if not self.result:
                 self.result = Register(func)
-            self.args.append(stack.pop())
-            self.blocks.append(self.args[-1].bc)
-            stack.push(self.result)
+            self.stack_args.append(stack.pop())
+            self.blocks.append(self.stack_args[-1])
+            stack.push(self)
 
         self.stacked = True
 
     def type_eval(self, func):
+        self.grab_stack()
         if len(self.args) == 0:
             return
         for arg in self.args:
