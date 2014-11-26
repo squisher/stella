@@ -12,6 +12,7 @@ from . import tp
 from . import utils
 from . import ir
 
+
 class CGEnv(object):
     module = None
     builder = None
@@ -27,7 +28,7 @@ class Program(object):
 
         self.llvm = self.makeStub()
 
-        for func in self.module.funcs:
+        for _, func in self.module.namestore.all(ir.Function):
             self.blockAndCode(func)
 
     def blockAndCode(self, impl):
@@ -81,7 +82,7 @@ class Program(object):
     def makeStub(self):
         impl = self.module.entry
         func_tp = llvm.core.Type.function(impl.result.type.llvmType(), [])
-        func = self.module.llvm.add_function(func_tp, str(impl)+'__stub__')
+        func = self.module.llvm.add_function(func_tp, str(impl.function)+'__stub__')
         bb = func.append_basic_block("entry")
         builder = llvm.core.Builder.new(bb)
         self.cge.builder = builder
@@ -89,9 +90,9 @@ class Program(object):
         for name, var in self.module.namestore.all(ir.GlobalVariable):
             var.translate(self.cge)
 
-        args = [arg.translate(self.cge) for arg in self.module.entry_args]
+        llvm_args = [arg.translate(self.cge) for arg in self.module.entry_args]
 
-        call = builder.call(impl.llvm, args)
+        call = builder.call(impl.llvm, llvm_args)
 
         if impl.result.type is tp.Void:
             builder.ret_void()
@@ -106,7 +107,7 @@ class Program(object):
 
     def optimize(self, opt):
         if opt is not None:
-            logging.debug("Running optimizations level {0}... ".format(opt))
+            logging.warn("Running optimizations level {0}... ".format(opt))
             self.module.llvm.verify()
 
             tm = llvm.ee.TargetMachine.new(opt=opt)
@@ -151,7 +152,8 @@ class Program(object):
         entry = self.module.entry
 
         logging.info("running {0}{1}".format(entry,
-                                             list(zip(entry.arg_types, self.module.entry_args))))
+                                             list(zip(entry.type_.arg_types,
+                                                      self.module.entry_args))))
 
         # Now let's compile and run!
 
@@ -164,5 +166,6 @@ class Program(object):
 
         logging.debug("Returning...")
         self.module.destruct()
-        del (self.module)
+        del self.module
+
         return tp.llvm_to_py(entry.result.type, retval)

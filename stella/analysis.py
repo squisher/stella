@@ -25,10 +25,17 @@ class Function(object):
 
     @classmethod
     def clearCache(klass):
-        klass.funcs = {}
+        klass.funcs.clear()
 
     @classmethod
-    def get(klass, impl, module):
+    def get(klass, f, module):
+        if isinstance(f, ir.FunctionRef):
+            impl = f.function
+        elif isinstance(f, ir.Function):
+            impl = f
+        else:
+            raise exc.TypeError("{} is not a Function, it has type {}", f, type(f))
+
         logging.debug("Function.get({0}|{1}, {2})".format(
             impl, id(impl), module))
         try:
@@ -43,7 +50,7 @@ class Function(object):
         self.labels = {}
         self.incoming_jumps = {}
 
-        self.f = impl.f
+        self.f = impl.pyFunc()
         self.impl = impl
         self.module = module
 
@@ -51,14 +58,11 @@ class Function(object):
         self.todo = utils.Stack("Todo", log=self.log)
         logging.info("Analyzing {0}".format(self))
 
-    def getName(self):
+    def __str__(self):
         return str(self.impl)
 
-    def __str__(self):
-        return self.getName()
-
     def __repr__(self):
-        return "{}:{}>".format(super().__repr__()[:-1], self.getName())
+        return "{}:{}>".format(super().__repr__()[:-1], self)
 
     def retype(self, go=True):
         """Immediately retype this function if go is True"""
@@ -234,7 +238,7 @@ class Function(object):
     def analyzeCall(self, args, kwargs):
         self.log.debug("analysis.Function id " + str(id(self)))
         if not self.impl.analyzed:
-            self.impl.setParamTypes(args, kwargs)
+            self.impl.setupArgs(args, kwargs)
 
             self.log.debug("Analysis of " + self.impl.nameAndType())
 
@@ -374,16 +378,21 @@ class Function(object):
 
 def main(f, args, kwargs):
     module = ir.Module()
-    impl = ir.Function(f, module)
+    f_type = tp.get(f)
+    funcref = module.getFunctionRef(f_type)
 
+    # TODO: why do I use wrapValue for args but Const for kwargs...?
     const_kw = {}
     for k, v in kwargs.items():
         const_kw[k] = tp.Const(v)
-    impl.makeEntry(list(map(tp.wrapValue, args)), const_kw)
-    module.addFunc(impl)
+    funcref.makeEntry(list(map(tp.wrapValue, args)), const_kw)
 
-    f = Function.get(impl, module)
-    f.analyzeCall(args, kwargs)
+    f = Function.get(funcref, module)
+
+    wrapped_args = [tp.wrapValue(arg) for arg in args]
+    wrapped_kwargs = {k: tp.wrapValue(v) for k, v in kwargs.items()}
+    f.analyzeCall(wrapped_args, wrapped_kwargs)
+
     f.log.debug("called functions: " + str(module.todoCount()))
     while module.todoCount() > 0:
         # TODO add kwargs support!

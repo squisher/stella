@@ -2,7 +2,7 @@ import numpy as np
 
 from test import *  # noqa
 import stella
-from stella import exc
+
 
 class B(object):
     x = 0
@@ -63,11 +63,29 @@ class D(object):
         return not self.__eq__(other)
 
     def __repr__(self):
-        return "{}:{}, {}>".format(str(type(self))[:-1], self.x, self.y)
+        return "{}: {}>".format(str(type(self))[:-1], [self.z, self.a, self.y, self.g])
+
+
+class E(object):
+    def __init__(self, x=0):
+        self.x = x
+
+    def inc(self, p=1):
+        self.x += p
+        return self.x
+
+    def __eq__(self, other):
+        return (self.x == other.x)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __repr__(self):
+        return "{}[x={}]".format(str(type(self))[8:-2], self.x)
 
 
 def justPassing(a):
-    x = 1
+    x = 1  # noqa
 
 
 def cmpAttrib(a):
@@ -106,7 +124,31 @@ def getAndSetAttrib2(a):
     a.x -= 1
 
 
-args1 = [(1,1), (24, 42), (0.0, 1.0), (1.0, 1.0), (3.0, 0.0)]
+def callBoundMethod(e):
+    e.inc()
+    return e.x
+
+
+def callBoundMethod2(e):
+    e.inc(42)
+
+
+def callBoundMethod3(e, x):
+    e.inc(x)
+
+
+def callBoundMethodTwice(e, x):
+    e.inc(x)
+    e.inc(x)
+
+
+def callBoundMethodOnTwo(e1, e2):
+    e1.inc(1)
+    e2.inc(2)
+
+
+args1 = [(1, 1), (24, 42), (0.0, 1.0), (1.0, 1.0), (3.0, 0.0)]
+
 
 def getFirstArrayValue(c):
     return c.a[0]
@@ -145,6 +187,7 @@ def test_no_mutation_u(f):
     st = stella.wrap(f)(b2)
 
     assert b1 == b2 and py == st
+
 
 @mark.parametrize('f', [setAttrib])
 def test_mutation(f):
@@ -201,6 +244,7 @@ def test_mutation2_u(f, args):
 
     assert b1 == b2 and py == st
 
+
 @mark.parametrize('f', [returnUnknownAttrib])
 @mark.xfail(raises=AttributeError)
 def test_mutation2_f(f):
@@ -214,7 +258,7 @@ def test_mutation2_f(f):
     assert b1 == b2 and py == st
 
 
-args2 = [(1,2,3,4), (1.0, 2.0, 3.0)]
+args2 = [(1, 2, 3, 4), (1.0, 2.0, 3.0)]
 args3 = list(zip(args2, [0, 0.0]))
 
 
@@ -265,7 +309,11 @@ def manipulate_d1(d):
     d.g = 4.0
 
 
-@mark.parametrize('f', [manipulate_d1])
+def pass_struct(d):
+    manipulate_d1(d)
+
+
+@mark.parametrize('f', [manipulate_d1, pass_struct])
 def test_mutation3(f):
     b1 = D()
     b2 = D()
@@ -275,3 +323,45 @@ def test_mutation3(f):
     st = stella.wrap(f)(b2)
 
     assert b1 == b2 and py == st
+
+
+@mark.parametrize('f', [callBoundMethod, callBoundMethod2])
+def test_mutation4(f):
+    e1 = E()
+    e2 = E()
+
+    assert e1 == e2
+
+    py = f(e1)
+    st = stella.wrap(f)(e2)
+
+    assert e1 == e2 and py == st
+
+
+@mark.parametrize('f', [callBoundMethod3, callBoundMethodTwice])
+@mark.parametrize('arg', [0, -1, 5])
+def test_mutation5(f, arg):
+    e1 = E()
+    e2 = E()
+
+    assert e1 == e2
+
+    py = f(e1, arg)
+    st = stella.wrap(f)(e2, arg)
+
+    assert e1 == e2 and py == st
+
+
+@mark.parametrize('f', [callBoundMethodOnTwo])
+def test_mutation6(f):
+    e1 = E()
+    e2 = E()
+    e3 = E()
+    e4 = E()
+
+    assert e1 == e2 and e3 == e4
+
+    py = f(e1, e3)
+    st = stella.wrap(f)(e2, e4)
+
+    assert e1 == e2 and e3 == e4 and py == st

@@ -43,8 +43,13 @@ class UndefinedGlobalError(StellaException):
     pass
 
 
+class InternalError(StellaException):
+    pass
+
+
 class WrongNumberOfArgsError(StellaException):
     pass
+
 
 class AttributeError(StellaException, AttributeError):
     def __init__(self, msg, debuginfo=None):

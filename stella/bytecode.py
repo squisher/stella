@@ -11,8 +11,9 @@ from . import tp
 from . import exc
 from . import utils
 from . import ir
-from .ir import Register, StackLoc, GlobalVariable
+from .storage import Register, StackLoc, GlobalVariable
 from .tp import Cast, Const
+from .intrinsics import Intrinsic
 
 
 def pop_stack(n):
@@ -705,7 +706,7 @@ class LOAD_GLOBAL(Bytecode):
     def stack_eval(self, func, stack):
         stack.push(self)
     def translate(self, cge):
-        if isinstance(self.var, ir.Function):
+        if isinstance(self.var, ir.FunctionRef):
             pass
         elif isinstance(self.var, GlobalVariable):
             self.result.llvm =cge.builder.load(self.var.translate(cge))
@@ -716,21 +717,20 @@ class LOAD_GLOBAL(Bytecode):
             self.var = func.impl.loadGlobal(self.args[0])
             # TODO: remove these isinstance checks and just check for
             # GlobalVariable else return directly?
-            if isinstance(self.var, ir.Function):
+            if isinstance(self.var, ir.FunctionRef):
                 self.result = self.var
             elif isinstance(self.var, types.ModuleType):
                 self.result = self.var
             elif isinstance(self.var, type):
                 self.result = tp.PyWrapper(self.var)
-            elif isinstance(self.var, ir.Intrinsic):
+            elif isinstance(self.var, Intrinsic):
                 self.result = self.var
             elif isinstance(self.var, GlobalVariable):
                 self.result = Register(func.impl)
             else:
                 raise exc.UnimplementedError(
                     "Unknown global type {0}".format(
-                        type(
-                            self.result)))
+                        type(self.var)))
 
         if isinstance(self.var, GlobalVariable):
             self.result.unify_type(self.var.type, self.debuginfo)
@@ -752,9 +752,13 @@ class LOAD_ATTR(Bytecode):
         if isinstance(arg1, types.ModuleType):
             return
         elif isinstance(arg1.type, tp.StructType):
-            struct_llvm = arg1.translate(cge)
+            tp_attr = arg1.type.getMemberType(self.args[0])
+            if isinstance(tp_attr, tp.FunctionType):
+                self.result.f_self = arg1
+                return
             idx = arg1.type.getMemberIdx(self.args[0])
             idx_llvm = tp.getIndex(idx)
+            struct_llvm = arg1.translate(cge)
             p = cge.builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
             self.result.llvm = cge.builder.load(p)
         else:
@@ -762,28 +766,31 @@ class LOAD_ATTR(Bytecode):
 
     def type_eval(self, func):
         self.grab_stack()
+
         arg1 = self.args[1]
         if self.result is None:
             if isinstance(arg1, types.ModuleType):
                 self.result = func.module.loadExt(arg1, self.args[0])
                 self.discard = True
+            elif isinstance(arg1.type, tp.StructType):
+                try:
+                    type_ = self.args[1].type.getMemberType(self.args[0])
+                    if isinstance(type_, tp.FunctionType):
+                        # TODO: WIP: This does not exist yet.
+                        self.result = func.module.getFunctionRef(type_)
+                    else:
+                        self.result = Register(func.impl)
+                        self.result.unify_type(type_, self.debuginfo)
+                except KeyError:
+                    raise exc.AttributeError("Unknown field {} of type {}".format(self.args[0],
+                                                                                arg1.type),
+                                            self.debuginfo)
             else:
                 self.result = Register(func.impl)
-
-        if isinstance(arg1, types.ModuleType):
-            pass
-        elif isinstance(arg1.type, tp.StructType):
-            try:
-                type_ = arg1.type.getMemberType(self.args[0])
-                self.result.unify_type(type_, self.debuginfo)
-            except KeyError:
-                raise exc.AttributeError("Unknown field {} of type {}".format(self.args[0],
-                                                                              arg1.type),
-                                         self.debuginfo)
-        else:
-            raise exc.UnimplementedError(
-                "Cannot load attribute {0} of an object with type {1}".format(
-                    self.args[0], type(arg1)))
+#        else:
+#            raise exc.UnimplementedError(
+#                "Cannot load attribute {0} of an object with type {1}".format(
+#                    self.args[0], type(arg1)))
 
 
 class STORE_ATTR(Bytecode):
@@ -837,7 +844,6 @@ class STORE_ATTR(Bytecode):
 
 
 class CALL_FUNCTION(Bytecode):
-
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
@@ -880,7 +886,7 @@ class CALL_FUNCTION(Bytecode):
 
             self.result = self.func.getResult(func.impl)
 
-            if not isinstance(self.func, ir.Intrinsic):
+            if not isinstance(self.func, Intrinsic):
                 func.module.functionCall(self.func, self.args, self.kw_args)
 
         type_ = self.func.getReturnType(self.args, self.kw_args)

@@ -1,97 +1,19 @@
 import logging
-import inspect
 import weakref
 import types
 import sys
 from abc import ABCMeta, abstractmethod
 import ctypes
-import math
 
 import llvm
 import llvm.core
 import llvm.ee
-import numpy as np
 
 from . import exc
 from . import utils
 from . import tp
-from .intrinsics import python
-
-
-class Register(tp.Typable):
-    name = None
-
-    def __init__(self, func, name=None):
-        super().__init__()
-        if name:
-            assert type(name) == str
-            self.name = name
-        else:
-            self.name = func.newRegisterName()
-
-    def __str__(self):
-        return "{0}<{1}>".format(self.name, self.type)
-
-    def __repr__(self):
-        return self.name
-
-
-class StackLoc(tp.Typable):
-    name = None
-
-    def __init__(self, func, name):
-        super().__init__()
-        self.name = name
-
-    def __str__(self):
-        return "#{0}<{1}>".format(self.name, self.type)
-
-    def __repr__(self):
-        return self.name
-
-
-class GlobalVariable(tp.Typable):
-    name = None
-    initial_value = None
-
-    def __init__(self, name, initial_value=None):
-        super().__init__()
-        self.name = name
-        if initial_value is not None:
-            self.setInitialValue(initial_value)
-
-    def setInitialValue(self, initial_value):
-        if isinstance(initial_value, tp.Typable):
-            self.initial_value = initial_value
-        else:
-            self.initial_value = tp.wrapValue(initial_value)
-        self.type = self.initial_value.type
-        self.type.makePointer()
-
-    def __str__(self):
-        return "+{0}<{1}>".format(self.name, self.type)
-
-    def __repr__(self):
-        return self.name
-
-    def translate(self, cge):
-        if self.llvm:
-            return self.llvm
-
-        self.llvm = cge.module.llvm.add_global_variable(self.llvmType(), self.name)
-        # TODO: this condition is too complicated and likely means that my
-        # code is not working consistently with the attribute
-        llvm_init = None
-        if (hasattr(self.initial_value, 'llvm')
-                and self.initial_value is not None):
-            llvm_init = self.initial_value.translate(cge)
-
-        if llvm_init == None:
-            self.llvm.initializer = llvm.core.Constant.undef(self.initial_value.type.llvmType())
-        else:
-            self.llvm.initializer = llvm_init
-
-        return self.llvm
+from .storage import Register, StackLoc, GlobalVariable
+from . import intrinsics
 
 
 @utils.linkedlist
@@ -293,8 +215,6 @@ class Module(object):
 
     def __init__(self):
         super().__init__()
-        """funcs is the set of python functions which are compiled by Stella"""
-        self.funcs = set()
         self._todo = []
         self.entry = None
         self.llvm = None
@@ -302,13 +222,31 @@ class Module(object):
         self.external_modules = dict()
         self._cleanup = []
 
-    def addFunc(self, f):
-        self.funcs.add(f)
+    def _getFunction(self, item):
+        if isinstance(item, tp.FunctionType):
+            f_type = item
+        else:
+            f_type = tp.get(item)
+        try:
+            f = self.namestore[f_type.name]
+        except exc.UndefinedGlobalError:
+            f = Function(f_type, self)
+            self.namestore[f_type.name] = f
+        return f
 
-    def makeEntry(self, f, args):
+    def getFunctionRef(self, item):
+        if isinstance(item, Function):
+            f = item
+        else:
+            f = self._getFunction(item)
+        if f.type_.bound:
+            return BoundFunctionRef(f)
+        else:
+            return FunctionRef(f)
+
+    def makeEntry(self, funcref, args):
         assert self.entry is None
-        self.entry = f
-        self.namestore[f.name] = f
+        self.entry = funcref
         self.entry_args = args
 
     def getExternalModule(self, mod):
@@ -320,17 +258,17 @@ class Module(object):
         return self.external_modules.values()
 
     def _wrapPython(self, key, item, module=None):
-        if type(item) in (types.FunctionType, types.BuiltinFunctionType):
+        if isinstance(item, (types.FunctionType, types.BuiltinFunctionType)):
             intrinsic = getIntrinsic(item)
 
             if intrinsic:
                 wrapped = intrinsic()
-            elif hasattr(module, '__file__') and module and module.__file__[-3:] == '.so':
+            elif module and hasattr(module, '__file__') and module.__file__[-3:] == '.so':
                 ext_module = self.getExternalModule(module)
-                wrapped = ext_module.getFunction(item)
+                wrapped = ext_module.getFunctionRef(item)
             else:
-                wrapped = Function(item, self)
-                self.addFunc(wrapped)
+                f = self._getFunction(item)
+                wrapped = self.getFunctionRef(f)
         elif isinstance(item, types.ModuleType):
             # no need to wrap it, it will be used with self.loadExt()
             wrapped = item
@@ -357,7 +295,7 @@ class Module(object):
                     type(item) == type(print):
                 # external module
                 pass
-            elif type(item) not in (types.FunctionType, type(print)):
+            elif not isinstance(item, (types.FunctionType, type(print))):
                 raise exc.UnimplementedError(
                     "Currently only Functions can be imported (not {0})".format(type(item)))
             wrapped = self._wrapPython(key, item, module)
@@ -367,21 +305,25 @@ class Module(object):
     def loadGlobal(self, func, key):
         try:
             wrapped = self.namestore[key]
+            if isinstance(wrapped, Function):
+                wrapped = self.getFunctionRef(wrapped)
         except exc.UndefinedGlobalError as e:
             # TODO: too much nesting, there should be a cleaner way to detect these types
             if key == 'len':
                 item = len
-            elif key not in func.f.__globals__:
+            elif key not in func.pyFunc().__globals__:
                 if tp.supported_scalar_name(key):
                     return __builtins__[key]
                 else:
                     raise exc.UndefinedError("Cannot find global variable `{0}'".format(key))
                 raise e
             else:
-                item = func.f.__globals__[key]
+                item = func.pyFunc().__globals__[key]
             wrapped = self._wrapPython(key, item)
 
-            self.namestore[key] = wrapped
+            # _wrapPython will create an entry for functions _only_
+            if not isinstance(wrapped, FunctionRef):
+                self.namestore[key] = wrapped
         return wrapped
 
     def newGlobal(self, func, name):
@@ -390,15 +332,16 @@ class Module(object):
         self.namestore[name] = wrapped
         return wrapped
 
-    def functionCall(self, func, args, kwargs):
-        if isinstance(func, Foreign):
+    def functionCall(self, funcref, args, kwargs):
+        func = funcref.function
+        if isinstance(func, tp.Foreign):
             # no need to analyze it
             return
 
         if kwargs is None:
             kwargs = {}
         if not func.analyzed:
-            self.todoAdd(func, args, kwargs)
+            self.todoAdd(funcref, args, kwargs)
 
     def todoAdd(self, func, args, kwargs):
         self._todo.append((func, args, kwargs))
@@ -421,25 +364,42 @@ class Module(object):
     def translate(self):
         self.llvm = llvm.core.Module.new('__stella__'+str(self.__class__.i))
         self.__class__.i += 1
-        for impl in self.funcs:
+        for _, impl in self.namestore.all(Function):
             impl.translate(self.llvm)
 
     def destruct(self):
+        """Clean up this objects so that gc will succeed.
+
+        Function has a weakref back to Module, but something in Function
+        confuses the gc algorithm and Module will never be collected while
+        fully intact.
+        """
         logging.debug("destruct() of " + repr(self))
+
+        # destruct() can be called more than once
+        if hasattr(self, 'entry'):
+            del self.entry
+        if hasattr(self, 'entry_args'):
+            del self.entry_args
+
+        tp.destruct()
+        msg = []
         while True:
             try:
                 d = self._cleanup.pop()
+                msg.append(str(d))
                 d()
             except IndexError:
                 break
+        if len(msg) > 0:
+            logging.debug("Called destructors: " + ", ".join(msg))
 
     def addDestruct(self, d):
         self._cleanup.append(d)
 
     def __del__(self):
         logging.debug("DEL  " + repr(self))
-        if len(self._cleanup) > 0:
-            self.destruct()
+        self.destruct()
 
     def getLlvmIR(self):
         if self.llvm:
@@ -451,93 +411,37 @@ class Module(object):
         return '__module__' + str(id(self))
 
 
-class Callable(metaclass=ABCMeta):
-    arg_defaults = {}
-    arg_names = []
-
-    @abstractmethod
-    def getReturnType(self, args, kw_args):
-        pass
-
-    def getResult(self, func):
-        return Register(func)
-
-    def readSignature(self, f):
-        if f == len:
-            # yay, special cases
-            self.arg_names = ['obj']
-            self.arg_defaults = []
-            return
-        argspec = inspect.getargspec(f)
-        self.arg_names = argspec.args
-        self.arg_defaults = [tp.Const(default) for default in argspec.defaults or []]
-
-    def combineAndCheckArgs(self, args, kwargs):
-        num_args = len(args)
-        # TODO: is this the right place to check number of arguments?
-        if num_args+len(kwargs) < len(self.arg_names)-len(self.arg_defaults):
-            raise exc.TypeError("takes at least {0} argument(s) ({1} given)".format(
-                len(self.arg_names)-len(self.arg_defaults), len(args)+len(kwargs)))
-        if num_args+len(kwargs) > len(self.arg_names):
-            raise exc.TypeError("takes at most {0} argument(s) ({1} given)".format(
-                len(self.arg_names), len(args)))
-
-        # just initialize r to a list of the correct length
-        # TODO: I could initialize this smarter
-        r = list(self.arg_names)
-
-        # copy supplied regular arguments
-        for i in range(len(args)):
-            r[i] = args[i]
-
-        # set default values
-        def_offset = len(self.arg_names)-len(self.arg_defaults)
-        for i in range(max(num_args, len(self.arg_names)-len(self.arg_defaults)),
-                       len(self.arg_names)):
-            r[i] = self.arg_defaults[i-def_offset]
-
-        # insert kwargs
-        for k, v in kwargs.items():
-            try:
-                idx = self.arg_names.index(k)
-                if idx < num_args:
-                    raise exc.TypeError("got multiple values for keyword argument '{0}'".format(
-                        self.arg_names[idx]))
-                r[idx] = v
-            except ValueError:
-                raise exc.TypeError("Function does not take an {0} argument".format(k))
-
-        return r
-
-    def call(self, cge, args, kw_args):
-        args = self.combineAndCheckArgs(args, kw_args)
-
-        return cge.builder.call(self.llvm, [arg.translate(cge) for arg in args])
-
-
-class Function(Callable, Scope):
-    def __init__(self, f, module):
+class Function(Scope):
+    """
+    Represents the code of the function. Has to be unique for each source
+    instance.
+    """
+    def __init__(self, type_, module):
         # TODO: pass the module as the parent for scope
         super().__init__(None)
-        self.f = f
-        self.name = f.__name__
+        if not isinstance(type_, tp.FunctionType):
+            type_ = tp.FunctionType.get(type_)
+        self.type_ = type_
+        self.name = type_.fq
         self.result = Register(self, '__return__')
 
-        self.readSignature(f)
         self.args = []
 
-        # weak reference is necessary so that Python will start garbage
-        # collection for Module.
+        # Use a weak reference here because module has a reference to the
+        # function -- the cycle would prevent gc
         self.module = weakref.proxy(module)
 
         self.analyzed = False
         self.log = logging.getLogger(str(self))
 
+    def pyFunc(self):
+        return self.type_.pyFunc()
+
     def __str__(self):
         return self.name
 
     def __repr__(self):
-        return super().__repr__()[:-1]+':'+str(self)+'>'
+        return "{}:{}>".format(super().__repr__()[:-1], self)
 
     def nameAndType(self):
         return self.name + "(" + str(self.args) + ")"
@@ -556,29 +460,24 @@ class Function(Callable, Scope):
     def newGlobal(self, key):
         return self.module.newGlobal(self, key)
 
-    def makeEntry(self, args, kwargs):
-        self.module.makeEntry(self, self.combineAndCheckArgs(args, kwargs))
+    def setupArgs(self, args, kwargs):
+        tp_args = [arg.type for arg in args]
+        tp_kwargs = {k: v.type for k, v in kwargs.items()}
 
-    def setParamTypes(self, args, kwargs):
-        combined = self.combineAndCheckArgs(args, kwargs)
+        combined = self.type_.typeArgs(tp_args, tp_kwargs)
 
         self.arg_transfer = []
 
         for i in range(len(combined)):
-            # TODO: I don't particularly like this isinstance check here but it seems the easiest
-            #       way to also handle the initial entry function
-            if isinstance(combined[i], tp.Typable):
-                type_ = combined[i].type
-            else:
-                type_ = tp.get(combined[i])
+            type_ = combined[i]
 
             if type_.on_heap:
                 # TODO: create superclass for complex types
-                arg = self.getOrNewRegister(self.arg_names[i])
+                arg = self.getOrNewRegister(self.type_.arg_names[i])
                 arg.type = type_
                 arg.type.makePointer()
             else:
-                name = self.arg_names[i]
+                name = self.type_.arg_names[i]
                 arg = self.getOrNewRegister('__param_'+name)
                 arg.type = type_
                 self.arg_transfer.append(name)
@@ -616,122 +515,77 @@ class Function(Callable, Scope):
         bc.remove()
 
 
-class Foreign(object):
-    """Mixin: This is not a Python function. It does not need to get analyzed."""
-    pass
-# Intrinsics {...
+class FunctionRef(tp.Callable):
+    def __init__(self, function):
+        self.function = function
 
+    def __str__(self):
+        return "<*function {}>".format(self.function)
 
-class Intrinsic(Foreign, Callable):
-    py_func = None
+    def __repr__(self):
+        return "{}:{}>".format(super().__repr__()[:-1], self.function.type_.fq)
 
-    @abstractmethod
-    def call(self, cge, args, kw_args):
-        """args and kw_args are already added by a call through addArgs()"""
-        pass
+    @property
+    def type_(self):
+        """Convenience function to return the referenced function's type."""
+        # TODO: this may be confusing if function references become first class
+        # citizens!
+        return self.function.type_
 
-
-class Zeros(Intrinsic):
-    py_func = python.zeros
-
-    def __init__(self):
-        self.readSignature(self.py_func)
-
-    def getReturnType(self, args, kw_args):
-        combined = self.combineAndCheckArgs(args, kw_args)
-        shape = combined[0].value
-        type_ = tp.get_scalar(combined[1])
-        if not tp.supported_scalar(type_):
-            raise exc.TypeError("Invalid array element type {0}".format(type_))
-        return tp.ArrayType(type_, shape)
-
-    def call(self, cge, args, kw_args):
-        type_ = self.getReturnType(args, kw_args).llvmType()
-        return cge.builder.alloca(type_)
-
-
-class Len(Intrinsic):
-    """
-    Determine the length of the array based on its type.
-    """
-    py_func = len
-
-    def __init__(self):
-        self.readSignature(self.py_func)
-
-    def getReturnType(self, args, kw_args):
-        return tp.Int
-
-    def getResult(self, func):
-        # we need the reference to back-patch
-        self.result = tp.Const(0)
-        return self.result
-
-    def call(self, cge, args, kw_args):
-        obj = args[0]
-        if not isinstance(obj.type, tp.ArrayType):
-            raise exc.TypeError("Invalid array type {0}".format(self.obj.type))
-        self.result.value = obj.type.shape
-        self.result.translate(cge)
-        return self.result.llvm
-
-
-class Log(Intrinsic):
-    py_func = math.log
-    intr = llvm.core.INTR_LOG
-
-    def __init__(self):
-        self.readSignature(self.py_func)
-
-    def readSignature(self, f):
-        # arg, inspect.getargspec(f) doesn't work for C/cython functions
-        self.arg_names = ['x']
-        self.arg_defaults = []
-
-    def getReturnType(self, args, kw_args):
-        return tp.Float
-
-    def call(self, cge, args, kw_args):
-        if args[0].type == tp.Int:
-            args[0] = tp.Cast(args[0], tp.Float)
-            #args[0].translate(cge)  # done automatically now?
-
-        llvm_f = llvm.core.Function.intrinsic(cge.module.llvm, self.intr, [args[0].llvmType()])
-        result = cge.builder.call(llvm_f, [args[0].translate(cge)])
-        return result
+    def makeEntry(self, args, kwargs):
+        # TODO Verify that type checking occurred at this point
+        self.function.module.makeEntry(self, self.combineArgs(args, kwargs))
 
     def getResult(self, func):
         return Register(func)
 
+    # TODO: Maybe the caller of the following functions should resolve to
+    # self.function instead of making a proxy call here.
 
-class Exp(Log):
-    py_func = math.exp
-    intr = llvm.core.INTR_EXP
+    def getReturnType(self, args, kw_args):
+        return self.function.getReturnType(args, kw_args)
 
-    def __init__(self):
-        super().__init__()
+    @property
+    def result(self):
+        return self.function.result
 
-# --
+    @property
+    def llvm(self):
+        return self.function.llvm
 
-func2klass = {}
-# Get all contrete subclasses of Intrinsic and register them
-for name in dir(sys.modules[__name__]):
-    klass = sys.modules[__name__].__dict__[name]
-    try:
-        if issubclass(klass, Intrinsic) and len(klass.__abstractmethods__) == 0 and \
-                klass.py_func is not None:
-            func2klass[klass.py_func] = klass
-    except TypeError:
-        pass
+
+class BoundFunctionRef(FunctionRef):
+    def __init__(self, function):
+        super().__init__(function)
+
+    def __str__(self):
+        return "<*bound method {} of {}>".format(self.function, self.type_.bound)
+
+    @property
+    def self_type(self):
+        return self.type_.bound
+
+    @property
+    def f_self(self):
+        return self._f_self
+
+    @f_self.setter
+    def f_self(self, value):
+        # TODO: These should be throw-away objects. I want to know if they live
+        # longer than expected.
+        assert not hasattr(self, '_f_self')
+        self._f_self = value
+
+    def combineArgs(self, args, kwargs):
+        full_args = [self.f_self] + args
+        return super().combineArgs(full_args, kwargs)
 
 
 def getIntrinsic(func):
-    if func in func2klass:
-        return func2klass[func]
+    if func in intrinsics.func2klass:
+        return intrinsics.func2klass[func]
     else:
         return None
-
-# } Intrinsics
 
 
 class ExtModule(object):
@@ -746,7 +600,8 @@ class ExtModule(object):
         self.signatures = python.getCSignatures()
 
         for name, sig in self.signatures.items():
-            self.funcs[name] = ExtFunction(name, sig)
+            type_ = tp.ExtFunctionType(sig)
+            self.funcs[name] = ExtFunction(name, type_)
         self.translated = False
 
     def getFile(self):
@@ -761,6 +616,9 @@ class ExtModule(object):
     def getFunction(self, f):
         return self.funcs[f.__name__]
 
+    def getFunctionRef(self, f):
+        return ExtFunctionRef(self.funcs[f.__name__])
+
     def __str__(self):
         return str(self.python)
 
@@ -773,43 +631,53 @@ class ExtModule(object):
                 func.translate(clib, module)
 
 
-class ExtFunction(Foreign, Callable):
+class ExtFunction(object):
     llvm = None
+    analyzed = True
     name = '?()'
 
-    def __init__(self, name, signature):
+    def __init__(self, name, type_):
         self.name = name
-        ret, arg_types = signature
-        self.return_type = tp.from_ctype(ret)
-        self.arg_types = list(map(tp.from_ctype, arg_types))
-        self.readSignature(None)
+        self.type_ = type_
+        self.result = Register(self, '__return__')
 
     def __str__(self):
         return self.name
 
-    def readSignature(self, f):
-        # arg, inspect.getargspec(f) doesn't work for C/cython functions
-        self.arg_names = ['arg{0}' for i in range(len(self.arg_types))]
-        self.arg_defaults = []
-
     def getReturnType(self, args, kw_args):
-        return self.return_type
+        # TODO: Do we need to type self.result?
+        return self.type_.getReturnType(args, kw_args)
 
     def translate(self, clib, module):
         logging.debug("Adding external function {0}".format(self.name))
         f = getattr(clib, self.name)
         llvm.ee.dylib_add_symbol(self.name, ctypes.cast(f, ctypes.c_void_p).value)
 
-        llvm_arg_types = [arg.llvmType() for arg in self.arg_types]
+        llvm_arg_types = [arg.llvmType() for arg in self.type_.arg_types]
 
-        func_tp = llvm.core.Type.function(self.return_type.llvmType(), llvm_arg_types)
+        func_tp = llvm.core.Type.function(self.type_.return_type.llvmType(), llvm_arg_types)
         self.llvm = module.add_function(func_tp, self.name)
 
+
+class ExtFunctionRef(tp.Callable):
+    def __init__(self, function):
+        self.function = function
+
+    @property
+    def type_(self):
+        return self.function.type_
+
+    def getReturnType(self, args, kwargs):
+        return self.function.getReturnType(args, kwargs)
+
+    def getResult(self, func):
+        return Register(func)
+
     def call(self, cge, args, kw_args):
-        args = self.combineAndCheckArgs(args, kw_args)
+        args = self.combineArgs(args, kw_args)
 
         args_llvm = []
-        for arg, arg_type in zip(args, self.arg_types):
+        for arg, arg_type in zip(args, self.type_.arg_types):
             if arg.type != arg_type:
                 # TODO: trunc is not valid for all type combinations.
                 # Needs to be generalized.
@@ -819,4 +687,4 @@ class ExtFunction(Foreign, Callable):
                 llvm = arg.llvm
             args_llvm.append(llvm)
 
-        return cge.builder.call(self.llvm, args_llvm)
+        return cge.builder.call(self.function.llvm, args_llvm)

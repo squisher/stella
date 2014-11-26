@@ -4,6 +4,9 @@ import llvm.ee
 import numpy as np
 import ctypes
 import logging
+import types
+from abc import ABCMeta, abstractmethod
+import inspect
 
 from . import exc
 
@@ -20,7 +23,6 @@ class Type(object):
         #self.ptr += 1
         if self.on_heap:
             self.ptr = 1
-
 
     def isPointer(self):
         return self.ptr > 0
@@ -40,12 +42,15 @@ NoType = Type()
 
 
 class PyWrapper(Type):
-    """This wrapper class can only be used for situations when the Python type
-    is consumed during the translation process, e.g. for intrinsics.
+    """Wrap Python types, e.g. for the intrinsic zeros dtype parameter.
+
+    This allows passing types as first-class values, but is used only in
+    special circumstances like zeros().
     """
     def __init__(self, py):
         self.py = py
         self.bc = None
+        self.type = get_scalar(py)
 
     def makePointer(self):
         raise exc.TypeError("Cannot make a pointer of Python type {}".format(self.py))
@@ -58,7 +63,6 @@ class PyWrapper(Type):
 
     def llvmType(self):
         raise exc.TypeError("Cannot create an LLVM type for Python type {}".format(self.py))
-
 
 
 class ScalarType(Type):
@@ -190,6 +194,7 @@ class StructType(Type):
 
     on_heap = True
 
+    attrib_names = None
     attrib_type = None
     attrib_idx = None
     base_type = None
@@ -197,16 +202,30 @@ class StructType(Type):
 
     @classmethod
     def fromObj(klass, obj):
-        type_name = str(type(obj))[1:-1]
+        type_name = str(type(obj)).split("'")[1]
         attrib_type = {}
         attrib_idx = {}
-        attrib_names = list(filter(lambda s: not s.startswith('_'), dir(obj)))  # TODO: only exclude __?
-        i = 0
+        attrib_names = sorted(list(filter(lambda s: not s.startswith('_'),
+                                          dir(obj))))  # TODO: only exclude __?
         for name in attrib_names:
             attrib = getattr(obj, name)
             # TODO: catch the exception and improve the error message?
             type_ = get (attrib)
             attrib_type[name] = type_
+
+        # Sort attrib_names so that function types are after attribute types.
+        # This allows me to keep them around, because even though they aren't
+        # translated into the llvm struct, their presence does not mess up the
+        # indices.
+        def funcs_last(n):
+            if isinstance(attrib_type[n], FunctionType):
+                return 1
+            else:
+                return 0
+
+        attrib_names = sorted(attrib_names, key=funcs_last)
+        i = 0
+        for name in attrib_names:
             attrib_idx[name] = i
             i += 1
 
@@ -225,6 +244,10 @@ class StructType(Type):
     def getMemberIdx(self, name):
         return self.attrib_idx[name]
 
+    def _scalarAttributeNames(self):
+        return filter(lambda n: not isinstance(self.attrib_type[n], FunctionType),
+                      self.attrib_names)
+
     def llvmType(self):
         # TODO find a more efficient place where the pointer values are created
         # This needs to be done before the cache look up because it will
@@ -234,9 +257,9 @@ class StructType(Type):
                 type_.makePointer()
         mangled_name = '_'.join([self.name] + [str(t) for t in self.attrib_type.values()])
 
-        if not mangled_name in self.__class__.type_store:
+        if mangled_name not in self.__class__.type_store:
             llvm_types = []
-            for name, idx in sorted(self.attrib_idx.items(), key=lambda a: a[1]):
+            for name in self._scalarAttributeNames():
                 type_ = self.attrib_type[name]
                 llvm_types.append(type_.llvmType())
             type_ = llvm.core.Type.struct(llvm_types, name=mangled_name)
@@ -248,7 +271,7 @@ class StructType(Type):
 
     def ctypes(self):
         fields = []
-        for name in self.attrib_names:
+        for name in self._scalarAttributeNames():
             fields.append((name, self.attrib_type[name].ctype))
         ctype = type("_" + self.name + "_transfer", (ctypes.Structure, ), {'_fields_': fields})
         return ctype
@@ -271,10 +294,11 @@ class StructType(Type):
 
 
     def __str__(self):
-        return "{}{}: {}".format('*'*self.ptr, self.name, list(self.attrib_type.keys()))
+        return "{}{}".format('*'*self.ptr, self.name)
 
     def __repr__(self):
-        return "<{}>".format(self)
+        #return "<{}>".format(self)
+        return "<{}{}: {}>".format('*'*self.ptr, self.name, list(self.attrib_type.keys()))
 
     def __eq__(self, other):
         return (type(self) == type(other)
@@ -286,7 +310,7 @@ class StructType(Type):
 
 
 class ArrayType(Type):
-    tp = NoType
+    type_ = NoType
     shape = None
     on_heap = True
     ctype = ctypes.POINTER(ctypes.c_int)  # TODO why is ndarray.ctypes.data of type int?
@@ -307,39 +331,246 @@ class ArrayType(Type):
 
         return ArrayType(dtype, shape)
 
-    def __init__(self, tp, shape):
-        assert tp in _pyscalars.values()
-        self.tp = tp
+    def __init__(self, type_, shape):
+        assert type_ in _pyscalars.values()
+        self.type_ = type_
         self.shape = shape
 
     def getElementType(self):
-        return self.tp
+        return self.type_
 
     def llvmType(self):
-        type_ = llvm.core.Type.array(self.tp.llvmType(), self.shape)
+        type_ = llvm.core.Type.array(self.type_.llvmType(), self.shape)
         if self.ptr:
             type_ = llvm.core.Type.pointer(type_)
 
         return type_
 
     def __str__(self):
-        return "<{}{}*{}>".format('*'*self.ptr, self.tp, self.shape)
+        return "<{}{}*{}>".format('*'*self.ptr, self.type_, self.shape)
 
     def __repr__(self):
         return str(self)
 
 
-def llvm_to_py(tp, val):
-    if tp == Int:
+class Callable(metaclass=ABCMeta):
+    @abstractmethod
+    def getResult(self, func):
+        pass
+
+    def combineArgs(self, args, kwargs):
+        """Combine concrete args and kwargs according to calling conventions.
+
+        Precondition: Typing has been performed, so typeArgs already ensures
+        that the correct number of arguments are provided.
+        """
+        return self.type_._combineArgs(args, kwargs)
+
+    def call(self, cge, args, kw_args):
+        combined_args = self.combineArgs(args, kw_args)
+
+        return cge.builder.call(self.llvm, [arg.translate(cge) for arg in combined_args])
+
+
+class Foreign(object):
+    """Mixin: This is not a Python function. It does not need to get analyzed."""
+    pass
+
+
+class FunctionType(Type):
+    _registry = {}
+
+    @classmethod
+    def get(klass, obj, bound=None, builtin=False):
+        if bound:
+            key = (type(bound), obj.__name__)
+        else:
+            key = obj
+
+        if key not in klass._registry:
+            klass._registry[key] = klass(obj, bound, builtin)
+
+        return klass._registry[key]
+
+    @classmethod
+    def destruct(klass):
+        klass._registry.clear()
+
+    def __init__(self, obj, bound=None, builtin=False):
+        """Type representing a function.
+
+        obj: Python function reference
+        bound: self if it is a method
+        builtin: True if e.g. len
+
+        Assumption: bound or builtin
+        """
+        self.name = obj.__name__
+        self._func = obj
+        self.bound = bound
+        self._builtin = builtin
+
+        self.readSignature(obj)
+
+    def pyFunc(self):
+        return self._func
+
+    @property
+    def bound(self):
+        """None if a regular function, returns the type of self if a bound method
+
+        Note that unbound methods are not yet supported
+        """
+        # Lazily get the type of bound to avoid recursion:
+        # -> self is a struct, which has as one of its members a bound function
+        if self._bound is None:
+            return None
+        return get(self._bound)
+
+    @bound.setter
+    def bound(self, obj):
+        self._bound = obj
+
+    @property
+    def builtin(self):
+        return self._builtin
+
+    arg_defaults = []
+    tp_defaults = []
+    arg_names = []
+    arg_types = []
+    def_offset = 0
+
+    @abstractmethod
+    def getReturnType(self, args, kw_args):
+        pass
+
+    def readSignature(self, f):
+        argspec = inspect.getargspec(f)
+        self.arg_names = argspec.args
+        self.arg_defaults = [Const(default) for default in argspec.defaults or []]
+        self.tp_defaults = [d.type for d in self.arg_defaults]
+        self.def_offset = len(self.arg_names)-len(self.arg_defaults)
+
+    def typeArgs(self, tp_args, tp_kwargs):
+        # TODO store the result?
+
+        if self.bound:
+            tp_args.insert(0, self.bound)
+
+        num_args = len(tp_args)
+        if num_args+len(tp_kwargs) < len(self.arg_names)-len(self.arg_defaults):
+            raise exc.TypeError("takes at least {0} argument(s) ({1} given)".format(
+                len(self.arg_names)-len(self.arg_defaults), len(tp_args)+len(tp_kwargs)))
+        if num_args+len(tp_kwargs) > len(self.arg_names):
+            raise exc.TypeError("takes at most {0} argument(s) ({1} given)".format(
+                len(self.arg_names), len(tp_args)))
+
+        if len(self.arg_types) == 0:
+            self.arg_types = self._combineArgs(tp_args, tp_kwargs, self.tp_defaults)
+        else:
+            # Already typed, so the supplied arguments must match what the last
+            # call used.
+            supplied_args = self._combineArgs(tp_args, tp_kwargs, self.tp_defaults)
+            for i, prototype, supplied in zip(range(len(supplied_args)),
+                                              self.arg_types,
+                                              supplied_args):
+                if prototype != supplied:
+                    raise exc.TypeError("Argument {} has type {}, but type {} was supplied".format(
+                        self.arg_names[i], prototype, supplied))
+        return self.arg_types
+
+    def _combineArgs(self, args, kwargs, defaults=None):
+        """Combine concrete or types of args and kwargs according to calling conventions."""
+        if defaults is None:
+            defaults = self.arg_defaults
+        num_args = len(args)
+        r = [None] * len(self.arg_names)
+
+        # copy supplied regular arguments
+        for i in range(len(args)):
+            r[i] = args[i]
+
+        # set default values
+        for i in range(max(num_args, len(self.arg_names)-len(defaults)),
+                       len(self.arg_names)):
+            r[i] = defaults[i-self.def_offset]
+
+        # insert kwargs
+        for k, v in kwargs.items():
+            try:
+                idx = self.arg_names.index(k)
+                if idx < num_args:
+                    raise exc.TypeError("got multiple values for keyword argument '{0}'".format(
+                        self.arg_names[idx]))
+                r[idx] = v
+            except ValueError:
+                raise exc.TypeError("Function does not take an {0} argument".format(k))
+
+        return r
+
+    def __str__(self):
+        if self._bound:
+            tp_name = str(type(self._bound)).split("'")[1]
+            return "<bound method {}.{}>".format(tp_name, self._func.__name__)
+        else:
+            return "<function {}>".format(self._func.__name__)
+
+    @property
+    def fq(self):
+        """Returns the fully qualified type name."""
+        if self._bound:
+            return "{}.{}".format(str(self.bound), self.name)
+        else:
+            return self.name
+
+    def llvmType(self):
+        raise exc.InternalError("This is an intermediate type presentation only!")
+
+
+class IntrinsicType(FunctionType):
+    def __init__(self, f, names, defaults):
+        super().__init__(f, bound=None, builtin=True)
+        self.arg_names = names
+        self.arg_defaults = defaults
+        self.def_offset = len(self.arg_names)-len(self.arg_defaults)
+
+    def readSignature(self, f):
+        """The signature is built in for Intrinsics. NOOP."""
+        pass
+
+
+class ExtFunctionType(Foreign, FunctionType):
+    def __init__(self, signature):
+        ret, arg_types = signature
+        self.return_type = from_ctype(ret)
+        self.arg_types = list(map(from_ctype, arg_types))
+        self.readSignature(None)
+
+    def __str__(self):
+        return "<{} function({})>".format(self.return_type,
+                                           ", ".join(zip(self.arg_types, self.arg_names)))
+
+    def readSignature(self, f):
+        # arg, inspect.getargspec(f) doesn't work for C/cython functions
+        self.arg_names = ['arg{0}' for i in range(len(self.arg_types))]
+        self.arg_defaults = []
+
+    def getReturnType(self, args, kw_args):
+        return self.return_type
+
+
+def llvm_to_py(type_, val):
+    if type_ == Int:
         return val.as_int_signed()
-    elif tp == Float:
-        return val.as_real(tp.llvmType())
-    elif tp == Bool:
+    elif type_ == Float:
+        return val.as_real(type_.llvmType())
+    elif type_ == Bool:
         return bool(val.as_int())
-    elif tp is None_:
+    elif type_ is None_:
         return None
     else:
-        raise exc.TypeError("Unknown type {0}".format(tp))
+        raise exc.TypeError("Unknown type {0}".format(type_))
 
 
 def get(obj):
@@ -349,10 +580,19 @@ def get(obj):
         return get_scalar(type_)
     elif type_ == np.ndarray:
         return ArrayType.fromArray(obj)
+    elif isinstance(obj, types.FunctionType):
+        return FunctionType.get(obj)
+    elif isinstance(obj, types.MethodType):
+        return FunctionType.get(obj, bound=obj.__self__)
+    elif isinstance(obj, types.BuiltinFunctionType):
+        return FunctionType.get(obj, builtin=True)
+    elif isinstance(obj, types.BuiltinMethodType):
+        assert False and "TODO: This case has not been completely implemented"
+        return FunctionType.get(obj, bound=True, builtin=True)
     else:
-        return StructType.fromObj(obj)
-        # TODO: How to identify unspported objects?
+        # TODO: How to identify unspported objects? Everything is an object...
         #raise exc.UnimplementedError("Unknown type {0}".format(type_))
+        return StructType.fromObj(obj)
 
 _cscalars = {
     ctypes.c_double: Float,
@@ -406,6 +646,16 @@ class Typable(object):
         pass
 
 
+class ImmutableType(object):
+    def unify_type(self, tp2, debuginfo):
+        raise TypeError("Type {} is immutable, it cannot be unified with {} at {}".format(
+            self.type, tp2, debuginfo))
+
+    def llvmType(self):
+        """Map from Python types to LLVM types."""
+        return self.type.llvmType()
+
+
 class Const(Typable):
     value = None
 
@@ -457,7 +707,18 @@ class NumpyArray(Typable):
         return str(self)
 
 
-class Struct(Const):
+class Struct(Typable):
+    obj_store = {}  # Class variable
+
+    @classmethod
+    def new(klass, obj):
+        """Only one Struct representation per Python object instance.
+        """
+        if not hasattr(obj, '__stella_wrapper__'):
+            obj.__stella_wrapper__ = Struct(obj)
+        assert isinstance(obj.__stella_wrapper__, klass)
+        return obj.__stella_wrapper__
+
     def __init__(self, obj):
         self.type = StructType.fromObj(obj)
         self.value = obj
@@ -466,14 +727,22 @@ class Struct(Const):
         return str(self.type)
 
     def __repr__(self):
-        return str(self)
+        return repr(self.type)
 
+    def translate(self, cge):
+        if not self.llvm:
+            (self.llvm, self.transfer_value) = self.type.constant(self.value, cge)
+        return self.llvm
     def copy2Python(self, cge):
+        """At the end of a Stella run, the struct's values need to be copied back
+        into Python.
+        """
         for name in self.type.attrib_names:
             item = getattr(self.transfer_value, name)
             if not self.type.attrib_type[name].on_heap:
                 setattr(self.value, name, item)
         del self.transfer_value
+        del self.value.__stella_wrapper__
 
 
 def wrapValue(value):
@@ -483,7 +752,7 @@ def wrapValue(value):
     elif type_ == np.ndarray:
         return NumpyArray(value)
     else:
-        return Struct(value)
+        return Struct.new(value)
 
 
 class Cast(Typable):
@@ -521,3 +790,6 @@ class Cast(Typable):
 
     def __str__(self):
         return self.name
+
+def destruct():
+    FunctionType.destruct()

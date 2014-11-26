@@ -28,9 +28,10 @@ def wrap(f, debug=True, p=False, ir=False, lazy=False, opt=None, stats=None):
 
         if lazy:
             return prog
-        elif ir == True:
+        elif ir is True:
             return prog.module.getLlvmIR()
         elif type(ir) == str:
+            print("Writing LLVM IR to {}...".format(ir))
             with open(ir, 'w') as fh:
                 fh.write(prog.module.getLlvmIR())
             return
