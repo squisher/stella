@@ -381,6 +381,10 @@ def main(f, args, kwargs):
     f_type = tp.get(f)
     funcref = module.getFunctionRef(f_type)
 
+    if f_type.bound:
+        f_self = tp.wrapValue(f.__self__)
+        funcref.f_self = f_self
+
     # TODO: why do I use wrapValue for args but Const for kwargs...?
     const_kw = {}
     for k, v in kwargs.items():
