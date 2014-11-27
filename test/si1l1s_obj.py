@@ -90,6 +90,8 @@ class Simulation(object):
         self.substrate = 0
         self.obs_i = 0
         self.observations = zeros(shape=self.K, dtype=int)
+        self.t = 0.0  # FIXME Added so that Stella knows about the member ahead of time
+        self.next_obs_time = 0.0  # FIXME Added so that Stella knows about the member ahead of time
 
     def __eq__(self, o):
         assert isinstance(o, self.__class__)
