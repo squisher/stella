@@ -377,6 +377,11 @@ class Function(object):
 
 
 def main(f, args, kwargs):
+    # Clean up first since an internal failure may have prevented the
+    # destructors from running.
+    Function.clearCache()
+    tp.FunctionType.destruct()
+
     module = ir.Module()
     f_type = tp.get(f)
     funcref = module.getFunctionRef(f_type)

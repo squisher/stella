@@ -24,4 +24,8 @@ sp = test.si1l1s_struct.Spider(settings, np.zeros(shape=settings['K'], dtype=int
 
 
 def current_work(run=False):
-    print(stella.wrap(sim.run, ir=not run)())
+    if type(run) == bool:
+        ir = not run
+    else:
+        ir = run
+    print(stella.wrap(sim.run, ir=ir)())
