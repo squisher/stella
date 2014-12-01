@@ -145,7 +145,6 @@ class Simulation(object):
                 self.makeObservation()
 
             self.step()
-        return self.observations
 
 
 def prototype(params):
@@ -163,7 +162,6 @@ def prototype(params):
 
 @mark.parametrize('args', [['seed=42'], ['seed=63'], ['seed=123456'],
                            ['rununtiltime=1e4', 'seed=494727']])
-@unimplemented
 def test1(args):
     prototype(args)
 
