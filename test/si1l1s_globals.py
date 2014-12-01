@@ -1,5 +1,6 @@
 import time
 from math import log
+from random import randint
 
 import numpy as np
 
@@ -175,7 +176,8 @@ def prototype(params):
 
 
 @mark.parametrize('args', [['seed=42'], ['seed=63'], ['seed=123456'],
-                           ['rununtiltime=1e4', 'seed=494727']])
+                           ['rununtiltime=1e4', 'seed=494727'],
+                           ['seed={}'.format(randint(1, 100000))]])
 def test1(args):
     prototype(args)
 

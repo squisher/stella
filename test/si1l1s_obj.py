@@ -6,6 +6,7 @@ import mtpy  # cython wrapper around mtwist
 from math import log, exp
 import time
 from numpy import zeros
+from random import randint
 
 from test import *  # noqa
 import stella
@@ -169,7 +170,8 @@ def prepare(params):
 
 
 @mark.parametrize('args', [['seed=42'], ['seed=63'], ['seed=123456'],
-                           ['rununtiltime=1e4', 'seed=494727']])
+                           ['rununtiltime=1e4', 'seed=494727'],
+                           ['seed={}'.format(randint(1, 100000))]])
 def test1(args):
     prototype(args)
 

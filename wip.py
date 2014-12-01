@@ -18,8 +18,9 @@ b2 = test.objects.B(0.0, 1.0)
 c = test.objects.C(np.array([1, 2, 3, 42]))
 e = test.objects.E()
 e2 = test.objects.E()
-settings = test.si1l1s_obj.Settings(['seed=42'])
+settings = test.si1l1s_obj.Settings(['seed=42', 'rununtiltime=1e6'])
 sim = test.si1l1s_obj.Simulation(settings)
+sim2 = test.si1l1s_obj.Simulation(settings)
 sp = test.si1l1s_struct.Spider(settings, np.zeros(shape=settings['K'], dtype=int))
 
 
