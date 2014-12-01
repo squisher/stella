@@ -126,14 +126,14 @@ def bench_si1l1s(module, suffix, duration):
     def run_si1l1s(args, stats):
         params = [v for k, v in args]
         s = module.Settings(params)
-        transfer = module.prepare(s)
+        run_f, transfer, result_f = module.prepare(s)
         if transfer is None:
             transfer = []
 
         time_start = time.time()
-        stella.wrap(module.run, debug=False, opt=opt, stats=stats)(*transfer)
+        stella.wrap(run_f, debug=False, opt=opt, stats=stats)(*transfer)
         elapsed_stella = time.time() - time_start
-        print(module.result(*transfer))
+        print(result_f(*transfer))
 
         return elapsed_stella
 
@@ -148,6 +148,12 @@ def bench_si1l1s_globals(duration):
 def bench_si1l1s_struct(duration):
     import test.si1l1s_struct
     return bench_si1l1s(test.si1l1s_struct, 'struct', duration)
+
+
+def bench_si1l1s_obj(duration):
+    import test.si1l1s_obj
+    # reuse the 'struct' version of C since there is no native OO
+    return bench_si1l1s(test.si1l1s_obj, 'struct', duration)
 
 
 @bench
@@ -168,4 +174,11 @@ def test_si1l1s_globals(bench_opt):
 def test_si1l1s_struct(bench_opt):
     duration = ['1e6', '1e8'][bench_opt]
     speedup = print_it(bench_si1l1s_struct, duration)
+    assert speedup >= min_speedup
+
+
+@bench
+def test_si1l1s_obj(bench_opt):
+    duration = ['1e6', '1e8'][bench_opt]
+    speedup = print_it(bench_si1l1s_obj, duration)
     assert speedup >= min_speedup

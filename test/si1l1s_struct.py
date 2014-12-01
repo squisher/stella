@@ -31,6 +31,9 @@ class Spider(object):
                 self.t == other.t and
                 self.next_obs_time == other.next_obs_time)
 
+    def __str__(self):
+        return "{}:{}>".format(super().__str__()[:-1], self.observations)
+
 
 def uniform():
     return mtpy.mt_drand()
@@ -173,10 +176,10 @@ def prototype(params):
 
 def prepare(params):
     sp_py = Spider(params, np.zeros(shape=params['K'], dtype=int))
-    return (sp_py,)
+    return (run, (sp_py, ), result)
 
 def result(sp):
-    return sp
+    return sp.observations
 
 
 @mark.parametrize('args', [['seed=42'], ['seed=63'], ['seed=123456'],

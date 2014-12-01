@@ -93,6 +93,9 @@ class Simulation(object):
         self.t = 0.0  # FIXME Added so that Stella knows about the member ahead of time
         self.next_obs_time = 0.0  # FIXME Added so that Stella knows about the member ahead of time
 
+    def __str__(self):
+        return "{}:{}>".format(super().__str__()[:-1], self.observations)
+
     def __eq__(self, o):
         assert isinstance(o, self.__class__)
         return (self.observations == o.observations).all()
@@ -158,6 +161,11 @@ def prototype(params):
 
     assert id(sim_py.observations) != id(sim_st.observations)
     assert sim_py == sim_st
+
+
+def prepare(params):
+    sim = Simulation(params)
+    return (sim.run, (), lambda: sim.observations)
 
 
 @mark.parametrize('args', [['seed=42'], ['seed=63'], ['seed=123456'],
