@@ -134,6 +134,7 @@ class Simulation(object):
         self.next_obs_time = self.getNextObsTime()
 
         while self.obs_i < self.K and self.t < self.rununtiltime:
+            R = 0.0
             if self.leg < self.substrate:
                 R = self.koffp
             else:
