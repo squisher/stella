@@ -249,13 +249,13 @@ class StructType(Type):
                       self.attrib_names)
 
     def llvmType(self):
-        # TODO find a more efficient place where the pointer values are created
-        # This needs to be done before the cache look up because it will
-        # affect mangled_name.
+        # TODO this was here for mangled_name, is it still necessary?
         for type_ in self.attrib_type.values():
             if type_.on_heap:
                 type_.makePointer()
-        mangled_name = '_'.join([self.name] + [str(t) for t in self.attrib_type.values()])
+        # Name is fully qualified and hence unique, no need to mangle a name
+        # anymore.
+        mangled_name = self.name
 
         if mangled_name not in self.__class__.type_store:
             llvm_types = []
