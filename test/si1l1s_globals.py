@@ -99,7 +99,7 @@ def run():
         while isNextObservation():
             makeObservation()
 
-            step()
+        step()
 
 
 class BaseSettings(object):

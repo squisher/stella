@@ -86,9 +86,9 @@ void run() {
 
         while (isNextObservation()) {
             makeObservation();
-
-            step();
         }
+
+        step();
     }
 }
 

@@ -88,9 +88,9 @@ void run(spider_t *sp) {
 
         while (isNextObservation(sp)) {
             makeObservation(sp);
-
-            step(sp);
         }
+
+        step(sp);
     }
 }
 
