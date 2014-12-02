@@ -29,4 +29,4 @@ def current_work(run=False):
         ir = not run
     else:
         ir = run
-    print(stella.wrap(sim.run, ir=ir)())
+    print(stella.wrap(test.objects.addAttribs, ir=ir)(b2))

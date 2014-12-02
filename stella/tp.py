@@ -791,5 +791,7 @@ class Cast(Typable):
     def __str__(self):
         return self.name
 
+
 def destruct():
     FunctionType.destruct()
+    StructType.type_store.clear()

@@ -376,11 +376,16 @@ class Function(object):
                 bc.blockEnd(self.last_bc)
 
 
+def cleanup():
+    logging.debug("Cleaning up...")
+    Function.clearCache()
+    tp.destruct()
+
+
 def main(f, args, kwargs):
     # Clean up first since an internal failure may have prevented the
     # destructors from running.
-    Function.clearCache()
-    tp.FunctionType.destruct()
+    cleanup()
 
     module = ir.Module()
     f_type = tp.get(f)
@@ -408,5 +413,5 @@ def main(f, args, kwargs):
         (call_impl, call_args, call_kwargs) = module.todoNext()
         call_f = Function.get(call_impl, module)
         call_f.analyzeCall(call_args, call_kwargs)
-    module.addDestruct(Function.clearCache)
+    module.addDestruct(cleanup)
     return module

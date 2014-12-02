@@ -382,7 +382,6 @@ class Module(object):
         if hasattr(self, 'entry_args'):
             del self.entry_args
 
-        tp.destruct()
         msg = []
         while True:
             try:
