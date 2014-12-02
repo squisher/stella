@@ -137,8 +137,11 @@ class Simulation(object):
         self.t = 0.0
         self.next_obs_time = self.getNextObsTime()
 
+        # TODO: Declaring R here is not necessary in Python! But llvm needs a
+        # it because otherwise the definition of R does not dominate the use below.
+        R = 0.0
+
         while self.obs_i < self.K and self.t < self.rununtiltime:
-            R = 0.0
             if self.leg < self.substrate:
                 R = self.koffp
             else:
