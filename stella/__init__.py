@@ -29,14 +29,14 @@ def wrap(f, debug=True, p=False, ir=False, lazy=False, opt=None, stats=None):
         if lazy:
             return prog
         elif ir is True:
-            return prog.module.getLlvmIR()
+            return prog.getLlvmIR()
         elif type(ir) == str:
             print("Writing LLVM IR to {}...".format(ir))
             with open(ir, 'w') as fh:
-                fh.write(prog.module.getLlvmIR())
+                fh.write(prog.getLlvmIR())
             return
         elif p:
-            print(prog.module.getLlvmIR())
+            print(prog.getLlvmIR())
         else:
             return prog.run(pass_stats)
     return run

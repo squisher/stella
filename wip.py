@@ -20,7 +20,6 @@ e = test.objects.E()
 e2 = test.objects.E()
 settings = test.si1l1s_obj.Settings(['seed=42', 'rununtiltime=1e6'])
 sim = test.si1l1s_obj.Simulation(settings)
-sim2 = test.si1l1s_obj.Simulation(settings)
 sp = test.si1l1s_struct.Spider(settings, np.zeros(shape=settings['K'], dtype=int))
 
 
@@ -29,4 +28,4 @@ def current_work(run=False):
         ir = not run
     else:
         ir = run
-    print(stella.wrap(test.objects.addAttribs, ir=ir)(b2))
+    print(stella.wrap(sim.run, ir=ir)())

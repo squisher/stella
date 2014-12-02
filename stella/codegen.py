@@ -114,6 +114,14 @@ class Program(object):
             pm = llvm.passes.build_pass_managers(tm, opt=opt, loop_vectorize=True, fpm=False).pm
             pm.run(self.module.llvm)
 
+    def destruct(self):
+        self.module.destruct()
+        del self.module
+
+    def __del__(self):
+        logging.debug("DEL  " + repr(self))
+        self.destruct()
+
     def run(self, stats):
         logging.debug("Verifying... ")
         self.module.llvm.verify()
@@ -163,9 +171,20 @@ class Program(object):
 
         for arg in self.module.entry_args:
             arg.copy2Python(self.cge)  # may be a no-op if not necessary
+            arg.destruct()  # may be a no-op if not necessary
 
         logging.debug("Returning...")
-        self.module.destruct()
-        del self.module
+        self.destruct()
 
         return tp.llvm_to_py(entry.result.type, retval)
+
+    def getLlvmIR(self):
+        ret = self.module.getLlvmIR()
+
+        for arg in self.module.entry_args:
+            arg.destruct()  # may be a no-op if not necessary
+
+        logging.debug("Returning...")
+        self.destruct()
+
+        return ret

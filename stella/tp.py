@@ -645,6 +645,9 @@ class Typable(object):
     def copy2Python(self, cge):
         pass
 
+    def destruct(self):
+        pass
+
 
 class ImmutableType(object):
     def unify_type(self, tp2, debuginfo):
@@ -736,11 +739,15 @@ class Struct(Typable):
     def copy2Python(self, cge):
         """At the end of a Stella run, the struct's values need to be copied back
         into Python.
+
+        Please call self.destruct() afterwards.
         """
         for name in self.type.attrib_names:
             item = getattr(self.transfer_value, name)
             if not self.type.attrib_type[name].on_heap:
                 setattr(self.value, name, item)
+
+    def destruct(self):
         del self.transfer_value
         del self.value.__stella_wrapper__
 
