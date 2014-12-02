@@ -254,8 +254,7 @@ class BinaryOp(Bytecode):
         f = getattr(cge.builder, self.builderFuncName())
         self.result.llvm = f(
             self.args[0].translate(cge),
-            self.args[1].translate(cge),
-            self.result.name)
+            self.args[1].translate(cge))
 
     @abstractproperty
     def b_func(self):
@@ -361,8 +360,7 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
 
         tmp = cge.builder.fdiv(
             self.args[0].translate(cge),
-            self.args[1].translate(cge),
-            self.result.name)
+            self.args[1].translate(cge))
         llvm_floor = llvm.core.Function.intrinsic(
            cge.module.llvm, llvm.core.INTR_FLOOR, [
                 tp.Float.llvmType()])
@@ -474,8 +472,7 @@ class COMPARE_OP(Bytecode):
 
         self.result.llvm = f(m[self.op],
                              self.args[0].translate(cge),
-                             self.args[1].translate(cge),
-                             self.result.name)
+                             self.args[1].translate(cge))
 
 
 class RETURN_VALUE(utils.BlockTerminal, Bytecode):
@@ -1380,8 +1377,7 @@ class UNARY_NEGATIVE(Bytecode):
         f = getattr(cge.builder, self.builderFuncName())
         self.result.llvm = f(
             self.result.type.constant(0),
-            self.args[0].translate(cge),
-            self.result.name)
+            self.args[0].translate(cge))
 
 opconst = {}
 # Get all contrete subclasses of Bytecode and register them
