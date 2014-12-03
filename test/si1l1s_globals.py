@@ -7,6 +7,7 @@ import numpy as np
 from test import *  # noqa
 import mtpy
 import stella
+from . import virtnet_utils
 
 EXPSTART = 0.2
 
@@ -147,7 +148,7 @@ class BaseSettings(object):
         return r[:-2] + '}'
 
 
-class Settings(BaseSettings):
+class Settings(virtnet_utils.Settings):
 
     def setDefaults(self):
         self.settings = {
