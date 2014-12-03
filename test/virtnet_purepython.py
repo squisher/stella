@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
-#import random
 import mtpy # cython wrapper around mtwist
 from math import log
-import pdb
 import sys
-import time
 from copy import deepcopy
-from virtnet_utils import Settings
+try:
+    from .virtnet_utils import Settings
+except ValueError:
+    from test.virtnet_utils import Settings
 
 #### Numpy emulators #####
 
@@ -33,24 +33,24 @@ def zeros(shape=1, dtype=None):
         inner = new_inner
     return inner
 
+
 #### HELPERS ####
 
 class Rnd(object):
     @staticmethod
     def seed(s):
         #random.seed(s)
-        mtpy.seed(s)
+        mtpy.mt_seed32new(s)
 
     @staticmethod
     def uniform():
         #return random.random()
-        return mtpy.uniform()
+        return mtpy.mt_drand()
 
     @staticmethod
     def exp(p):
-        #u = 1.0 - random.random()
-        #return -log(u)/p
-        return mtpy.exp(p)
+        u = 1.0 - mtpy.mt_drand()
+        return -log(u)/p
 
 
 class SimObj(object):
@@ -65,6 +65,7 @@ class SimObj(object):
     def pick(klass, l):
         prob = Rnd.uniform()
         return l[int(prob*len(l))]
+
 
 class Point(object):
     def __init__(self, pos = None):
@@ -104,6 +105,7 @@ class Point(object):
     #    self.pos *= p2
     def __repr__(self):
         return self.pos.__repr__()
+
 
 #### MAIN OBJECTS ####
 
@@ -212,6 +214,7 @@ class Spider(SimObj):
         #assert len(spiders) == 1
         return spiders[0]
 
+
 class Surface(object):
     (substrate, product, occupied) = range(3)
     def __init__(self, params):
@@ -280,7 +283,6 @@ class Simulation(object):
         self.elapsedTime = params['elapsedTime']
         self.observations = []
 
-
     def end(self):
         return self.nextObsDist > self.params['radius']
 
@@ -296,8 +298,10 @@ class Simulation(object):
         #print ("{t:.4f} {dist:.1f} {secs:.2f}".format(t=self.t, dist=dist, secs=self.params['elapsedTime']()))
         self.observations.append((self.t, dist, self.params['elapsedTime']()))
 
-    def run(self):
+    def __eq__(self, o):
+        return self.observations == o.observations
 
+    def run(self):
         self.t = 0
         self.nextObsDist = 1
         while not self.end():
@@ -314,7 +318,7 @@ class Simulation(object):
             if self.isNewObservation(spider):
                 self.observe(spider)
                 self.nextObsDist += 1
-        return self.getHeader(), self.observations
+
 
 
 def test_Simulation():
@@ -324,22 +328,27 @@ def test_Simulation():
     settings = Settings()
     settings['seed'] = seed
 
-    header, actual_results = Simulation(settings).run()
+    sim = Simulation(settings)
+    sim.run()
 
+    actual_results = sim.observations
     for (e_t, e_dist), (a_t, a_dist, wct) in zip(exp_results, actual_results):
         assert (e_t == a_t and int(e_dist) == int(a_dist))
+
 
 def main(argv):
     settings = Settings(argv)
     print("## {0}".format(settings))
 
-    header, results = Simulation(settings).run()
+    sim = Simulation(settings)
+    sim.run()
 
-    print (header)
-    for t, dist, wct in results:
+    print (sim.getHeader())
+    for t, dist, wct in sim.observations:
         print ("{t:.4f} {dist:.1f} {secs:.2f}".format(t=t, dist=dist, secs=wct))
 
     #print ([(x[0], x[1]) for x in results])
+
 
 if __name__ == '__main__':
     main(sys.argv[1:])
