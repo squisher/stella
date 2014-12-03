@@ -119,8 +119,7 @@ class Program(object):
         del self.module
 
     def __del__(self):
-        logging.debug("DEL  " + repr(self))
-        self.destruct()
+        logging.debug("DEL  {}: {}".format(repr(self), hasattr(self, 'module')))
 
     def run(self, stats):
         logging.debug("Verifying... ")
