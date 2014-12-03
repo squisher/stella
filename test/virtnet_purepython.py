@@ -4,6 +4,7 @@ import mtpy # cython wrapper around mtwist
 from math import log
 import sys
 from copy import deepcopy
+import numpy
 try:
     from .virtnet_utils import Settings
 except ValueError:
@@ -281,25 +282,28 @@ class Simulation(object):
                 yield init_params
         self.spiders = Spider.make(params['nspiders'], spiderInit())
         self.elapsedTime = params['elapsedTime']
-        self.observations = []
+        max_observations = 15  # pre-allocate space for observations, this is arbitrary and only limited by memory
+        self.observations = numpy.zeros(max_observations, dtype=float)
+        self.obs_i = 0
 
     def end(self):
-        return self.nextObsDist > self.params['radius']
+        return self.nextObsDist > self.params['radius'] or self.obs_i >= len(self.observations)
 
     def isNewObservation(self, spider):
         return spider.getDistance() >= self.nextObsDist
 
     def getHeader(self):
-        return "# sim_time distance wall_time"
+        return "# sim_time"
 
     def observe(self, spider):
         #pdb.set_trace()
         dist = spider.getDistance()
         #print ("{t:.4f} {dist:.1f} {secs:.2f}".format(t=self.t, dist=dist, secs=self.params['elapsedTime']()))
-        self.observations.append((self.t, dist, self.params['elapsedTime']()))
+        self.observations[self.obs_i] = self.t
+        self.obs_i += 1
 
     def __eq__(self, o):
-        return self.observations == o.observations
+        return (self.observations == o.observations).all()
 
     def run(self):
         self.t = 0
@@ -332,8 +336,8 @@ def test_Simulation():
     sim.run()
 
     actual_results = sim.observations
-    for (e_t, e_dist), (a_t, a_dist, wct) in zip(exp_results, actual_results):
-        assert (e_t == a_t and int(e_dist) == int(a_dist))
+    for e_t, a_t in zip(exp_results, actual_results):
+        assert e_t == a_t
 
 
 def main(argv):
@@ -344,8 +348,8 @@ def main(argv):
     sim.run()
 
     print (sim.getHeader())
-    for t, dist, wct in sim.observations:
-        print ("{t:.4f} {dist:.1f} {secs:.2f}".format(t=t, dist=dist, secs=wct))
+    for t in sim.observations:
+        print ("{t:.4f}".format(t=t))
 
     #print ([(x[0], x[1]) for x in results])
 
