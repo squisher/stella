@@ -1,5 +1,5 @@
 import time
-from math import log
+from math import log, exp
 from random import randint
 
 import numpy as np
@@ -40,7 +40,7 @@ def uniform():
     return mtpy.mt_drand()
 
 
-def exp(p):
+def mtpy_exp(p):
     u = 1.0 - uniform()
     return -log(u) / p
 
@@ -94,7 +94,7 @@ def run(sp):
             R = sp.koffp
         else:
             R = sp.kcat
-        sp.t += exp(R)
+        sp.t += mtpy_exp(R)
 
         while isNextObservation(sp):
             makeObservation(sp)

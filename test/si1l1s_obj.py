@@ -3,7 +3,7 @@ Semi-infinite 1D strip with a single spider.
 """
 
 import mtpy  # cython wrapper around mtwist
-from math import log
+from math import log, exp
 import time
 from numpy import zeros
 from random import randint
@@ -58,7 +58,6 @@ class BaseSettings(object):
 
 
 class Settings(BaseSettings):
-
     def setDefaults(self):
         self.settings = {
             'seed': [int(time.time()), int],
@@ -115,7 +114,7 @@ class Simulation(object):
         if self.obs_i == self.K - 1:
             return self.rununtiltime
 
-        return mtpy_exp(log(self.EXPSTART) + self.delta * self.obs_i)
+        return exp(log(self.EXPSTART) + self.delta * self.obs_i)
 
     def step(self):
         """Called from run()"""

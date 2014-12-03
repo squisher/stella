@@ -25,7 +25,7 @@ double uniform() {
     return mt_drand();
 }
 
-double exp(double p) {
+double mtpy_exp(double p) {
     double u = 1.0 - uniform();
     return -log(u)/p;
 }
@@ -84,7 +84,7 @@ void run(spider_t *sp) {
             R = sp->koffp;
         else
             R = sp->kcat;
-        sp->t += exp(R);
+        sp->t += mtpy_exp(R);
 
         while (isNextObservation(sp)) {
             makeObservation(sp);

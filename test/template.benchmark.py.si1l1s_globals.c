@@ -23,7 +23,7 @@ double uniform() {
     return mt_drand();
 }
 
-double exp(double p) {
+double mtpy_exp(double p) {
     double u = 1.0 - uniform();
     return -log(u)/p;
 }
@@ -82,7 +82,7 @@ void run() {
             R = koffp;
         else
             R = kcat;
-        t += exp(R);
+        t += mtpy_exp(R);
 
         while (isNextObservation()) {
             makeObservation();
