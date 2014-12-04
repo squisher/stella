@@ -173,7 +173,6 @@ class Leg(SimObj):
 
 class Spider(SimObj):
     def __init__(self, params):
-        self.params = params
         def legInit():
             pos = Point(Point.center)
             i = 0
@@ -183,6 +182,8 @@ class Spider(SimObj):
                 i += 1
 
         self.legs = Leg.make(params['nlegs'], legInit())
+        self.nlegs = params['nlegs']
+        self.gait = params['gait']
         #pdb.set_trace()
 
     def getLegs(self):
@@ -198,14 +199,14 @@ class Spider(SimObj):
         pos = Point()
         for leg in self.legs:
             pos.addPos(leg.getPosition())
-        pos.div(self.params['nlegs'])
+        pos.div(self.nlegs)
         return pos.reldist(Point.center)
 
     def gaitOk(self, pos, leg):
         otherlegs = [l for l in self.legs if l != leg]
         #assert len(otherlegs) == self.params['nlegs'] - 1
         for oleg in otherlegs:
-            if oleg.getDistance(pos) > self.params['gait']:
+            if oleg.getDistance(pos) > self.gait:
                 return False
         return True
 
@@ -274,20 +275,19 @@ class Simulation(object):
         Point.center = Point([params['center'] for x in range(params['dim'])])
 
         self.surface = Surface(params)
-        self.params = params
         def spiderInit():
             init_params = deepcopy(params)
             init_params['surface'] = self.surface
             while True:
                 yield init_params
         self.spiders = Spider.make(params['nspiders'], spiderInit())
-        self.elapsedTime = params['elapsedTime']
         max_observations = 15  # pre-allocate space for observations, this is arbitrary and only limited by memory
         self.observations = numpy.zeros(max_observations, dtype=float)
         self.obs_i = 0
+        self.radius = params['radius']
 
     def end(self):
-        return self.nextObsDist > self.params['radius'] or self.obs_i >= len(self.observations)
+        return self.nextObsDist > self.radius or self.obs_i >= len(self.observations)
 
     def isNewObservation(self, spider):
         return spider.getDistance() >= self.nextObsDist
