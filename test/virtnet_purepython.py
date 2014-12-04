@@ -125,7 +125,6 @@ class Leg(SimObj):
     def move(self, spider, surface):
         # TODO gait check, extend possible moves?
         moves = []
-        #pdb.set_trace()
         for d1 in range(surface.dim):
             pos = Point(self.pos)
             pos.addToDim(d1, -1)
@@ -136,7 +135,6 @@ class Leg(SimObj):
             pos.addToDim(d1, 1)
             if not surface.isOccupied(pos) and spider.gaitOk(pos, self):
                 moves.append(pos)
-        #pdb.set_trace()
         if len(moves) == 0:
             raise Exception ("No moves -- this shouldn't happen")
         move = moves[int(Rnd.uniform() * len(moves))]
@@ -184,7 +182,6 @@ class Spider(SimObj):
         self.legs = Leg.make(params['nlegs'], legInit())
         self.nlegs = params['nlegs']
         self.gait = params['gait']
-        #pdb.set_trace()
 
     def getLegs(self):
         return self.legs
@@ -296,8 +293,7 @@ class Simulation(object):
         return "# sim_time"
 
     def observe(self, spider):
-        #pdb.set_trace()
-        dist = spider.getDistance()
+        #dist = spider.getDistance()
         #print ("{t:.4f} {dist:.1f} {secs:.2f}".format(t=self.t, dist=dist, secs=self.params['elapsedTime']()))
         self.observations[self.obs_i] = self.t
         self.obs_i += 1
