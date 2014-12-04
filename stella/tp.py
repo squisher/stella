@@ -210,7 +210,10 @@ class StructType(Type):
         for name in attrib_names:
             attrib = getattr(obj, name)
             # TODO: catch the exception and improve the error message?
-            type_ = get (attrib)
+            try:
+                type_ = get (attrib)
+            except TypeError as e:
+                raise exc.TypeError("{}({}).{}({}) is not supported".format(obj, type(obj), name, type(attrib)))
             attrib_type[name] = type_
 
         # Sort attrib_names so that function types are after attribute types.
