@@ -21,6 +21,8 @@ e = test.objects.E()
 e2 = test.objects.E()
 settings = test.virtnet_purepython.Settings(['seed=42'])
 sim = test.virtnet_purepython.Simulation(settings)
+l1 = [test.objects.E(2), test.objects.E(4)]
+f = test.objects.F(l1)
 
 
 def current_work(run=False):
@@ -28,4 +30,4 @@ def current_work(run=False):
         ir = not run
     else:
         ir = run
-    print(stella.wrap(sim.run, ir=ir)())
+    print(stella.wrap(test.objects.objContainingList1, ir=ir)(f))

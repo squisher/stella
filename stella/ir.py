@@ -474,7 +474,7 @@ class Function(Scope):
                 # TODO: create superclass for complex types
                 arg = self.getOrNewRegister(self.type_.arg_names[i])
                 arg.type = type_
-                arg.type.makePointer()
+                #arg.type.makePointer()  # now automatically done
             else:
                 name = self.type_.arg_names[i]
                 arg = self.getOrNewRegister('__param_'+name)

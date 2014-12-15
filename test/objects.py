@@ -84,6 +84,20 @@ class E(object):
         return "{}[x={}]".format(str(type(self))[8:-2], self.x)
 
 
+class F(object):
+    def __init__(self, l):
+        self.l = l
+
+    def __eq__(self, other):
+        return (self.l == other.l)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __repr__(self):
+        return "{}[l={}]".format(str(type(self))[8:-2], self.l)
+
+
 def justPassing(a):
     x = 1  # noqa
 
@@ -145,6 +159,28 @@ def callBoundMethodTwice(e, x):
 def callBoundMethodOnTwo(e1, e2):
     e1.inc(1)
     e2.inc(2)
+
+
+def objList1(l):
+    return l[0].x + l[1].x
+
+
+def objList2(l):
+    r = 0
+    for i in range(len(l)):
+        r += l[i].x
+    return r
+
+
+def objContainingList1(f):
+    return f.l[0].x + f.l[1].x
+
+
+def objContainingList2(f):
+    r = 0
+    for i in range(len(f.l)):
+        r += f.l[i].x
+    return r
 
 
 args1 = [(1, 1), (24, 42), (0.0, 1.0), (1.0, 1.0), (3.0, 0.0)]
@@ -365,3 +401,27 @@ def test_mutation6(f):
     st = stella.wrap(f)(e2, e4)
 
     assert e1 == e2 and e3 == e4 and py == st
+
+
+@mark.parametrize('f', [objList1, objList2])
+def test_mutation7(f):
+    e1 = [E(4), E(1)]
+    e2 = [E(4), E(1)]
+
+    py = f(e1)
+    st = stella.wrap(f)(e2)
+
+    assert e1 == e2 and py == st
+
+
+@mark.parametrize('f', [objContainingList1, objContainingList2])
+def test_mutation8(f):
+    l1 = [E(2), E(5)]
+    l2 = [E(2), E(5)]
+    f1 = F(l1)
+    f2 = F(l2)
+
+    py = f(f1)
+    st = stella.wrap(f)(f2)
+
+    assert f1 == f2 and py == st

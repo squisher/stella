@@ -94,6 +94,7 @@ class LOAD_FAST(Bytecode):
 
     def type_eval(self, func):
         self.grab_stack()
+        arg_type = self.args[0].type
         if self.result is None:
             type_ = type(self.args[0])
             if type_ == StackLoc:
@@ -103,7 +104,10 @@ class LOAD_FAST(Bytecode):
             else:
                 raise exc.StellaException(
                     "Invalid LOAD_FAST argument type `{0}'".format(type_))
-        self.result.unify_type(self.args[0].type, self.debuginfo)
+        if type(self.args[0]) == StackLoc:
+            if arg_type.isReference():
+                    arg_type = arg_type.dereference()
+            self.result.unify_type(arg_type, self.debuginfo)
 
     def translate(self, cge):
         type_ = type(self.args[0])
@@ -135,23 +139,25 @@ class STORE_FAST(Bytecode):
         # func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
         if self.result is None:
             self.result = self.popFirstArg()
+            if self.result.type.isUntyped():
+                self.result.type = tp.Reference(self.result.type)
 
         arg = self.args[0]
-        widened, needs_cast = self.result.unify_type(arg.type, self.debuginfo)
+        widened, needs_cast = self.result.unify_type(arg.type, self.debuginfo, is_reference=True)
         if widened:
             # TODO: can I avoid a retype in some cases?
             func.retype()
         if needs_cast:
-            self.args[0] = Cast(arg, self.result.type)
+            self.args[0] = Cast(arg, self.result.type.dereference())
 
     def translate(self, cge):
         self.cast(cge)
         arg = self.args[0]
         if self.new_allocate:
-            type_ = arg.llvmType()
-            # TODO: is this the right place to make it a pointer?
-            if isinstance(arg.type, tp.ArrayType):
-                type_ = llvm.core.Type.pointer(type_)
+            if arg.type.on_heap:
+                type_ = tp.Reference(arg.type).llvmType()
+            else:
+                type_ = arg.type.llvmType()
             self.result.llvm = cge.builder.alloca(type_, name=self.result.name)
         cge.builder.store(arg.translate(cge), self.result.translate(cge))
 
@@ -1240,19 +1246,26 @@ class BINARY_SUBSCR(Bytecode):
 
     def type_eval(self, func):
         self.grab_stack()
-        if not isinstance(self.args[0].type, tp.ArrayType):
+        if self.args[0].type.isReference():
+            arg_type = self.args[0].type.dereference()
+        else:
+            arg_type = self.args[0].type
+        if not isinstance(arg_type, tp.ArrayType):
             raise exc.TypeError(
                 "Expected an array, but got {0}".format(
                     self.args[0].type))
         self.result.unify_type(
-            self.args[0].type.getElementType(),
+            arg_type.getElementType(),
             self.debuginfo)
 
     def translate(self, cge):
-        p = cge.builder.gep(
-            self.args[0].translate(cge), [
-                tp.Int.constant(0), self.args[1].translate(cge)], inbounds=True)
-        self.result.llvm = cge.builder.load(p)
+        p = cge.builder.gep(self.args[0].translate(cge),
+                            [tp.Int.constant(0), self.args[1].translate(cge)],
+                            inbounds=True)
+        if isinstance(self.args[0].type, tp.ListType):
+            self.result.llvm = p
+        else:
+            self.result.llvm = cge.builder.load(p)
 
 
 class POP_TOP(Bytecode):

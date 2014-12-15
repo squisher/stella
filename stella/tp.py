@@ -18,24 +18,61 @@ class Type(object):
     on_heap = False
 
     def makePointer(self):
-        """Note: each subtype must interpret `ptr` itself"""
-        # TODO: clean up calling of makePointer; it happes too frequently
-        #self.ptr += 1
         if self.on_heap:
-            self.ptr = 1
+            assert self.ptr == 0
+            self.ptr += 1
 
-    def isPointer(self):
+    def isReference(self):
         return self.ptr > 0
+
+    def isUntyped(self):
+        # TODO this is hack-ish
+        return str(self)[-1] == '?'
+
+    def dereference(self):
+        if self.ptr == 1:
+            # TODO hackish!
+            return self
+        else:
+            raise exc.TypeError("Cannot dereference the non-reference type {}".format(self))
 
     def __str__(self):
         return '?'
+
     # llvm.core.ArrayType does something funny, it will compare against _ptr,
     # so let's just add the attribute here to enable equality tests
     _ptr = None
 
     def llvmType(self):
+        # some types just come as a reference (e.g. external numpy array). For
+        # references within stella use class Reference.
+        assert self.ptr <= 1
+        type_ = self._llvmType()
+        if self.ptr:
+            return llvm.core.Type.pointer(type_)
+        else:
+            return type_
+
+    def _llvmType(self):
         raise exc.TypeError(
             "Cannot create llvm type for an unknown type. This should have been cought earlier.")
+
+class Reference(Type):
+    def __init__(self, type_):
+        self.type_ = type_
+        self.ptr = type_.ptr + 1
+
+    def llvmType(self):
+        type_ = self.type_.llvmType()
+        # for i in range(self.ptr):
+        type_ = llvm.core.Type.pointer(type_)
+        return type_
+
+    def dereference(self):
+        return self.type_
+
+    def __str__(self):
+        return '*{}'.format(self.type_)
 
 
 NoType = Type()
@@ -52,16 +89,16 @@ class PyWrapper(Type):
         self.bc = None
         self.type = get_scalar(py)
 
-    def makePointer(self):
-        raise exc.TypeError("Cannot make a pointer of Python type {}".format(self.py))
+    #def makePointer(self):
+    #    raise exc.TypeError("Cannot make a pointer of Python type {}".format(self.py))
 
-    def isPointer(self):
-        raise exc.TypeError("Cannot check pointer status of Python type {}".format(self.py))
+    #def isPointer(self):
+    #    raise exc.TypeError("Cannot check pointer status of Python type {}".format(self.py))
 
     def __str__(self):
         return str(self.py)
 
-    def llvmType(self):
+    def _llvmType(self):
         raise exc.TypeError("Cannot create an LLVM type for Python type {}".format(self.py))
 
 
@@ -74,7 +111,7 @@ class ScalarType(Type):
         self.f_generic_value = f_generic_value
         self.f_constant = f_constant
 
-    def llvmType(self):
+    def _llvmType(self):
         return self._llvm
 
     def genericValue(self, value):
@@ -190,14 +227,28 @@ def supported_scalar_name(name):
     return any([name == t for t in types])
 
 
-class StructType(Type):
+class CType(object):
+    _registry = {}
 
+    @classmethod
+    def get(klass, name, fields):
+        fields = tuple(fields)
+        if (name, fields) not in klass._registry:
+            type_ = type(name, (ctypes.Structure, ), {'_fields_': fields})
+            klass._registry[(name, fields)] = type_
+            return type_
+        else:
+            return klass._registry[(name, fields)]
+
+
+class StructType(Type):
     on_heap = True
 
     attrib_names = None
     attrib_type = None
     attrib_idx = None
     base_type = None
+    _ctype = None
     type_store = {}  # Class variable
 
     @classmethod
@@ -212,8 +263,11 @@ class StructType(Type):
             # TODO: catch the exception and improve the error message?
             try:
                 type_ = get (attrib)
-            except TypeError as e:
+            except TypeError:
                 raise exc.TypeError("{}({}).{}({}) is not supported".format(obj, type(obj), name, type(attrib)))
+            if type_.on_heap:
+                #type_ = Reference(type_)
+                type_.makePointer()
             attrib_type[name] = type_
 
         # Sort attrib_names so that function types are after attribute types.
@@ -233,6 +287,7 @@ class StructType(Type):
             i += 1
 
         type_ = StructType(type_name, attrib_names, attrib_type, attrib_idx)
+        type_.makePointer()  # by default
         return type_
 
     def __init__(self, name, attrib_names, attrib_type, attrib_idx):
@@ -251,13 +306,7 @@ class StructType(Type):
         return filter(lambda n: not isinstance(self.attrib_type[n], FunctionType),
                       self.attrib_names)
 
-    def llvmType(self):
-        # TODO this was here for mangled_name, is it still necessary?
-        for type_ in self.attrib_type.values():
-            if type_.on_heap:
-                type_.makePointer()
-        # Name is fully qualified and hence unique, no need to mangle a name
-        # anymore.
+    def _llvmType(self):
         mangled_name = self.name
 
         if mangled_name not in self.__class__.type_store:
@@ -266,35 +315,59 @@ class StructType(Type):
                 type_ = self.attrib_type[name]
                 llvm_types.append(type_.llvmType())
             type_ = llvm.core.Type.struct(llvm_types, name=mangled_name)
-            ptype_ = llvm.core.Type.pointer(type_)
-            self.__class__.type_store[mangled_name] = ptype_
-            return ptype_
+            self.__class__.type_store[mangled_name] = type_
         else:
-            return self.__class__.type_store[mangled_name]
+            type_ = self.__class__.type_store[mangled_name]
 
-    def ctypes(self):
+        return type_
+
+    @property
+    def ctype(self):
+        if self._ctype:
+            return self._ctype
         fields = []
         for name in self._scalarAttributeNames():
-            fields.append((name, self.attrib_type[name].ctype))
-        ctype = type("_" + self.name + "_transfer", (ctypes.Structure, ), {'_fields_': fields})
-        return ctype
+            if isinstance(self.attrib_type[name], ListType):
+                fields.append((name, ctypes.POINTER(self.attrib_type[name].ctype)))
+            else:
+                fields.append((name, self.attrib_type[name].ctype))
+        self._ctype = CType.get("_" + self.name + "_transfer", fields)
+        return self._ctype
 
-    def constant(self, value, cge):
-        """Transfer values Python -> Stella"""
-        ctype = self.ctypes()
-        transfer_value = ctype()
-
+    def ctypeInit(self, value, transfer_value):
         for name in self.attrib_names:
             item = getattr(value, name)
             if isinstance(item, np.ndarray):
+                # TODO: will this fail with float?
                 item = ctypes.cast(item.ctypes.data, ctypes.POINTER(ctypes.c_int))
+            elif isinstance(item, list):
+                l = List.fromObj(item)
+                l.ctypeInit()
+                item = ctypes.cast(ctypes.addressof(l.transfer_value), ctypes.POINTER(l.type.ctype))
             setattr(transfer_value, name, item)
+
+    def constant(self, value, cge):
+        """Transfer values Python -> Stella"""
+        transfer_value = self.ctype()
+
+        assert self.ptr == 1
+
+        self.ctypeInit(value, transfer_value)
 
         addr_llvm = Int.constant(int(ctypes.addressof(transfer_value)))
         result_llvm = cge.builder.inttoptr(addr_llvm,
                                            self.llvmType())
         return (result_llvm, transfer_value)
 
+    def ctype2Python(self, transfer_value, value):
+        for name in self._scalarAttributeNames():
+            item = getattr(transfer_value, name)
+            if not self.attrib_type[name].on_heap:
+                setattr(value, name, item)
+
+    def resetReference(self):
+        """Special case: when a list of objects is allocated, then the type is NOT a pointer type"""
+        self.ptr = 0
 
     def __str__(self):
         return "{}{}".format('*'*self.ptr, self.name)
@@ -319,41 +392,99 @@ class ArrayType(Type):
     ctype = ctypes.POINTER(ctypes.c_int)  # TODO why is ndarray.ctypes.data of type int?
 
     @classmethod
-    def fromArray(klass, array):
+    def fromObj(klass, obj):
         # TODO support more types
-        if array.dtype == np.int64:
+        if obj.dtype == np.int64:
             dtype = _pyscalars[int]
-        elif array.dtype == np.float64:
+        elif obj.dtype == np.float64:
             dtype = _pyscalars[float]
         else:
             raise exc.UnimplementedError("Numpy array dtype {0} not (yet) supported".format(
-                array.dtype))
+                obj.dtype))
 
         # TODO: multidimensional arrays
-        shape = array.shape[0]
+        shape = obj.shape[0]
+
+        assert klass.isValidType(dtype)
 
         return ArrayType(dtype, shape)
 
+    @classmethod
+    def isValidType(klass, type_):
+        return type_ in _pyscalars.values()
+
     def __init__(self, type_, shape):
-        assert type_ in _pyscalars.values()
         self.type_ = type_
         self.shape = shape
 
     def getElementType(self):
         return self.type_
 
-    def llvmType(self):
+    def _llvmType(self):
         type_ = llvm.core.Type.array(self.type_.llvmType(), self.shape)
-        if self.ptr:
-            type_ = llvm.core.Type.pointer(type_)
 
         return type_
 
     def __str__(self):
-        return "<{}{}*{}>".format('*'*self.ptr, self.type_, self.shape)
+        return "{}{}[{}]".format('*'*self.ptr, self.type_, self.shape)
 
     def __repr__(self):
-        return str(self)
+        return '<{}>'.format(self)
+
+
+class ListType(ArrayType):
+    type_store = {}  # Class variable
+
+    @classmethod
+    def fromObj(klass, obj):
+        # type checking: only continue if the list can be represented.
+        if len(obj) == 0:
+            raise exc.TypeError("Empty lists are not supported, because they are not typable.")
+        type_ = type(obj[0])
+        for o in obj[1:]:
+            if type_ != type(o):
+                raise exc.TypeError("List contains elements of type {} and type {}, but lists must not contain objects of more than one type.".format(type_, type(o)))
+
+        base_type = get(obj[0])
+        if not isinstance(base_type, StructType):
+            msg = "Python lists must contain objects, not {}. Use numpy arrays for simple types.".format(base_type)
+            raise exc.TypeError(msg)
+        base_type.resetReference()
+        # assert !klass.isValidType(dtype)
+
+        # type_name = "[{}]".format(str(type(obj[0])).split("'")[1])
+        type_ = klass(base_type, len(obj))
+        return type_
+
+    def __init__(self, base_type, shape):
+        super().__init__(base_type, shape)
+
+    def _llvmType(self):
+        mangled_name = str(self)
+
+        if mangled_name not in self.__class__.type_store:
+            type_ = llvm.core.Type.array(self.type_.llvmType(), self.shape)
+            self.__class__.type_store[mangled_name] = type_
+            return type_
+        else:
+            return self.__class__.type_store[mangled_name]
+
+    def ctypeInit(self, value, transfer_value):
+        for i in range(len(value)):
+            self.type_.ctypeInit(value[i], transfer_value[i])
+
+    @property
+    def ctype(self):
+        #return ctypes.POINTER(self.type_.ctype * self.shape)
+        return self.type_.ctype * self.shape
+
+    def __eq__(self, other):
+        return (type(self) == type(other)
+                and self.type_ == other.type_
+                and self.shape == other.shape)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
 class Callable(metaclass=ABCMeta):
@@ -523,11 +654,13 @@ class FunctionType(Type):
     def fq(self):
         """Returns the fully qualified type name."""
         if self._bound:
-            return "{}.{}".format(str(self.bound), self.name)
+            # bound is a reference, we don't want the * as part of the name
+            assert self.bound.isReference()
+            return "{}.{}".format(str(self.bound)[1:], self.name)
         else:
             return self.name
 
-    def llvmType(self):
+    def _llvmType(self):
         raise exc.InternalError("This is an intermediate type presentation only!")
 
 
@@ -582,7 +715,9 @@ def get(obj):
     if supported_scalar(type_):
         return get_scalar(type_)
     elif type_ == np.ndarray:
-        return ArrayType.fromArray(obj)
+        return ArrayType.fromObj(obj)
+    elif type_ == list:
+        return ListType.fromObj(obj)
     elif isinstance(obj, types.FunctionType):
         return FunctionType.get(obj)
     elif isinstance(obj, types.MethodType):
@@ -613,20 +748,29 @@ class Typable(object):
     type = NoType
     llvm = None
 
-    def unify_type(self, tp2, debuginfo):
+    def unify_type(self, tp2, debuginfo, is_reference=False):
         """Returns: widened:bool, needs_cast:bool
         widened: this type changed
         needs_cast: tp2 needs to be cast to this type
         """
-        tp1 = self.type
+        if is_reference:
+            tp1 = self.type.dereference()
+        else:
+            tp1 = self.type
         if tp1 == tp2:
             pass
         elif tp1 == NoType:
-            self.type = tp2
+            if is_reference:
+                self.type = Reference(tp2)
+            else:
+                self.type = tp2
         elif tp2 == NoType:
             pass
         elif tp1 == Int and tp2 == Float:
-            self.type = Float
+            if is_reference:
+                self.type = Reference(Float)
+            else:
+                self.type = Float
             return True, False
         elif tp1 == Float and tp2 == Int:
             # Note that the type does not have to change here because Float is
@@ -645,7 +789,7 @@ class Typable(object):
     def translate(self, cge):
         return self.llvm
 
-    def copy2Python(self, cge):
+    def ctype2Python(self, cge):
         pass
 
     def destruct(self):
@@ -698,12 +842,13 @@ class NumpyArray(Typable):
         assert isinstance(array, np.ndarray)
 
         # TODO: multi-dimensional arrays
-        self.type = ArrayType.fromArray(array)
+        self.type = Reference(ArrayType.fromObj(array))
         self.value = array
 
         ptr_int = self.value.ctypes.data  # int
         ptr_int_llvm = Int.constant(ptr_int)
-        type_ = llvm.core.Type.pointer(self.type.llvmType())
+        #type_ = llvm.core.Type.pointer(self.type.llvmType())
+        type_ = self.type.llvmType()
         self.llvm = llvm.core.Constant.inttoptr(ptr_int_llvm, type_)
 
     def __str__(self):
@@ -717,7 +862,7 @@ class Struct(Typable):
     obj_store = {}  # Class variable
 
     @classmethod
-    def new(klass, obj):
+    def fromObj(klass, obj):
         """Only one Struct representation per Python object instance.
         """
         if not hasattr(obj, '__stella_wrapper__'):
@@ -739,20 +884,74 @@ class Struct(Typable):
         if not self.llvm:
             (self.llvm, self.transfer_value) = self.type.constant(self.value, cge)
         return self.llvm
-    def copy2Python(self, cge):
+
+    def ctype2Python(self, cge):
         """At the end of a Stella run, the struct's values need to be copied back
         into Python.
 
         Please call self.destruct() afterwards.
         """
-        for name in self.type.attrib_names:
-            item = getattr(self.transfer_value, name)
-            if not self.type.attrib_type[name].on_heap:
-                setattr(self.value, name, item)
+        self.type.ctype2Python(self.transfer_value, self.value)
 
     def destruct(self):
         del self.transfer_value
         del self.value.__stella_wrapper__
+
+
+class List(Typable):
+    _registry = {}  # Class variable
+
+    @classmethod
+    def fromObj(klass, obj):
+        """Only one Struct representation per Python object instance.
+        """
+        if id(obj) not in klass._registry:
+            wrapped = klass(obj)
+            klass._registry[id(obj)] = wrapped
+        return klass._registry[id(obj)]
+
+    @classmethod
+    def destructList(klass):
+        klass._registry.clear()
+
+    def __init__(self, obj):
+        self.type = ListType.fromObj(obj)
+        self.type.makePointer()
+        self.value = obj
+
+        self.transfer_value = self.type.ctype()
+
+    def __str__(self):
+        return str(self.type)
+
+    def __repr__(self):
+        return repr(self.type)
+
+    def ctypeInit(self):
+        self.type.ctypeInit(self.value, self.transfer_value)
+
+    def translate(self, cge):
+        if self.llvm:
+            return self.llvm
+
+        self.ctypeInit()
+
+        addr_llvm = Int.constant(int(ctypes.addressof(self.transfer_value)))
+        self.llvm = cge.builder.inttoptr(addr_llvm,
+                                         self.type.llvmType())
+        return self.llvm
+
+    def ctype2Python(self, cge):
+        """At the end of a Stella run, all list elements need to get copied back
+        into Python.
+
+        Please call self.destruct() afterwards.
+        """
+        for i in range(len(self.value)):
+            self.type.type_.ctype2Python(self.transfer_value[i], self.value[i])
+
+    def destruct(self):
+        del self.transfer_value
 
 
 def wrapValue(value):
@@ -761,8 +960,10 @@ def wrapValue(value):
         return Const(value)
     elif type_ == np.ndarray:
         return NumpyArray(value)
+    elif type_ == list:
+        return List.fromObj(value)
     else:
-        return Struct.new(value)
+        return Struct.fromObj(value)
 
 
 class Cast(Typable):
@@ -805,3 +1006,4 @@ class Cast(Typable):
 def destruct():
     FunctionType.destruct()
     StructType.type_store.clear()
+    List.destructList()

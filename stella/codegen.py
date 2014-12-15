@@ -169,7 +169,7 @@ class Program(object):
         stats['elapsed'] = time.time() - time_start
 
         for arg in self.module.entry_args:
-            arg.copy2Python(self.cge)  # may be a no-op if not necessary
+            arg.ctype2Python(self.cge)  # may be a no-op if not necessary
             arg.destruct()  # may be a no-op if not necessary
 
         logging.debug("Returning...")

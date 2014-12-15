@@ -39,7 +39,8 @@ class Zeros(Intrinsic):
         type_ = tp.get_scalar(combined[1])
         if not tp.supported_scalar(type_):
             raise exc.TypeError("Invalid array element type {0}".format(type_))
-        return tp.ArrayType(type_, shape)
+        atype = tp.ArrayType(type_, shape)
+        return atype
 
     def call(self, cge, args, kw_args):
         type_ = self.getReturnType(args, kw_args).llvmType()
@@ -63,9 +64,13 @@ class Len(Intrinsic):
 
     def call(self, cge, args, kw_args):
         obj = args[0]
-        if not isinstance(obj.type, tp.ArrayType):
-            raise exc.TypeError("Invalid array type {0}".format(self.obj.type))
-        self.result.value = obj.type.shape
+        if obj.type.isReference():
+            type_ = obj.type.dereference()
+        else:
+            type_ = obj.type
+        if not isinstance(type_, tp.ArrayType):
+            raise exc.TypeError("Invalid array type {0}".format(obj.type))
+        self.result.value = type_.shape
         self.result.translate(cge)
         return self.result.llvm
 
