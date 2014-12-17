@@ -205,7 +205,7 @@ def test1():
 
 
 def format_e(dt, n, system):
-    return calculate_energy(system)
+    return "{:.9f}".format(calculate_energy(system))
 
 
 def prepare(args):
