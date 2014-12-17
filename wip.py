@@ -32,4 +32,4 @@ def current_work(run=False):
     else:
         ir = run
     #print(stella.wrap(test.objects.objContainingList3, ir=ir)(f))
-    print(test.nbody.main(5000, lambda x: stella.wrap(x, ir=ir)))
+    print(test.nbody.main(6000, lambda x: stella.wrap(x, ir=ir)))

@@ -13,6 +13,7 @@ import sys
 import copy
 import math
 import stella
+from test import mark, unimplemented
 
 
 PI = 3.14159265358979323
@@ -190,13 +191,26 @@ def offset_momentum(ref, bodies, px=0.0, py=0.0, pz=0.0):
     ref.vz = pz / ref.mass
 
 
-def test1():
-    n = 5000
+
+@mark.parametrize('opt', [3, 2, 1])
+def test1a(opt):
+    return _test1(opt)
+
+
+@mark.parametrize('opt', [0])
+@unimplemented
+def test1b(opt):
+    """At -O0 the alloca of the nested for loops will cause a stack overflow."""
+    return _test1(opt)
+
+
+def _test1(opt):
+    n = 5990
     offset_momentum(BODIES.sun, SYSTEM)
     s1 = copy.deepcopy(SYSTEM)
     s2 = copy.deepcopy(SYSTEM)
-    r1 = advance1(0.01, n, s1)
-    r2 = stella.wrap(advance1)(0.01, n, s2)
+    r1 = advance(0.01, n, s1)
+    r2 = stella.wrap(advance, opt=opt)(0.01, n, s2)
 
     for i, body in enumerate(s1):
         body.diff(s2[i])
