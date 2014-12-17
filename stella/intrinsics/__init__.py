@@ -97,7 +97,16 @@ class Exp(Log):
     intr = llvm.core.INTR_EXP
     arg_names = ['x']
 
+
+class Sqrt(Log):
+    py_func = math.sqrt
+    intr = llvm.core.INTR_SQRT
+    arg_names = ['x']
+
+
 func2klass = {}
+
+
 # Get all contrete subclasses of Intrinsic and register them
 for name in dir(sys.modules[__name__]):
     klass = sys.modules[__name__].__dict__[name]
