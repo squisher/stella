@@ -11,6 +11,7 @@
 
 import sys
 import copy
+import math
 import stella
 
 
@@ -94,7 +95,12 @@ def advance(dt, n, bodies):
                 dx = bodies[j].x - bodies[k].x
                 dy = bodies[j].y - bodies[k].y
                 dz = bodies[j].z - bodies[k].z
-                mag = dt * ((dx * dx + dy * dy + dz * dz) ** (-1.5))
+
+                # This is extremely slow because of pow (**)
+                # mag = dt * ((dx * dx + dy * dy + dz * dz) ** (-1.5))
+                dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+                mag = dt / (dist * dist * dist)
+
                 b1m = bodies[j].mass * mag
                 b2m = bodies[k].mass * mag
                 bodies[j].vx -= dx * b2m

@@ -47,7 +47,7 @@ def bench_it(name, c_src, args, stella_f=None, full_f=None, flags=[]):
         raise Exception(
             "Either need to specify stella_f(*arg_value) or full_f(args, stats)")
 
-    c_args = {k+'_init': k+'='+str(v) for k,v in args.items()}
+    c_args = {k+'_init': k+'='+str(v) for k, v in args.items()}
     print("Doing {0}({1})".format(name, args))
     src = pystache.render(c_src, **c_args)
     exe = ccompile(__file__ + "." + name + ".c", src, flags)

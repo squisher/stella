@@ -8,6 +8,7 @@
 # 2to3
 
 import sys
+import math
 
 def combinations(l):
     result = []
@@ -69,7 +70,12 @@ def advance(dt, n, bodies=SYSTEM, pairs=PAIRS):
             dx = x1 - x2
             dy = y1 - y2
             dz = z1 - z2
+
+            # Interestingly this change does NOT speed up the Python runtime!
+            # dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+            # mag = dt / (dist*dist*dist)
             mag = dt * ((dx * dx + dy * dy + dz * dz) ** (-1.5))
+
             b1m = m1 * mag
             b2m = m2 * mag
             v1[0] -= dx * b2m
