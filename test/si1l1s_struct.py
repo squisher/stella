@@ -130,7 +130,8 @@ def prototype(params):
     assert sp_py == sp_st
 
 
-def prepare(params):
+def prepare(args):
+    params = Settings([k+'='+str(v) for k, v in args.items()])
     sp_py = Spider(params, np.zeros(shape=params['K'], dtype=int))
     return (run, (sp_py, ), result)
 

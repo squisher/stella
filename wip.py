@@ -6,6 +6,7 @@ import test.external_func
 import test.si1l1s_struct
 import test.si1l1s_obj
 import test.virtnet_purepython
+import test.nbody
 import stella
 from stella import exc  # noqa
 import numpy as np
@@ -30,4 +31,5 @@ def current_work(run=False):
         ir = not run
     else:
         ir = run
-    print(stella.wrap(test.objects.objContainingList1, ir=ir)(f))
+    #print(stella.wrap(test.objects.objContainingList3, ir=ir)(f))
+    print(test.nbody.main(5000, lambda x: stella.wrap(x, ir=ir)))

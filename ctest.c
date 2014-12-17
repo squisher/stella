@@ -13,5 +13,6 @@ void setx(tCoord *t, int x) {
 int main(int argc, char ** argv) {
     tCoord c[2];
     setx(&(c[1]), 1);
-    return c[1].x;
+    c[0].x = 2;
+    return c[0].x;
 }

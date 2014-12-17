@@ -67,7 +67,7 @@ class Program(object):
                 cge.builder = llvm.core.Builder.new(bc.block)
 
             bc.translate(cge)
-            impl.log.debug("TRANS'D {0}".format(bc))
+            impl.log.debug("TRANS'D {0}".format(bc.locStr()))
             # Note: the `and not' part is a basic form of dead code elimination
             #       This is used to drop unreachable "return None" which are implicitly added
             #       by Python to the end of functions.

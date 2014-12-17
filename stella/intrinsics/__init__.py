@@ -59,7 +59,7 @@ class Len(Intrinsic):
 
     def getResult(self, func):
         # we need the reference to back-patch
-        self.result = tp.Const(0)
+        self.result = tp.Const(-42)
         return self.result
 
     def call(self, cge, args, kw_args):

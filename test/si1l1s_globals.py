@@ -12,8 +12,10 @@ from . import virtnet_utils
 EXPSTART = 0.2
 
 
-def prepare(params):
+def prepare(args):
     global K, rununtiltime, koffp, kcat, delta, leg, substrate, obs_i, observations
+    params = Settings([k+'='+str(v) for k, v in args.items()])
+
     K = params['K']
     rununtiltime = params['rununtiltime']
     mtpy.mt_seed32new(params['seed'])
@@ -162,9 +164,7 @@ class Settings(virtnet_utils.Settings):
 
 
 def prototype(params):
-    s = Settings(params)
-
-    prepare(s)
+    prepare(params)
     run()
     py = np.array(observations)  # save the global result variable
 

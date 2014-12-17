@@ -4,6 +4,7 @@ import types
 import sys
 from abc import ABCMeta, abstractmethod
 import ctypes
+import inspect
 
 import llvm
 import llvm.core
@@ -97,7 +98,7 @@ class IR(metaclass=ABCMeta):
         return self.__str__()
 
     def locStr(self):
-        return "{0:2s} {1}".format(str(self.loc), str(self))
+        return "{0:3s} {1}".format(str(self.loc), str(self))
 
     def equivalent(self, other):
         """Equality but location independent.
@@ -232,6 +233,7 @@ class Module(object):
         except exc.UndefinedGlobalError:
             f = Function(f_type, self)
             self.namestore[f_type.name] = f
+
         return f
 
     def getFunctionRef(self, item):
@@ -262,7 +264,7 @@ class Module(object):
             intrinsic = getIntrinsic(item)
 
             if intrinsic:
-                wrapped = intrinsic()
+                wrapped = intrinsic
             elif module and hasattr(module, '__file__') and module.__file__[-3:] == '.so':
                 ext_module = self.getExternalModule(module)
                 wrapped = ext_module.getFunctionRef(item)
@@ -300,7 +302,13 @@ class Module(object):
                     "Currently only Functions can be imported (not {0})".format(type(item)))
             wrapped = self._wrapPython(key, item, module)
             self.namestore[key] = wrapped
-        return wrapped
+
+        # instrinsinc check: we need a new instance for every call!
+        # TODO: see also self.loadGlobal()
+        if inspect.isclass(wrapped) and issubclass(wrapped, intrinsics.Intrinsic):
+            return wrapped()
+        else:
+            return wrapped
 
     def loadGlobal(self, func, key):
         try:
@@ -324,7 +332,13 @@ class Module(object):
             # _wrapPython will create an entry for functions _only_
             if not isinstance(wrapped, FunctionRef):
                 self.namestore[key] = wrapped
-        return wrapped
+
+        # instrinsinc check: we need a new instance for every call!
+        # TODO: this may be required in _getFunction?
+        if inspect.isclass(wrapped) and issubclass(wrapped, intrinsics.Intrinsic):
+            return wrapped()
+        else:
+            return wrapped
 
     def newGlobal(self, func, name):
         """MUST ensure that loadGlobal() fails before calling this function!"""
@@ -474,7 +488,6 @@ class Function(Scope):
                 # TODO: create superclass for complex types
                 arg = self.getOrNewRegister(self.type_.arg_names[i])
                 arg.type = type_
-                #arg.type.makePointer()  # now automatically done
             else:
                 name = self.type_.arg_names[i]
                 arg = self.getOrNewRegister('__param_'+name)

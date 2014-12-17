@@ -55,7 +55,7 @@ class Function(object):
         self.module = module
 
         self.log = logging.getLogger(str(self))
-        self.todo = utils.Stack("Todo", log=self.log)
+        self.todo = utils.Stack("Todo", log=self.log, quiet=True)
         logging.info("Analyzing {0}".format(self))
 
     def __str__(self):
@@ -95,6 +95,7 @@ class Function(object):
                     for_loop = bytecode.ForLoop(self, bc.debuginfo)
                     for_loop.basicSetup(bc)
                     for_loop.rewrite(self)
+                    self.replaceLocation(for_loop)
             except exc.StellaException as e:
                 e.addDebug(bc.debuginfo)
                 raise
@@ -108,6 +109,7 @@ class Function(object):
                 if isinstance(bc, bytecode.Jump):
                     if bc.processFallThrough():
                         self.add_incoming_jump(bc.linearNext(), bc)
+                if isinstance(bc, bytecode.HasTarget):
                     target_bc = self.labels[bc.target_label]
                     bc.setTargetBytecode(target_bc)
                     self.add_incoming_jump(target_bc, bc)
@@ -118,7 +120,11 @@ class Function(object):
         for bc in self.bytecodes:
             try:
                 if bc in self.incoming_jumps:
-                    if not isinstance(bc.linearPrev(), utils.BlockTerminal):
+                    bc_prev = bc.linearPrev()
+                    # TODO Ugly -- blocks aren't transparent enough
+                    if isinstance(bc_prev, utils.Block):
+                        bc_prev = bc_prev.blockContent()
+                    if bc_prev and not isinstance(bc_prev, utils.BlockTerminal):
                         bc_ = bytecode.Jump(self, bc.debuginfo)
                         bc_.loc = ''
                         bc_.setTargetBytecode(bc)
@@ -213,7 +219,7 @@ class Function(object):
             for bc in bc_list:
                 try:
                     bc.type_eval(self)
-                    self.log.debug("TYPE'D " + str(bc))
+                    self.log.debug("TYPE'D " + bc.locStr())
                     if isinstance(bc, bytecode.RETURN_VALUE):
                         self.retype(self.impl.result.unify_type(bc.result.type,
                                                                 bc.debuginfo))
@@ -221,6 +227,7 @@ class Function(object):
                             bc.linearNext() is not None and \
                             bc.linearNext() not in self.incoming_jumps:
                         self.log.debug("Unreachable {0}, aborting".format(bc.linearNext()))
+                        #import pdb; pdb.set_trace()  # XXX BREAKPOINT
                         break
                 except exc.StellaException as e:
                     e.addDebug(bc.debuginfo)

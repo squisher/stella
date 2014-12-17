@@ -103,16 +103,6 @@ def fib(x):
     return fib(x - 1) + fib(x - 2)
 
 
-def fib_harness(n, x):
-    """
-    Test calling an external function.
-    """
-    r = 0
-    for i in range(n):
-        r += fib(x)
-    return r
-
-
 def hof_f(n):
     if n == 0:
         return 1
@@ -359,7 +349,7 @@ def test7(f, arg):
     make_eq_test(f, arg)
 
 
-@mark.parametrize('f', [fib_harness, kwargs])
+@mark.parametrize('f', [kwargs])
 def test8(f):
     make_eq_test(f, (1, 30))
 

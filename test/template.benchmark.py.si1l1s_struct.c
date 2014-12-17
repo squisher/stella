@@ -6,8 +6,8 @@
 
 typedef struct {
     int K;
-    double {{rununtiltime_decl}};
-    int {{seed_decl}};
+    double rununtiltime;
+    int seed;
     double koffp;
     double kcat;
 

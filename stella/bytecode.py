@@ -315,7 +315,7 @@ class BINARY_POWER(BinaryOp):
                 '(i32)' +
                 self.args[1].name)
         else:
-            power = self.args[1].llvm
+            power = self.args[1].translate(cge)
 
         llvm_pow = llvm.core.Function.intrinsic(
            cge.module.llvm, self.b_func[
@@ -942,7 +942,7 @@ class JUMP_FORWARD(Jump, Bytecode):
         super().__init__(func, debuginfo)
 
 
-class ForLoop(ir.IR):
+class ForLoop(HasTarget, ir.IR):
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
@@ -953,8 +953,11 @@ class ForLoop(ir.IR):
     def setLimit(self, limit):
         self.limit = limit
 
+    def setStart(self, start):
+        self.start = start
+
     def setEndLoc(self, end_loc):
-        self.end_loc = end_loc
+        self.target_label = end_loc
 
     def setTestLoc(self, loc):
         self.test_loc = loc
@@ -965,6 +968,7 @@ class ForLoop(ir.IR):
 
     def basicSetup(self, bc):
         iter_loc = bc.loc
+        start = None
 
         cur = bc.prev
         if not isinstance(cur, GET_ITER):
@@ -1005,6 +1009,12 @@ class ForLoop(ir.IR):
                     type(cur)))
         cur = bc.prev
 
+        # this supports a start argument to range
+        if isinstance(cur, LOAD_FAST):
+            start = cur
+            cur.remove()
+            cur = bc.prev
+
         if not isinstance(cur, LOAD_GLOBAL):
             raise exc.UnimplementedError('unsupported for loop')
         cur.remove()
@@ -1015,6 +1025,7 @@ class ForLoop(ir.IR):
 
         self.loc = cur.loc
         # TODO set location for self and transfer jumps!
+        self.setStart(start)
         self.setLimit(limit)
         self.setEndLoc(end_loc)
         self.setTestLoc(bc.loc)
@@ -1038,13 +1049,15 @@ class ForLoop(ir.IR):
             str(self.test_loc) + "__limit")
 
         # init
-        b = LOAD_CONST(func.impl, self.debuginfo)
-        b.addArg(Const(0))
+        if self.start:
+            b = self.start
+        else:
+            b = LOAD_CONST(func.impl, self.debuginfo)
+            b.addArg(Const(0))
         last.insert_after(b)
         last = b
 
         b = STORE_FAST(func.impl, self.debuginfo)
-
         b.addArg(self.loop_var)
         b.new_allocate = True
         last.insert_after(b)
@@ -1092,7 +1105,7 @@ class ForLoop(ir.IR):
         last = b
 
         b = POP_JUMP_IF_TRUE(func.impl, self.debuginfo)
-        b.setTarget(self.end_loc)
+        b.setTarget(self.target_label)
         if isinstance(self.limit, list):
             b.additionalPop(1)
         last.insert_after(b)
@@ -1134,8 +1147,8 @@ class ForLoop(ir.IR):
         last = b
 
         # $body, keep, find the end of it
-        body_loc = b.next.loc
-        func.addLabel(b.next)
+        body_loc = b.linearNext().loc
+        func.addLabel(b.linearNext())
 
         jump_updates = []
         while b.next is not None:
@@ -1155,10 +1168,10 @@ class ForLoop(ir.IR):
         for b in jump_updates:
             b.setTarget(loop_test_loc)
 
-        if last.prev.equivalent(last) and isinstance(last, JUMP_ABSOLUTE):
+        if last.linearPrev().equivalent(last) and isinstance(last, JUMP_ABSOLUTE):
             # Python seems to sometimes add a duplicate JUMP_ABSOLUTE at the
             # end of the loop. Remove it.
-            last.prev.remove()
+            last.linearPrev().remove()
 
         # loop test
         # pdb.set_trace()
@@ -1177,7 +1190,7 @@ class ForLoop(ir.IR):
         last.insert_before(b)
 
         b = POP_JUMP_IF_TRUE(func.impl, self.debuginfo)
-        b.setTarget(self.end_loc)
+        b.setTarget(self.target_label)
         last.insert_before(b)
 
         # increment

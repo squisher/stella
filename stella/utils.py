@@ -4,9 +4,10 @@ import logging
 class Stack(object):
     backend = None
 
-    def __init__(self, name="Stack", log=None):
+    def __init__(self, name="Stack", log=None, quiet=False):
         self.backend = []
         self.name = name
+        self.quiet = quiet
         if log is None:
             self.log = logging
         else:
@@ -18,13 +19,17 @@ class Stack(object):
     def __repr__(self):
         return "[" + self.name + "=" + ", ".join([str(x) for x in self.backend]) + "]"
 
+    def _log_debug(self, *args):
+        if not self.quiet:
+            self.log.debug(*args)
+
     def push(self, item):
-        self.log.debug("[" + self.name + "] Pushing " + str(item))
+        self._log_debug("[" + self.name + "] Pushing " + str(item))
         self.backend.append(item)
 
     def pop(self):
         item = self.backend.pop()
-        self.log.debug("[" + self.name + "] Popping " + str(item))
+        self._log_debug("[" + self.name + "] Popping " + str(item))
         return item
 
     def peek(self):
@@ -37,7 +42,7 @@ class Stack(object):
         return len(self.backend) == 0
 
     def clone(self):
-        s = Stack(self.name)
+        s = Stack(self.name, self.log, self.quiet)
         s.backend = [x for x in self.backend]
         return s
 
@@ -104,6 +109,7 @@ def linkedlist(klass):
         Note: block start and end are not adjusted here! They're only checked at remove()"""
         bc.next = self.next
         if bc.next:
+            # TODO is this sufficient for the end of a block?
             bc.next.prev = bc
         self.next = bc
         bc.prev = self
@@ -116,7 +122,12 @@ def linkedlist(klass):
         bc.prev = self.prev
         bc.next = self
 
-        bc.prev.next = bc
+        if not bc.prev and self._block_parent:
+            bc._block_parent = self._block_parent
+            self._block_parent = None
+            bc._block_parent._block_start = bc
+        else:
+            bc.prev.next = bc
         self.prev = bc
     klass.insert_before = insert_before
 
@@ -156,11 +167,11 @@ def linkedlist(klass):
     klass.blockEnd = blockEnd
 
     def linearNext(self):
-        """Move to the previous bytecode, transparently handling blocks"""
+        """Move to the next bytecode, transparently handling blocks"""
         # TODO should this be its own iterator?
         if self.next is None:
             if self._block_parent:
-                return self._block_parent.next
+                return self._block_parent.linearNext()
             else:
                 return None
         if isinstance(self.next, Block):

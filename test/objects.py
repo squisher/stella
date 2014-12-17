@@ -171,6 +171,18 @@ def objList2(l):
         r += l[i].x
     return r
 
+def objList3(l):
+    r = 0
+    for i in range(len(l)):
+        for j in range(len(l)):
+            r += l[j].x + i
+    return r
+
+
+def objList4(l):
+    for i in range(len(l)):
+        l[i].x = i
+
 
 def objContainingList1(f):
     return f.l[0].x + f.l[1].x
@@ -181,6 +193,11 @@ def objContainingList2(f):
     for i in range(len(f.l)):
         r += f.l[i].x
     return r
+
+
+def objContainingList3(f):
+    for i in range(len(f.l)):
+        f.l[i].x = i
 
 
 args1 = [(1, 1), (24, 42), (0.0, 1.0), (1.0, 1.0), (3.0, 0.0)]
@@ -403,18 +420,43 @@ def test_mutation6(f):
     assert e1 == e2 and e3 == e4 and py == st
 
 
-@mark.parametrize('f', [objList1, objList2])
+@mark.parametrize('f', [objList1, objList2, objList3])
+def test_no_mutation7(f):
+    l1 = [E(4), E(1)]
+    l2 = [E(4), E(1)]
+
+    py = f(l1)
+    st = stella.wrap(f)(l2)
+
+    assert l1 == l2 and py == st
+
+
+@mark.parametrize('f', [objList4])
 def test_mutation7(f):
-    e1 = [E(4), E(1)]
-    e2 = [E(4), E(1)]
+    l1 = [E(4), E(1)]
+    l2 = [E(4), E(1)]
 
-    py = f(e1)
-    st = stella.wrap(f)(e2)
+    py = f(l1)
+    st = stella.wrap(f)(l2)
 
-    assert e1 == e2 and py == st
+    assert l1 == l2 and py == st
 
 
 @mark.parametrize('f', [objContainingList1, objContainingList2])
+def test_no_mutation8(f):
+    l1 = [E(2), E(5)]
+    l2 = [E(2), E(5)]
+    f1 = F(l1)
+    f2 = F(l2)
+
+    py = f(f1)
+    st = stella.wrap(f)(f2)
+
+    assert f1 == f2 and py == st
+
+
+@mark.parametrize('f', [objContainingList3])
+@unimplemented
 def test_mutation8(f):
     l1 = [E(2), E(5)]
     l2 = [E(2), E(5)]

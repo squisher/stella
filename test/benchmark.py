@@ -40,17 +40,16 @@ def ccompile(fn, src, flags=[]):
 
 
 def bench_it(name, c_src, args, stella_f=None, full_f=None, flags=[]):
-    """args = [(k,v),(k,v),...]"""
+    """args = {k=v, ...}
+    Args gets expanded to `k`_init: `k`=`v` for the C template
+    """
     if not stella_f and not full_f:
         raise Exception(
             "Either need to specify stella_f(*arg_value) or full_f(args, stats)")
 
+    c_args = {k+'_init': k+'='+str(v) for k,v in args.items()}
     print("Doing {0}({1})".format(name, args))
-    extra_args = []
-    for k, v in args:
-        if k.endswith('_init'):
-            extra_args.append((k[:-5]+'_decl', v.split('=')[0]))
-    src = pystache.render(c_src, **dict(args+extra_args))
+    src = pystache.render(c_src, **c_args)
     exe = ccompile(__file__ + "." + name + ".c", src, flags)
 
     cmd = [exe]
@@ -64,7 +63,7 @@ def bench_it(name, c_src, args, stella_f=None, full_f=None, flags=[]):
     if stella_f:
         time_start = time.time()
         print(stella.wrap(stella_f, debug=False, opt=opt, stats=stats)
-              (*[v for k, v in args]))
+              (*[v for k, v in args.items()]))
         elapsed_stella = time.time() - time_start
     else:
         elapsed_stella = full_f(args, stats)
@@ -81,9 +80,9 @@ def print_it(f, arg=None):
 
 
 def bench_fib(duration):
-    from test.langconstr import fib_harness
+    from test.langconstr import fib
 
-    args = [('n', duration), ('x', 47)]
+    args = {'x': duration}
     fib_c = """
 #include <stdio.h>
 #include <stdlib.h>
@@ -97,36 +96,28 @@ long long fib(long long x) {
 }
 
 int main(int argc, char ** argv) {
-    int i;
     long long r = 0;
+    const int {{x_init}};
 
-    for (i=0; i<{{n}}; i++) {
-        r += fib({{x}});
-    }
+    r += fib(x);
 
     printf ("%lld\\n", r);
     exit (0);
 }
 """
 
-    return bench_it('fib', fib_c, args, stella_f=fib_harness)
+    return bench_it('fib', fib_c, args, stella_f=fib)
 
 
-def bench_si1l1s(module, suffix, duration):
-    args = [('seed_init', 'seed=42'),
-            ('rununtiltime_init', 'rununtiltime=' + duration),
-            ]
-    name = 'si1l1s_' + suffix
+def bench_vs_template(module, name, args, flags):
     fn = "{}/template.{}.{}.c".format(os.path.dirname(__file__),
                                       os.path.basename(__file__),
                                       name)
     with open(fn) as f:
         src = f.read()
 
-    def run_si1l1s(args, stats):
-        params = [v for k, v in args]
-        s = module.Settings(params)
-        run_f, transfer, result_f = module.prepare(s)
+    def run_it(args, stats):
+        run_f, transfer, result_f = module.prepare(args)
         if transfer is None:
             transfer = []
 
@@ -137,7 +128,14 @@ def bench_si1l1s(module, suffix, duration):
 
         return elapsed_stella
 
-    return bench_it(name, src, args, flags=['-lm'], full_f=run_si1l1s)
+    return bench_it(name, src, args, flags=['-lm'], full_f=run_it)
+
+
+def bench_si1l1s(module, suffix, duration):
+    args = {'seed': '42',
+            'rununtiltime': duration
+            }
+    return bench_vs_template(module, 'si1l1s_' + suffix, args, ['-lm'])
 
 
 def bench_si1l1s_globals(duration):
@@ -156,9 +154,17 @@ def bench_si1l1s_obj(duration):
     return bench_si1l1s(test.si1l1s_obj, 'struct', duration)
 
 
+def bench_nbody(n):
+    import test.nbody
+    args = {'n': n,
+            'dt': 0.01,
+            }
+    return bench_vs_template(test.nbody, 'nbody', args, flags=['-lm'])
+
+
 @bench
 def test_fib(bench_opt):
-    duration = [1, 4][bench_opt]
+    duration = [45, 47][bench_opt]
     speedup = print_it(bench_fib, duration)
     assert speedup >= min_speedup
 
@@ -181,4 +187,11 @@ def test_si1l1s_struct(bench_opt):
 def test_si1l1s_obj(bench_opt):
     duration = ['1e6', '1e8'][bench_opt]
     speedup = print_it(bench_si1l1s_obj, duration)
+    assert speedup >= min_speedup
+
+
+@bench
+def test_nbody(bench_opt):
+    duration = [10000000, 50000000][bench_opt]
+    speedup = print_it(bench_nbody, duration)
     assert speedup >= min_speedup

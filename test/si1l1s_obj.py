@@ -122,7 +122,8 @@ def prototype(params):
     assert sim_py == sim_st
 
 
-def prepare(params):
+def prepare(args):
+    params = Settings([k+'='+str(v) for k, v in args.items()])
     sim = Simulation(params)
     return (sim.run, (), lambda: sim.observations)
 
