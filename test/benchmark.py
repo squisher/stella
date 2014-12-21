@@ -128,6 +128,45 @@ int main(int argc, char ** argv) {
     return bench_it('fib', fib_c, args, extended, stella_f=fib)
 
 
+def bench_fib_nonrecursive(duration, extended):
+    from test.langconstr import fib_nonrecursive
+
+    args = {'x': duration}
+    fib_c = """
+#include <stdio.h>
+#include <stdlib.h>
+
+long long fib(long long x) {
+    if (x == 0)
+        return 1;
+    if (x == 1)
+        return 1;
+    long long grandparent = 1;
+    long long parent = 1;
+    long long me = 0;
+    int i;
+    for (i=2; i<x; i++) {
+        me = parent + grandparent;
+        grandparent = parent;
+        parent = me;
+    }
+    return me;
+}
+
+int main(int argc, char ** argv) {
+    long long r = 0;
+    const int {{x_init}};
+
+    r += fib(x);
+
+    printf ("%lld\\n", r);
+    exit (0);
+}
+"""
+
+    return bench_it('fib_nonrecursive', fib_c, args, extended, stella_f=fib_nonrecursive)
+
+
 def bench_vs_template(module, extended, name, args, flags):
     fn = "{}/template.{}.{}.c".format(os.path.dirname(__file__),
                                       os.path.basename(__file__),
@@ -182,7 +221,8 @@ def bench_nbody(n, extended):
 
 
 def speedup(bench):
-    return bench['stella'] / bench['gcc']
+    #return bench['stella'] / bench['gcc']
+    return bench['gcc'] / bench['stella']
 
 
 @bench
@@ -190,6 +230,13 @@ def test_fib(bench_result, bench_opt, bench_ext):
     duration = [30, 45, 48][bench_opt]
     bench_result['fib'] = bench_fib(duration, bench_ext)
     assert speedup(bench_result['fib']) >= min_speedup
+
+
+@bench
+def test_fib_nonrecursive(bench_result, bench_opt, bench_ext):
+    duration = [50, 150, 175][bench_opt]
+    bench_result['fib_nonrec'] = bench_fib_nonrecursive(duration, bench_ext)
+    assert speedup(bench_result['fib_nonrec']) >= min_speedup
 
 
 si1l1s_durations = ['1e5', '1e6', '1e8']
