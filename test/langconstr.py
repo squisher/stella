@@ -110,6 +110,7 @@ def fib_nonrecursive(n):
         return 3
     grandparent = 1
     parent = 3
+    me = 0  # required for stella only
     for i in range(2, n):
         me = 3 * parent - grandparent
         grandparent = parent
