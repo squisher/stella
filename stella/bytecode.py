@@ -1010,7 +1010,7 @@ class ForLoop(HasTarget, ir.IR):
         cur = bc.prev
 
         # this supports a start argument to range
-        if isinstance(cur, LOAD_FAST):
+        if isinstance(cur, LOAD_FAST) or isinstance(cur, LOAD_CONST):
             start = cur
             cur.remove()
             cur = bc.prev

@@ -103,6 +103,20 @@ def fib(x):
     return fib(x - 1) + fib(x - 2)
 
 
+def fib_nonrecursive(n):
+    if n == 0:
+        return 1
+    if n == 1:
+        return 3
+    grandparent = 1
+    parent = 3
+    for i in range(2, n):
+        me = 3 * parent - grandparent
+        grandparent = parent
+        parent = me
+    return me
+
+
 def hof_f(n):
     if n == 0:
         return 1
@@ -344,7 +358,7 @@ def test6(f, arg):
 
 
 @mark.parametrize('arg', single_args([0, 1, 2, 5, 8, -1, -3]))
-@mark.parametrize('f', [fib])
+@mark.parametrize('f', [fib, fib_nonrecursive])
 def test7(f, arg):
     make_eq_test(f, arg)
 
