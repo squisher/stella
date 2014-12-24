@@ -14,7 +14,7 @@ opt = 3
 min_speedup = 0.8
 
 
-def ccompile(fn, src, flags=[]):
+def ccompile(fn, src, cc=None, flags=[]):
     """
     Write the string src into the file fn, then compile it with -O{opt} and
     return the executable name.
@@ -22,10 +22,13 @@ def ccompile(fn, src, flags=[]):
     with open(fn, 'w') as f:
         f.write(src)
 
-    if 'CC' in os.environ:
-        CC = os.environ['CC']
+    if cc is None:
+        if 'CC' in os.environ:
+            CC = os.environ['CC']
+        else:
+            CC = 'gcc'
     else:
-        CC = 'gcc'
+        CC = cc
 
     (root, ext) = os.path.splitext(fn)
     if os.path.exists(root):
@@ -39,7 +42,7 @@ def ccompile(fn, src, flags=[]):
     return root
 
 
-def bench_it(name, c_src, args, stella_f=None, full_f=None, flags=[]):
+def bench_it(name, c_src, args, extended=False, stella_f=None, full_f=None, flags=[]):
     """args = {k=v, ...}
     Args gets expanded to `k`_init: `k`=`v` for the C template
     """
@@ -47,32 +50,55 @@ def bench_it(name, c_src, args, stella_f=None, full_f=None, flags=[]):
         raise Exception(
             "Either need to specify stella_f(*arg_value) or full_f(args, stats)")
 
+    r = {}
+
     c_args = {k+'_init': k+'='+str(v) for k, v in args.items()}
     print("Doing {0}({1})".format(name, args))
     src = pystache.render(c_src, **c_args)
-    exe = ccompile(__file__ + "." + name + ".c", src, flags)
 
-    cmd = [exe]
-    print("Running C:", " ".join(cmd))
-    time_start = time.time()
-    call(cmd)
-    elapsed_c = time.time() - time_start
+    if extended:
+        CCs = ['gcc', 'clang']
+    else:
+        CCs = ['gcc']
+
+    for cc in CCs:
+        exe = ccompile(__file__ + "." + name + ".c", src, cc, flags)
+
+        cmd = [exe]
+        print("Running C/{}: {}".format(cc, " ".join(cmd)))
+        time_start = time.time()
+        call(cmd)
+        elapsed_c = time.time() - time_start
+        r[cc] = elapsed_c
 
     print("Running Stella:")
     stats = {}
+    wrapper_opts = {'debug': False, 'opt': opt, 'stats': stats}
     if stella_f:
         time_start = time.time()
-        print(stella.wrap(stella_f, debug=False, opt=opt, stats=stats)
+        print(stella.wrap(stella_f, **wrapper_opts)
               (*[v for k, v in args.items()]))
         elapsed_stella = time.time() - time_start
     else:
-        elapsed_stella = full_f(args, stats)
-    return {'c': elapsed_c,
-            'stella': stats['elapsed'], 'stella+': elapsed_stella,
-            'speedup': elapsed_c / stats['elapsed']}
+        elapsed_stella = full_f(args, stella.wrap, wrapper_opts)
+
+    r['stella'] = stats['elapsed']
+    r['stella+compile'] = elapsed_stella
+
+    if extended:
+        print("Running Python:")
+        if stella_f:
+            time_start = time.time()
+            print(stella_f(*[v for k, v in args.items()]))
+            elapsed_py = time.time() - time_start
+        else:
+            elapsed_py = full_f(args, time_stats, wrapper_opts)
+        r['python'] = elapsed_py
+
+    return r
 
 
-def bench_fib(duration):
+def bench_fib(duration, extended):
     from test.langconstr import fib
 
     args = {'x': duration}
@@ -99,92 +125,99 @@ int main(int argc, char ** argv) {
 }
 """
 
-    return bench_it('fib', fib_c, args, stella_f=fib)
+    return bench_it('fib', fib_c, args, extended, stella_f=fib)
 
 
-def bench_vs_template(module, name, args, flags):
+def bench_vs_template(module, extended, name, args, flags):
     fn = "{}/template.{}.{}.c".format(os.path.dirname(__file__),
                                       os.path.basename(__file__),
                                       name)
     with open(fn) as f:
         src = f.read()
 
-    def run_it(args, stats):
+    def run_it(args, wrapper, wrapper_opts):
         run_f, transfer, result_f = module.prepare(args)
         if transfer is None:
             transfer = []
 
         time_start = time.time()
-        stella.wrap(run_f, debug=False, opt=opt, stats=stats)(*transfer)
+        wrapper(run_f, **wrapper_opts)(*transfer)
         elapsed_stella = time.time() - time_start
         print(result_f(*transfer))
 
         return elapsed_stella
 
-    return bench_it(name, src, args, flags=['-lm'], full_f=run_it)
+    return bench_it(name, src, args, extended, flags=['-lm'], full_f=run_it)
 
 
-def bench_si1l1s(module, suffix, duration):
+def bench_si1l1s(module, extended, suffix, duration):
     args = {'seed': '42',
             'rununtiltime': duration
             }
-    return bench_vs_template(module, 'si1l1s_' + suffix, args, ['-lm'])
+    return bench_vs_template(module, extended, 'si1l1s_' + suffix, args, ['-lm'])
 
 
-def bench_si1l1s_globals(duration):
+def bench_si1l1s_globals(duration, extended):
     import test.si1l1s_globals
-    return bench_si1l1s(test.si1l1s_globals, 'globals', duration)
+    return bench_si1l1s(test.si1l1s_globals, extended, 'globals', duration)
 
 
-def bench_si1l1s_struct(duration):
+def bench_si1l1s_struct(duration, extended):
     import test.si1l1s_struct
-    return bench_si1l1s(test.si1l1s_struct, 'struct', duration)
+    return bench_si1l1s(test.si1l1s_struct, extended, 'struct', duration)
 
 
-def bench_si1l1s_obj(duration):
+def bench_si1l1s_obj(duration, extended):
     import test.si1l1s_obj
     # reuse the 'struct' version of C since there is no native OO
-    return bench_si1l1s(test.si1l1s_obj, 'struct', duration)
+    return bench_si1l1s(test.si1l1s_obj, extended, 'struct', duration)
 
 
-def bench_nbody(n):
+def bench_nbody(n, extended):
     import test.nbody
     args = {'n': n,
             'dt': 0.01,
             }
-    return bench_vs_template(test.nbody, 'nbody', args, flags=['-lm'])
+    return bench_vs_template(test.nbody, extended, 'nbody', args, flags=['-lm'])
+
+
+def speedup(bench):
+    return bench['stella'] / bench['gcc']
 
 
 @bench
-def test_fib(bench_result, bench_opt):
-    duration = [45, 47][bench_opt]
-    bench_result['fib'] = bench_fib(duration)
-    assert bench_result['fib']['speedup'] >= min_speedup
+def test_fib(bench_result, bench_opt, bench_ext):
+    duration = [30, 45, 48][bench_opt]
+    bench_result['fib'] = bench_fib(duration, bench_ext)
+    assert speedup(bench_result['fib']) >= min_speedup
+
+
+si1l1s_durations = ['1e5', '1e6', '1e8']
 
 
 @bench
-def test_si1l1s_globals(bench_result, bench_opt):
-    duration = ['1e6', '1e8'][bench_opt]
-    bench_result['si1l1s_global'] = bench_si1l1s_globals(duration)
-    assert bench_result['si1l1s_global']['speedup'] >= min_speedup
+def test_si1l1s_globals(bench_result, bench_opt, bench_ext):
+    duration = si1l1s_durations[bench_opt]
+    bench_result['si1l1s_global'] = bench_si1l1s_globals(duration, bench_ext)
+    assert speedup(bench_result['si1l1s_global']) >= min_speedup
 
 
 @bench
-def test_si1l1s_struct(bench_result, bench_opt):
-    duration = ['1e6', '1e8'][bench_opt]
-    bench_result['si1l1s_struct'] = bench_si1l1s_struct(duration)
-    assert bench_result['si1l1s_struct']['speedup'] >= min_speedup
+def test_si1l1s_struct(bench_result, bench_opt, bench_ext):
+    duration = si1l1s_durations[bench_opt]
+    bench_result['si1l1s_struct'] = bench_si1l1s_struct(duration, bench_ext)
+    assert speedup(bench_result['si1l1s_struct']) >= min_speedup
 
 
 @bench
-def test_si1l1s_obj(bench_result, bench_opt):
-    duration = ['1e6', '1e8'][bench_opt]
-    bench_result['si1l1s_obj'] = bench_si1l1s_obj(duration)
-    assert bench_result['si1l1s_obj']['speedup'] >= min_speedup
+def test_si1l1s_obj(bench_result, bench_opt, bench_ext):
+    duration = si1l1s_durations[bench_opt]
+    bench_result['si1l1s_obj'] = bench_si1l1s_obj(duration, bench_ext)
+    assert speedup(bench_result['si1l1s_obj']) >= min_speedup
 
 
 @bench
-def test_nbody(bench_result, bench_opt):
-    duration = [10000000, 50000000][bench_opt]
-    bench_result['nbody'] = bench_nbody(duration)
-    assert bench_result['nbody']['speedup'] >= min_speedup
+def test_nbody(bench_result, bench_opt, bench_ext):
+    duration = [250000, 10000000, 100000000][bench_opt]
+    bench_result['nbody'] = bench_nbody(duration, bench_ext)
+    assert speedup(bench_result['nbody']) >= min_speedup

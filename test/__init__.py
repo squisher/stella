@@ -57,9 +57,17 @@ bench = mark.bench
 def bench_opt(request):
     opt = request.config.getoption("--bench")
     if opt in ('l', 'long'):
+        return 2
+    elif opt in ('s', 'short'):
         return 1
     else:
         return 0
+
+
+@pytest.fixture
+def bench_ext(request):
+    opt = request.config.getoption("--extended-bench")
+    return opt
 
 
 def timeit(f):
@@ -70,6 +78,17 @@ def timeit(f):
         end = time.time()
         print("{0}({1}, {2}) took {3:0.2f}s".format(
             f.__name__, args, kw_args, end - start))
+        return r
+    return wrapper
+
+
+def time_stats(f, stats=None, **kwargs):
+    @wraps(f)
+    def wrapper(*args, **kw_args):
+        start = time.time()
+        r = f(*args, **kw_args)
+        end = time.time()
+        stats['elapsed'] = end - start
         return r
     return wrapper
 
