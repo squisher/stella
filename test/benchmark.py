@@ -67,16 +67,9 @@ def bench_it(name, c_src, args, stella_f=None, full_f=None, flags=[]):
         elapsed_stella = time.time() - time_start
     else:
         elapsed_stella = full_f(args, stats)
-    return (elapsed_c, stats['elapsed'], elapsed_stella)
-
-
-def print_it(f, arg=None):
-    print("Benchmarking {0} -O{1}".format(f.__name__, opt))
-    (time_c, time_stella, time_stella_whole) = f(arg)
-    speedup = time_c / time_stella
-    print("Elapsed C: {0:2.2f}s\t Elapsed Stella: {1:2.2f}s\t Speed-Up: {2:2.2f}\t (Stella+Compile: {3:2.2f}s)".format(  # noqa
-        time_c, time_stella, speedup, time_stella_whole))
-    return speedup
+    return {'c': elapsed_c,
+            'stella': stats['elapsed'], 'stella+': elapsed_stella,
+            'speedup': elapsed_c / stats['elapsed']}
 
 
 def bench_fib(duration):
@@ -163,35 +156,35 @@ def bench_nbody(n):
 
 
 @bench
-def test_fib(bench_opt):
+def test_fib(bench_result, bench_opt):
     duration = [45, 47][bench_opt]
-    speedup = print_it(bench_fib, duration)
-    assert speedup >= min_speedup
+    bench_result['fib'] = bench_fib(duration)
+    assert bench_result['fib']['speedup'] >= min_speedup
 
 
 @bench
-def test_si1l1s_globals(bench_opt):
+def test_si1l1s_globals(bench_result, bench_opt):
     duration = ['1e6', '1e8'][bench_opt]
-    speedup = print_it(bench_si1l1s_globals, duration)
-    assert speedup >= min_speedup
+    bench_result['si1l1s_global'] = bench_si1l1s_globals(duration)
+    assert bench_result['si1l1s_global']['speedup'] >= min_speedup
 
 
 @bench
-def test_si1l1s_struct(bench_opt):
+def test_si1l1s_struct(bench_result, bench_opt):
     duration = ['1e6', '1e8'][bench_opt]
-    speedup = print_it(bench_si1l1s_struct, duration)
-    assert speedup >= min_speedup
+    bench_result['si1l1s_struct'] = bench_si1l1s_struct(duration)
+    assert bench_result['si1l1s_struct']['speedup'] >= min_speedup
 
 
 @bench
-def test_si1l1s_obj(bench_opt):
+def test_si1l1s_obj(bench_result, bench_opt):
     duration = ['1e6', '1e8'][bench_opt]
-    speedup = print_it(bench_si1l1s_obj, duration)
-    assert speedup >= min_speedup
+    bench_result['si1l1s_obj'] = bench_si1l1s_obj(duration)
+    assert bench_result['si1l1s_obj']['speedup'] >= min_speedup
 
 
 @bench
-def test_nbody(bench_opt):
+def test_nbody(bench_result, bench_opt):
     duration = [10000000, 50000000][bench_opt]
-    speedup = print_it(bench_nbody, duration)
-    assert speedup >= min_speedup
+    bench_result['nbody'] = bench_nbody(duration)
+    assert bench_result['nbody']['speedup'] >= min_speedup
