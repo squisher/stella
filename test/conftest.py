@@ -33,6 +33,8 @@ def pytest_configure(config):
 
 def pytest_terminal_summary(terminalreporter):
     tr = terminalreporter
+    if not tr.config.getoption("--bench"):
+        return
     lines = []
     name_width = max(map(len, results.keys())) + 2
     for benchmark, times in results.items():
