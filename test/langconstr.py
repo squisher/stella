@@ -312,6 +312,10 @@ def numpy_func_limit(a):
         a[i] = i + 1
 
 
+def tuple1():
+    return (4, 2)
+
+
 @mark.parametrize('args', [(40, 2), (43, -1), (41, 1)])
 @mark.parametrize('f', [direct_assignment, simple_assignment, double_assignment, double_cast,
                         return_without_init])

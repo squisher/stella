@@ -26,10 +26,9 @@ l1 = [test.objects.E(2), test.objects.E(4)]
 f = test.objects.F(l1)
 
 
-def current_work(run=False):
+def current_work(run=False, **kwargs):
     if type(run) == bool:
         ir = not run
     else:
         ir = run
-    #print(stella.wrap(test.objects.objContainingList3, ir=ir)(f))
-    print(test.nbody.main(6000, lambda x: stella.wrap(x, ir=ir)))
+    print(stella.wrap(test.objects.objContainingList3, ir=ir, **kwargs)(f))

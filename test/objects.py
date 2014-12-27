@@ -456,7 +456,6 @@ def test_no_mutation8(f):
 
 
 @mark.parametrize('f', [objContainingList3])
-@unimplemented
 def test_mutation8(f):
     l1 = [E(2), E(5)]
     l2 = [E(2), E(5)]

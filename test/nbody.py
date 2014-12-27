@@ -191,7 +191,6 @@ def offset_momentum(ref, bodies, px=0.0, py=0.0, pz=0.0):
     ref.vz = pz / ref.mass
 
 
-
 @mark.parametrize('opt', [3, 2, 1])
 def test1a(opt):
     return _test1(opt)
@@ -240,6 +239,7 @@ def main(n, wrapper=lambda x: x):
     r = wrapper(advance)(0.01, n, system)
     report_energy(system)
     return r
+
 
 if __name__ == '__main__':
     main(int(sys.argv[1]))

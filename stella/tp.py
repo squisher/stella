@@ -16,6 +16,7 @@ class Type(object):
     _llvm = None
     ptr = 0
     on_heap = False
+    req_transfer = False
 
     def makePointer(self):
         if self.on_heap:
@@ -243,11 +244,11 @@ class CType(object):
 
 class StructType(Type):
     on_heap = True
+    req_transfer = True
 
     attrib_names = None
     attrib_type = None
     attrib_idx = None
-    base_type = None
     _ctype = None
     type_store = {}  # Class variable
 
@@ -306,6 +307,11 @@ class StructType(Type):
         return filter(lambda n: not isinstance(self.attrib_type[n], FunctionType),
                       self.attrib_names)
 
+    def items(self):
+        """Return (unordered) name, type tuples
+        """
+        # TODO turn this into an iterator?
+        return [(name, self.attrib_type[name]) for name in self.attrib_names]
     def _llvmType(self):
         mangled_name = self.name
 
@@ -362,7 +368,12 @@ class StructType(Type):
     def ctype2Python(self, transfer_value, value):
         for name in self._scalarAttributeNames():
             item = getattr(transfer_value, name)
-            if not self.attrib_type[name].on_heap:
+            # TODO generalize!
+            if isinstance(self.attrib_type[name], List):
+                l = List.fromObj(item)
+                l.ctype2Python(item)
+            elif not self.attrib_type[name].on_heap:
+                # TODO is this actually used?
                 setattr(value, name, item)
 
     def resetReference(self):
@@ -433,6 +444,7 @@ class ArrayType(Type):
 
 
 class ListType(ArrayType):
+    req_transfer = True
     type_store = {}  # Class variable
 
     @classmethod
@@ -873,6 +885,10 @@ class Struct(Typable):
     def __init__(self, obj):
         self.type = StructType.fromObj(obj)
         self.value = obj
+        self.transfer_attributes = {}
+        for name, type_ in self.type.items():
+            if type_.req_transfer:
+                self.transfer_attributes[name] = wrapValue(getattr(obj, name))
 
     def __str__(self):
         return str(self.type)
@@ -881,6 +897,8 @@ class Struct(Typable):
         return repr(self.type)
 
     def translate(self, cge):
+        for wrapped in self.transfer_attributes.values():
+            wrapped.translate(cge)
         if not self.llvm:
             (self.llvm, self.transfer_value) = self.type.constant(self.value, cge)
         return self.llvm
@@ -892,6 +910,8 @@ class Struct(Typable):
         Please call self.destruct() afterwards.
         """
         self.type.ctype2Python(self.transfer_value, self.value)
+        for wrapped in self.transfer_attributes.values():
+            wrapped.ctype2Python(cge)
 
     def destruct(self):
         del self.transfer_value
