@@ -312,8 +312,26 @@ def numpy_func_limit(a):
         a[i] = i + 1
 
 
-def tuple1():
+def return_tuple():
     return (4, 2)
+
+
+def first(t):
+    return t[0]
+
+
+def callFirst():
+    t = (4, 2)
+    return first(t)
+
+
+def second(t):
+    return t[1]
+
+
+def firstPlusSecond():
+    t = (4, 2)
+    return first(t) + second(t)
 
 
 @mark.parametrize('args', [(40, 2), (43, -1), (41, 1)])
@@ -475,3 +493,14 @@ def test13d():
     assert 'prev_undefined' not in globals()
 
     assert py == st
+
+
+@mark.parametrize('f', [callFirst, firstPlusSecond])
+def test14(f):
+    make_eq_test(f, ())
+
+
+@mark.parametrize('f', [return_tuple])
+@unimplemented
+def test14_u(f):
+    make_eq_test(f, ())

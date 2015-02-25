@@ -7,6 +7,7 @@ import test.si1l1s_struct
 import test.si1l1s_obj
 import test.virtnet_purepython
 import test.nbody
+import test.errors
 import stella
 from stella import exc  # noqa
 import numpy as np
@@ -31,4 +32,4 @@ def current_work(run=False, **kwargs):
         ir = not run
     else:
         ir = run
-    print(stella.wrap(test.objects.objContainingList3, ir=ir, **kwargs)(f))
+    print(stella.wrap(test.langconstr.return_tuple, ir=ir, **kwargs)())

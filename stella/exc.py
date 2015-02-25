@@ -56,3 +56,10 @@ class AttributeError(StellaException, AttributeError):
         super().__init__(msg)
 
         self.addDebug(debuginfo)
+
+
+class IndexError(StellaException, IndexError):
+    def __init__(self, msg, debuginfo=None):
+        super().__init__(msg)
+
+        self.addDebug(debuginfo)

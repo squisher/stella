@@ -14,7 +14,7 @@ EXPSTART = 0.2
 
 def prepare(args):
     global K, rununtiltime, koffp, kcat, delta, leg, substrate, obs_i, observations
-    params = Settings([k+'='+str(v) for k, v in args.items()])
+    params = Settings(args)
 
     K = params['K']
     rununtiltime = params['rununtiltime']
@@ -168,7 +168,7 @@ def prototype(params):
     run()
     py = np.array(observations)  # save the global result variable
 
-    prepare(s)
+    prepare(params)
     stella.wrap(run)()
     assert id(py) != id(observations)
     st = observations

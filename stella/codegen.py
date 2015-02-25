@@ -11,6 +11,7 @@ import time
 from . import tp
 from . import utils
 from . import ir
+from . import exc
 
 
 class CGEnv(object):
@@ -62,22 +63,26 @@ class Program(object):
         bb = None
         cge = self.cge
         for bc in impl.bytecodes:
-            if bb != bc.block:
-                # new basic block, use a new builder
-                cge.builder = llvm.core.Builder.new(bc.block)
+            try:
+                if bb != bc.block:
+                    # new basic block, use a new builder
+                    cge.builder = llvm.core.Builder.new(bc.block)
 
-            bc.translate(cge)
-            impl.log.debug("TRANS'D {0}".format(bc.locStr()))
-            # Note: the `and not' part is a basic form of dead code elimination
-            #       This is used to drop unreachable "return None" which are implicitly added
-            #       by Python to the end of functions.
-            #       TODO is this the proper way to handle those returns? Any side effects?
-            #            NEEDS REVIEW
-            #       See also analysis.Function.analyze
-            if isinstance(bc, utils.BlockTerminal) and \
-                    bc.next and bc.next not in impl.incoming_jumps:
-                impl.log.debug("TRANS stopping")
-                break
+                bc.translate(cge)
+                impl.log.debug("TRANS'D {0}".format(bc.locStr()))
+                # Note: the `and not' part is a basic form of dead code elimination
+                #       This is used to drop unreachable "return None" which are implicitly added
+                #       by Python to the end of functions.
+                #       TODO is this the proper way to handle those returns? Any side effects?
+                #            NEEDS REVIEW
+                #       See also analysis.Function.analyze
+                if isinstance(bc, utils.BlockTerminal) and \
+                        bc.next and bc.next not in impl.incoming_jumps:
+                    impl.log.debug("TRANS stopping")
+                    break
+            except exc.StellaException as e:
+                e.addDebug(bc.debuginfo)
+                raise
 
     def makeStub(self):
         impl = self.module.entry

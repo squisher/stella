@@ -75,6 +75,20 @@ class Reference(Type):
     def __str__(self):
         return '*{}'.format(self.type_)
 
+class Subscriptable(metaclass=ABCMeta):
+    """Mixin"""
+    @abstractmethod
+    def loadSubscript(cge, container, idx):
+        pass
+
+    @abstractmethod
+    def storeSubscript(cge, container, idx, value):
+        pass
+
+    @abstractmethod
+    def getElementType(self, idx):
+        pass
+
 
 NoType = Type()
 
@@ -186,12 +200,52 @@ Str = ScalarType(
 _pyscalars = {
     int: Int,
     float: Float,
-    bool: Bool
+    bool: Bool,
 }
 
+class Tuple(ScalarType, Subscriptable):
+    # TODO really derive from scalarType?
+    # TODO add a separate representation for a tuple value?
+    def __init__(self, values):
+        self.values = [wrapValue(v) for v in values]
+
+    def _llvmType(self):
+        return llvm.core.Type.struct([v.type.llvmType() for v in self.values])
+
+    def genericValue(self, value):
+        raise exc.UnimplementedError("???")
+
+    def constant(self, value, cge = None):
+        if not self._llvm:
+            self._llvm = llvm.core.Constant.struct([v.translate(cge) for v in self.values])
+        return self._llvm
+
+    def __str__(self):
+        return "(tuple, {} elems)".format(len(self.values))
+
+    def __repr__(self):
+        return "({})".format(", ".join( [str(v) for v in self.values]))
+
+
+    def getElementType(self, idx):
+        if not isinstance(idx, Const):
+            raise exc.TypeError("Tuple index must be constant, not {}".format(type(idx)))
+        if idx.value >= len(self.values):
+            raise exc.IndexError("tuple index out of range")
+        return self.values[idx.value].type
+
+    def loadSubscript(self, cge, container, idx):
+        assert isinstance(idx, Const)
+        return cge.builder.extract_value(container.translate(cge), [idx.value])
+
+    def storeSubscript(self, cge, container, idx, value):
+        assert isinstance(idx, Const)
+        cge.builder.insert_value(container.translate(cge), [idx.value], value.translate(cge))
 
 def get_scalar(obj):
-    """obj can either be a value, or a type"""
+    """obj can either be a value, or a type
+
+    Returns the Stella type for the given object"""
     type_ = type(obj)
     if type_ == type(int):
         type_ = obj
@@ -396,7 +450,7 @@ class StructType(Type):
         return not self.__eq__(other)
 
 
-class ArrayType(Type):
+class ArrayType(Type, Subscriptable):
     type_ = NoType
     shape = None
     on_heap = True
@@ -428,7 +482,13 @@ class ArrayType(Type):
         self.type_ = type_
         self.shape = shape
 
-    def getElementType(self):
+    def _boundsCheck(self, idx):
+        """Check bounds, if possible. This is a compile time operation."""
+        if isinstance(idx, Const) and idx.value >= self.shape:
+            raise exc.IndexError("array index out of range")
+
+    def getElementType(self, idx):
+        self._boundsCheck(idx)
         return self.type_
 
     def _llvmType(self):
@@ -441,6 +501,20 @@ class ArrayType(Type):
 
     def __repr__(self):
         return '<{}>'.format(self)
+
+    def loadSubscript(self, cge, container, idx):
+        self._boundsCheck(idx)
+        p = cge.builder.gep(container.translate(cge),
+                            [Int.constant(0), idx.translate(cge)],
+                            inbounds=True)
+        return cge.builder.load(p)
+
+    def storeSubscript(self, cge, container, idx, value):
+        self._boundsCheck(idx)
+        p = cge.builder.gep(
+            container.translate(cge), [
+                Int.constant(0), idx.translate(cge)], inbounds=True)
+        cge.builder.store(value.translate(cge), p)
 
 
 class ListType(ArrayType):
@@ -497,6 +571,13 @@ class ListType(ArrayType):
 
     def __ne__(self, other):
         return not self.__eq__(other)
+
+    def loadSubscript(self, cge, container, idx):
+        # TODO address calculation is same as for ArrayType, unify?
+        p = cge.builder.gep(container.translate(cge),
+                            [Int.constant(0), idx.translate(cge)],
+                            inbounds=True)
+        return p
 
 
 class Callable(metaclass=ABCMeta):
@@ -824,7 +905,10 @@ class Const(Typable):
     def __init__(self, value):
         self.value = value
         try:
-            self.type = get_scalar(value)
+            if type(value) == tuple:
+                self.type = Tuple(value)
+            else:
+                self.type = get_scalar(value)
             self.name = str(value)
         except exc.TypeError as e:
             self.name = "InvalidConst({0}, type={1})".format(value, type(value))
@@ -973,10 +1057,22 @@ class List(Typable):
     def destruct(self):
         del self.transfer_value
 
+    def loadSubscript(self, cge, container, idx):
+        p = cge.builder.gep(container.translate(cge),
+                            [Int.constant(0), idx.translate(cge)],
+                            inbounds=True)
+        return p
+
+    def storeSubscript(self, cge, container, idx, value):
+        p = cge.builder.gep(
+            container.translate(cge), [
+                Int.constant(0), idx.translate(cge)], inbounds=True)
+        cge.builder.store(value.translate(cge), p)
+
 
 def wrapValue(value):
     type_ = type(value)
-    if supported_scalar(type_):
+    if supported_scalar(type_) or type_ == tuple:
         return Const(value)
     elif type_ == np.ndarray:
         return NumpyArray(value)

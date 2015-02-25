@@ -1227,7 +1227,6 @@ class ForLoop(HasTarget, ir.IR):
 
 
 class STORE_SUBSCR(Bytecode):
-
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
@@ -1239,16 +1238,14 @@ class STORE_SUBSCR(Bytecode):
         self.grab_stack()
 
     def translate(self, cge):
-        # for structs
-        # insert_element(self, vec_val, elt_val, idx_val, name='')¶
-        p = cge.builder.gep(
-            self.args[1].translate(cge), [
-                tp.Int.constant(0), self.args[2].translate(cge)], inbounds=True)
-        cge.builder.store(self.args[0].translate(cge), p)
+        if self.args[1].type.isReference():
+            type_ = self.args[1].type.dereference()
+        else:
+            type_ = self.args[1].type
+        type_.storeSubscript(cge, self.args[1], self.args[2], self.args[0])
 
 
 class BINARY_SUBSCR(Bytecode):
-
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
         self.result = Register(func)
@@ -1263,22 +1260,20 @@ class BINARY_SUBSCR(Bytecode):
             arg_type = self.args[0].type.dereference()
         else:
             arg_type = self.args[0].type
-        if not isinstance(arg_type, tp.ArrayType):
+        if not isinstance(arg_type, tp.Subscriptable):
             raise exc.TypeError(
-                "Expected an array, but got {0}".format(
+                "Type must be subscriptable, but got {0}".format(
                     self.args[0].type))
         self.result.unify_type(
-            arg_type.getElementType(),
+            arg_type.getElementType(self.args[1]),
             self.debuginfo)
 
     def translate(self, cge):
-        p = cge.builder.gep(self.args[0].translate(cge),
-                            [tp.Int.constant(0), self.args[1].translate(cge)],
-                            inbounds=True)
-        if isinstance(self.args[0].type, tp.ListType):
-            self.result.llvm = p
+        if self.args[0].type.isReference():
+            type_ = self.args[0].type.dereference()
         else:
-            self.result.llvm = cge.builder.load(p)
+            type_ = self.args[0].type
+        self.result.llvm = type_.loadSubscript(cge, self.args[0], self.args[1])
 
 
 class POP_TOP(Bytecode):
