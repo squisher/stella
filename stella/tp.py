@@ -1,6 +1,4 @@
-import llvm
-import llvm.core
-import llvm.ee
+import llvmlite.ir as ll
 import numpy as np
 import ctypes
 import logging
@@ -17,6 +15,7 @@ class Type(object):
     ptr = 0
     on_heap = False
     req_transfer = False
+    ctype = False  # init to false because None is a valid ctype
 
     def makePointer(self):
         if self.on_heap:
@@ -40,23 +39,26 @@ class Type(object):
     def __str__(self):
         return '?'
 
-    # llvm.core.ArrayType does something funny, it will compare against _ptr,
-    # so let's just add the attribute here to enable equality tests
-    _ptr = None
-
     def llvmType(self):
         # some types just come as a reference (e.g. external numpy array). For
         # references within stella use class Reference.
         assert self.ptr <= 1
         type_ = self._llvmType()
         if self.ptr:
-            return llvm.core.Type.pointer(type_)
+            return type_.as_pointer()
         else:
             return type_
 
     def _llvmType(self):
         raise exc.TypeError(
             "Cannot create llvm type for an unknown type. This should have been cought earlier.")
+
+    def Ctype(self):
+        if type(self.ctype) == bool:
+            raise exc.TypeError(
+                "Cannot create ctype for an unknown type. This should have been cought earlier.")
+        else:
+            return self.ctype
 
 class Reference(Type):
     def __init__(self, type_):
@@ -66,8 +68,7 @@ class Reference(Type):
     def llvmType(self):
         type_ = self.type_.llvmType()
         # for i in range(self.ptr):
-        type_ = llvm.core.Type.pointer(type_)
-        return type_
+        return type_.as_pointer()
 
     def dereference(self):
         return self.type_
@@ -118,22 +119,17 @@ class PyWrapper(Type):
 
 
 class ScalarType(Type):
-    def __init__(self, name, type_, llvm, ctype, f_generic_value, f_constant):
+    def __init__(self, name, type_, llvm, ctype):
         self.name = name
         self.type_ = type_
         self.ctype = ctype
         self._llvm = llvm
-        self.f_generic_value = f_generic_value
-        self.f_constant = f_constant
 
     def _llvmType(self):
         return self._llvm
 
-    def genericValue(self, value):
-        return self.f_generic_value(self._llvm, value)
-
     def constant(self, value, cge = None):
-        return self.f_constant(self._llvm, value)
+        return ll.Constant(self._llvm, value)
 
     def __str__(self):
         return self.name
@@ -142,41 +138,32 @@ class ScalarType(Type):
         return "<{0}:{1}>".format(str(type(self))[8:-2], self.name)
 
 
-tp_int = llvm.core.Type.int(64)
-tp_int32 = llvm.core.Type.int(32)  # needed for llvm operators
-# tp_float = llvm.core.Type.float() # Python always works with double precision
-tp_double = llvm.core.Type.double()
-tp_bool = llvm.core.Type.int(1)
-tp_void = llvm.core.Type.void()
+tp_int = ll.IntType(64)
+tp_int32 = ll.IntType(32)  # needed for llvm operators
+tp_double = ll.DoubleType()
+tp_bool = ll.IntType(1)
+tp_void = ll.VoidType()
 
 Int = ScalarType(
     "Int",
     int, tp_int, ctypes.c_int64,
-    llvm.ee.GenericValue.int_signed,
-    llvm.core.Constant.int
 )
 uInt = ScalarType(  # TODO: unclear whether this is correct or not
     "uInt",
     int, tp_int32, ctypes.c_int32,
-    llvm.ee.GenericValue.int,
-    llvm.core.Constant.int
 )
 Float = ScalarType(
     "Float",
     float, tp_double, ctypes.c_double,
-    llvm.ee.GenericValue.real,
-    llvm.core.Constant.real
 )
 Bool = ScalarType(
     "Bool",
     bool, tp_bool, ctypes.c_bool,
-    llvm.ee.GenericValue.int,
-    llvm.core.Constant.int
 )
 
 def getIndex(i):
     if type(i) == int:
-        return llvm.core.Constant.int(tp_int32, i)
+        return ll.Constant(tp_int32, i)
     else:
         raise exc.UnimplementedError("Unsupported index type {}".format(type(i)))
 
@@ -185,16 +172,12 @@ def invalid_none_use(msg):
     raise exc.StellaException(msg)
 None_ = ScalarType(
     "NONE",
-    type(None), tp_void, ctypes.c_void_p,
-    lambda t, v: invalid_none_use("Can't create a generic value ({0},{1}) for void".format(t, v)),
-    lambda t, v: None  # Constant, needed for constructing `RETURN None'
+    type(None), tp_void, None,
 )
 Void = None_  # TODO: Could there be differences later?
 Str = ScalarType(
     "Str",
     str, None, ctypes.c_char_p,
-    lambda t, v: None,
-    lambda t, v: None
 )
 
 _pyscalars = {
@@ -210,14 +193,14 @@ class Tuple(ScalarType, Subscriptable):
         self.values = [wrapValue(v) for v in values]
 
     def _llvmType(self):
-        return llvm.core.Type.struct([v.type.llvmType() for v in self.values])
+        return ll.LiteralStructType([v.type.llvmType() for v in self.values])
 
     def genericValue(self, value):
         raise exc.UnimplementedError("???")
 
     def constant(self, value, cge = None):
         if not self._llvm:
-            self._llvm = llvm.core.Constant.struct([v.translate(cge) for v in self.values])
+            self._llvm = ll.Constant.literal_struct([v.translate(cge) for v in self.values])
         return self._llvm
 
     def __str__(self):
@@ -374,7 +357,9 @@ class StructType(Type):
             for name in self._scalarAttributeNames():
                 type_ = self.attrib_type[name]
                 llvm_types.append(type_.llvmType())
-            type_ = llvm.core.Type.struct(llvm_types, name=mangled_name)
+            # TODO: IdentifiedStructType here? No way to name a literal
+            # struct..., name=mangled_name)
+            type_ = ll.LiteralStructType(llvm_types)
             self.__class__.type_store[mangled_name] = type_
         else:
             type_ = self.__class__.type_store[mangled_name]
@@ -415,8 +400,7 @@ class StructType(Type):
         self.ctypeInit(value, transfer_value)
 
         addr_llvm = Int.constant(int(ctypes.addressof(transfer_value)))
-        result_llvm = cge.builder.inttoptr(addr_llvm,
-                                           self.llvmType())
+        result_llvm = ll.Constant(tp_int, addr_llvm).inttoptr(self.llvmType())
         return (result_llvm, transfer_value)
 
     def ctype2Python(self, transfer_value, value):
@@ -492,7 +476,7 @@ class ArrayType(Type, Subscriptable):
         return self.type_
 
     def _llvmType(self):
-        type_ = llvm.core.Type.array(self.type_.llvmType(), self.shape)
+        type_ = ll.ArrayType(self.type_.llvmType(), self.shape)
 
         return type_
 
@@ -549,7 +533,7 @@ class ListType(ArrayType):
         mangled_name = str(self)
 
         if mangled_name not in self.__class__.type_store:
-            type_ = llvm.core.Type.array(self.type_.llvmType(), self.shape)
+            type_ = ll.ArrayType(self.type_.llvmType(), self.shape)
             self.__class__.type_store[mangled_name] = type_
             return type_
         else:
@@ -943,9 +927,8 @@ class NumpyArray(Typable):
 
         ptr_int = self.value.ctypes.data  # int
         ptr_int_llvm = Int.constant(ptr_int)
-        #type_ = llvm.core.Type.pointer(self.type.llvmType())
         type_ = self.type.llvmType()
-        self.llvm = llvm.core.Constant.inttoptr(ptr_int_llvm, type_)
+        self.llvm = ll.Constant(tp_int, ptr_int_llvm).inttoptr(type_)
 
     def __str__(self):
         return str(self.type)
@@ -1041,8 +1024,7 @@ class List(Typable):
         self.ctypeInit()
 
         addr_llvm = Int.constant(int(ctypes.addressof(self.transfer_value)))
-        self.llvm = cge.builder.inttoptr(addr_llvm,
-                                         self.type.llvmType())
+        self.llvm = ll.Constant(tp_int, addr_llvm).inttoptr(self.type.llvmType())
         return self.llvm
 
     def ctype2Python(self, cge):

@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 
-import llvm
-import llvm.core
-import llvm.ee
-import llvm.passes
+import llvmlite.ir as ll
+import llvmlite.binding as llvm
 
 import logging
 import time
@@ -21,6 +19,10 @@ class CGEnv(object):
 
 class Program(object):
     def __init__(self, module):
+        llvm.initialize()
+        llvm.initialize_native_target()
+        llvm.initialize_native_asmprinter()
+
         self.module = module
         self.module.translate()
 
@@ -31,6 +33,16 @@ class Program(object):
 
         for _, func in self.module.namestore.all(ir.Function):
             self.blockAndCode(func)
+
+        self.target_machine = llvm.Target.from_default_triple().create_target_machine()
+
+        logging.debug("Verifying... ")
+        self._llmod = None
+
+    def llmod(self):
+        if not self._llmod:
+            self._llmod = llvm.parse_assembly(str(self.module.llvm))
+        return self._llmod
 
     def blockAndCode(self, impl):
         func = impl.llvm
@@ -66,7 +78,7 @@ class Program(object):
             try:
                 if bb != bc.block:
                     # new basic block, use a new builder
-                    cge.builder = llvm.core.Builder.new(bc.block)
+                    cge.builder = ll.IRBuilder(bc.block)
 
                 bc.translate(cge)
                 impl.log.debug("TRANS'D {0}".format(bc.locStr()))
@@ -86,10 +98,10 @@ class Program(object):
 
     def makeStub(self):
         impl = self.module.entry
-        func_tp = llvm.core.Type.function(impl.result.type.llvmType(), [])
-        func = self.module.llvm.add_function(func_tp, str(impl.function)+'__stub__')
+        func_tp = ll.FunctionType(impl.result.type.llvmType(), [])
+        func = ll.Function(self.module.llvm, func_tp, name=str(impl.function)+'__stub__')
         bb = func.append_basic_block("entry")
-        builder = llvm.core.Builder.new(bb)
+        builder = ll.IRBuilder(bb)
         self.cge.builder = builder
 
         for name, var in self.module.namestore.all(ir.GlobalVariable):
@@ -113,11 +125,13 @@ class Program(object):
     def optimize(self, opt):
         if opt is not None:
             logging.warn("Running optimizations level {0}... ".format(opt))
-            self.module.llvm.verify()
 
-            tm = llvm.ee.TargetMachine.new(opt=opt)
-            pm = llvm.passes.build_pass_managers(tm, opt=opt, loop_vectorize=True, fpm=False).pm
-            pm.run(self.module.llvm)
+            # TODO was build_pass_managers(tm, opt=opt, loop_vectorize=True, fpm=False)
+            pmb = llvm.create_pass_manager_builder()
+            pmb.opt_level = opt
+            pm = llvm.create_module_pass_manager()
+            pmb.populate(pm)
+            pm.run(self.llmod())
 
     def destruct(self):
         self.module.destruct()
@@ -127,51 +141,34 @@ class Program(object):
         logging.debug("DEL  {}: {}".format(repr(self), hasattr(self, 'module')))
 
     def run(self, stats):
-        logging.debug("Verifying... ")
-        self.module.llvm.verify()
-
         logging.debug("Preparing execution...")
 
-        # m = Module.new('-lm')
-        # fntp = Type.function(Type.float(), [Type.int()])
-        # func = m.add_function(fntp, '__powidf2')
-
         import ctypes
-        from llvmpy import _api
-        clib = ctypes.cdll.LoadLibrary(_api.__file__)
-        logging.debug(str(clib))
+        import llvmlite
+        import os
 
-        # BUG: clib.__powidf2 gets turned into the following bytecode:
-        # 103 LOAD_FAST                3 (clib)
-        # 106 LOAD_ATTR               11 (_Program__powidf2)
-        # 109 STORE_FAST               5 (f)
-        # which is not correct. I have no idea where _Program is coming from,
-        # I'm assuming it is some internal Python magic going wrong
+        _lib_dir = os.path.dirname(llvm.ffi.__file__)
+        clib = ctypes.CDLL(os.path.join(_lib_dir, llvmlite.utils.get_library_name()))
+        # Direct access as below mangles the name
+        # f = clib.__powidf2
         f = getattr(clib, '__powidf2')
+        llvm.add_symbol('__powidf2', ctypes.cast(f, ctypes.c_void_p).value)
 
-        logging.debug(str(f))
+        with llvm.create_mcjit_compiler(self.llmod(), self.target_machine) as ee:
+            ee.finalize_object()
 
-        llvm.ee.dylib_add_symbol('__powidf2', ctypes.cast(f, ctypes.c_void_p).value)
+            entry = self.module.entry
 
-        # ee = ExecutionEngine.new(self.module)
-        eb = llvm.ee.EngineBuilder.new(self.module.llvm)
+            logging.info("running {0}{1}".format(entry,
+                                                 list(zip(entry.type_.arg_types,
+                                                          self.module.entry_args))))
 
-        logging.debug("Enabling mcjit...")
-        eb.mcjit(True)
+            entry_ptr = ee.get_pointer_to_global(self.llmod().get_function(self.llvm.name))
+            cfunc = ctypes.CFUNCTYPE(entry.result.type.Ctype())(entry_ptr)
 
-        ee = eb.create()
-
-        entry = self.module.entry
-
-        logging.info("running {0}{1}".format(entry,
-                                             list(zip(entry.type_.arg_types,
-                                                      self.module.entry_args))))
-
-        # Now let's compile and run!
-
-        time_start = time.time()
-        retval = ee.run_function(self.llvm, [])
-        stats['elapsed'] = time.time() - time_start
+            time_start = time.time()
+            retval = cfunc()
+            stats['elapsed'] = time.time() - time_start
 
         for arg in self.module.entry_args:
             arg.ctype2Python(self.cge)  # may be a no-op if not necessary
@@ -180,7 +177,10 @@ class Program(object):
         logging.debug("Returning...")
         self.destruct()
 
-        return tp.llvm_to_py(entry.result.type, retval)
+        return retval
+
+    def getAssembly(self):
+        return self.target_machine.emit_assembly(self.llmod())
 
     def getLlvmIR(self):
         ret = self.module.getLlvmIR()

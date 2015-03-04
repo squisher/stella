@@ -1,6 +1,7 @@
 from dis import dis
 import stella
-import llvm, llvm.core, llvm.ee, llvm.passes
+import llvmlite.ir as ll
+import llvmlite.binding as llvm
 import pdb
 from pdb import pm
 

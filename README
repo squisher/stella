@@ -12,7 +12,7 @@ Example Installation
 
 (for debug only)
 llvm-src$ ``./configure --enable-debug-runtime --enable-debug-symbols \
-                        --prefix=/home/squisher/opt/llvm-3.4/``
+                        --prefix=$HOME/opt/llvm-3.4/``
 llvm-src$ ``REQUIRES_RTTI=1 make all install``
 
 llvmpy$ LLVM_CONFIG_PATH=$HOME/opt/numba/bin/llvm-config python setup.py build

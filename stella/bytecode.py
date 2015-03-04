@@ -3,9 +3,8 @@ import sys
 import types
 from abc import abstractproperty
 
-import llvm
-import llvm.core
-import llvm.ee
+# import llvmlite.ir as ll
+import llvmlite.binding as llvm
 
 from . import tp
 from . import exc
@@ -284,7 +283,7 @@ class BINARY_MODULO(BinaryOp):
 
 
 class BINARY_POWER(BinaryOp):
-    b_func = {tp.Float: llvm.core.INTR_POW, tp.Int: llvm.core.INTR_POWI}
+    b_func = {tp.Float: 'llvm.pow', tp.Int: 'llvm.powi'}
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
@@ -317,11 +316,9 @@ class BINARY_POWER(BinaryOp):
         else:
             power = self.args[1].translate(cge)
 
-        llvm_pow = llvm.core.Function.intrinsic(
-           cge.module.llvm, self.b_func[
-               self.args[1].type], [
-               self.args[0].llvmType()])
-        pow_result =cge.builder.call(llvm_pow, [self.args[0].translate(cge), power])
+        llvm_pow = cge.module.llvm.declare_intrinsic(self.b_func[self.args[1].type],
+                                                     [self.args[0].llvmType()])
+        pow_result = cge.builder.call(llvm_pow, [self.args[0].translate(cge), power])
 
         if isinstance(self.args[0], Cast) and \
                 self.args[0].obj.type == tp.Int and self.args[1].type == tp.Int:
@@ -367,9 +364,8 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
         tmp = cge.builder.fdiv(
             self.args[0].translate(cge),
             self.args[1].translate(cge))
-        llvm_floor = llvm.core.Function.intrinsic(
-           cge.module.llvm, llvm.core.INTR_FLOOR, [
-                tp.Float.llvmType()])
+        llvm_floor = cge.module.llvm.declare_intrinsic('llvm.floor',
+                                                       [tp.Float.llvmType()])
         self.result.llvm = cge.builder.call(llvm_floor, [tmp])
 
         # TODO this is peaking too deeply into the cast
@@ -427,24 +423,8 @@ class INPLACE_MODULO(BINARY_MODULO):
 
 
 class COMPARE_OP(Bytecode):
-    b_func = {tp.Float: 'fcmp', tp.Int: 'icmp', tp.Bool: 'icmp'}
+    b_func = {tp.Float: 'fcmp_ordered', tp.Int: 'icmp_signed', tp.Bool: 'icmp_signed'}
     op = None
-
-    icmp = {'==': llvm.core.ICMP_EQ,
-            '!=': llvm.core.ICMP_NE,
-            '>':  llvm.core.ICMP_SGT,
-            '>=': llvm.core.ICMP_SGE,
-            '<':  llvm.core.ICMP_SLT,
-            '<=': llvm.core.ICMP_SLE,
-            }
-
-    fcmp = {'==': llvm.core.FCMP_OEQ,
-            '!=': llvm.core.FCMP_ONE,
-            '>':  llvm.core.FCMP_OGT,
-            '>=': llvm.core.FCMP_OGE,
-            '<':  llvm.core.FCMP_OLT,
-            '<=': llvm.core.FCMP_OLE,
-            }
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
@@ -474,9 +454,8 @@ class COMPARE_OP(Bytecode):
             raise exc.UnimplementedError(type_)
 
         f = getattr(cge.builder, self.b_func[type_])
-        m = getattr(self,    self.b_func[type_])
 
-        self.result.llvm = f(m[self.op],
+        self.result.llvm = f(self.op,
                              self.args[0].translate(cge),
                              self.args[1].translate(cge))
 

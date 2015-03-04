@@ -1,5 +1,5 @@
 from . import tp
-import llvm
+import llvmlite.ir as ll
 
 
 class Register(tp.Typable):
@@ -62,7 +62,7 @@ class GlobalVariable(tp.Typable):
         if self.llvm:
             return self.llvm
 
-        self.llvm = cge.module.llvm.add_global_variable(self.llvmType(), self.name)
+        self.llvm = ll.GlobalVariable(cge.module.llvm, self.llvmType(), self.name)
         # TODO: this condition is too complicated and likely means that my
         # code is not working consistently with the attribute
         llvm_init = None
@@ -71,7 +71,7 @@ class GlobalVariable(tp.Typable):
             llvm_init = self.initial_value.translate(cge)
 
         if llvm_init is None:
-            self.llvm.initializer = llvm.core.Constant.undef(self.initial_value.type.llvmType())
+            self.llvm.initializer = ll.Constant(self.initial_value.type.llvmType(), ll.Undefined)
         else:
             self.llvm.initializer = llvm_init
 

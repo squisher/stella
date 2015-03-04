@@ -5,7 +5,6 @@ Intrinsics
 import sys
 import math
 from abc import abstractmethod
-import llvm
 from . import python
 from .. import tp, exc
 from ..storage import Register
@@ -77,7 +76,7 @@ class Len(Intrinsic):
 
 class Log(Intrinsic):
     py_func = math.log
-    intr = llvm.core.INTR_LOG
+    intr = 'llvm.log'
     arg_names = ['x']  # TODO: , base
 
     def getReturnType(self, args, kw_args):
@@ -87,20 +86,21 @@ class Log(Intrinsic):
         if args[0].type == tp.Int:
             args[0] = tp.Cast(args[0], tp.Float)
 
-        llvm_f = llvm.core.Function.intrinsic(cge.module.llvm, self.intr, [args[0].llvmType()])
+        # TODO llvmlite
+        llvm_f = cge.module.llvm.declare_intrinsic(self.intr, [args[0].llvmType()])
         result = cge.builder.call(llvm_f, [args[0].translate(cge)])
         return result
 
 
 class Exp(Log):
     py_func = math.exp
-    intr = llvm.core.INTR_EXP
+    intr = 'llvm.exp'
     arg_names = ['x']
 
 
 class Sqrt(Log):
     py_func = math.sqrt
-    intr = llvm.core.INTR_SQRT
+    intr = 'llvm.sqrt'
     arg_names = ['x']
 
 

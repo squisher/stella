@@ -6,9 +6,8 @@ from abc import ABCMeta, abstractmethod
 import ctypes
 import inspect
 
-import llvm
-import llvm.core
-import llvm.ee
+import llvmlite.ir as ll
+import llvmlite.binding as llvm
 
 from . import exc
 from . import utils
@@ -376,7 +375,7 @@ class Module(object):
         return len(self._todo)
 
     def translate(self):
-        self.llvm = llvm.core.Module.new('__stella__'+str(self.__class__.i))
+        self.llvm = ll.Module('__stella__'+str(self.__class__.i))
         self.__class__.i += 1
         for _, impl in self.namestore.all(Function):
             impl.translate(self.llvm)
@@ -501,8 +500,8 @@ class Function(Scope):
     def translate(self, module):
         self.arg_types = [arg.llvmType() for arg in self.args]
 
-        func_tp = llvm.core.Type.function(self.result.type.llvmType(), self.arg_types)
-        self.llvm = module.add_function(func_tp, self.name)
+        func_tp = ll.FunctionType(self.result.type.llvmType(), self.arg_types)
+        self.llvm = ll.Function(module, func_tp, name=self.name)
 
         for i in range(len(self.args)):
             self.llvm.args[i].name = self.args[i].name
@@ -663,12 +662,12 @@ class ExtFunction(object):
     def translate(self, clib, module):
         logging.debug("Adding external function {0}".format(self.name))
         f = getattr(clib, self.name)
-        llvm.ee.dylib_add_symbol(self.name, ctypes.cast(f, ctypes.c_void_p).value)
+        llvm.add_symbol(self.name, ctypes.cast(f, ctypes.c_void_p).value)
 
         llvm_arg_types = [arg.llvmType() for arg in self.type_.arg_types]
 
-        func_tp = llvm.core.Type.function(self.type_.return_type.llvmType(), llvm_arg_types)
-        self.llvm = module.add_function(func_tp, self.name)
+        func_tp = ll.FunctionType(self.type_.return_type.llvmType(), llvm_arg_types)
+        self.llvm = ll.Function(module, func_tp, self.name)
 
 
 class ExtFunctionRef(tp.Callable):

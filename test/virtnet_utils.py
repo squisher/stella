@@ -22,9 +22,13 @@ class Settings(object):
 
         self.setDefaults()
 
-        # parse command line arguments to overwrite the defaults
-        for key, _, val in [s.partition('=') for s in argv]:
-            self[key] = val
+        if isinstance(argv, dict):
+            for k, v in argv.items():
+                self[k] = v
+        else:
+            # parse command line arguments to overwrite the defaults
+            for key, _, val in [s.partition('=') for s in argv]:
+                self[key] = val
 
     def __setitem__(self,k,v):
         if k in self.settings:

@@ -1,4 +1,5 @@
 llvmpy/
+llvmlite/
 ve/
 */__pycache__/
 *.pyc
