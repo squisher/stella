@@ -334,6 +334,44 @@ def firstPlusSecond():
     return first(t) + second(t)
 
 
+def getReturnedTuple1():
+    t = return_tuple()
+    return first(t)
+
+
+def getReturnedTuple2():
+    x, _ = return_tuple()
+    return x
+
+
+def switchTuple():
+    x, y = (1, 2)
+    y, x = x, y
+
+    return x - y
+
+
+def createTuple():
+    x = 1
+    t1 = (x, -1)
+    t2 = (t1[1], x)
+    return t1[0], t2[0]
+
+
+def iterateTuple():
+    t = (4, 6, 8, 10)
+    r = 0
+    for i in t:
+        r += i
+    return r
+
+
+def addTuple(t):
+    return t[0] + t[1]
+
+
+###
+
 @mark.parametrize('args', [(40, 2), (43, -1), (41, 1)])
 @mark.parametrize('f', [direct_assignment, simple_assignment, double_assignment, double_cast,
                         return_without_init])
@@ -495,12 +533,19 @@ def test13d():
     assert py == st
 
 
-@mark.parametrize('f', [callFirst, firstPlusSecond])
+@mark.parametrize('f', [callFirst, firstPlusSecond, getReturnedTuple1,
+                        getReturnedTuple2, return_tuple, switchTuple, createTuple])
 def test14(f):
     make_eq_test(f, ())
 
 
-@mark.parametrize('f', [return_tuple])
+@mark.parametrize('f', [iterateTuple])
 @unimplemented
 def test14_u(f):
     make_eq_test(f, ())
+
+
+@mark.parametrize('arg', single_args([(10, 20), (4.0, 2.0), (13.0, 14)]))
+@mark.parametrize('f', [addTuple])
+def test15(f, arg):
+    make_eq_test(f, arg)

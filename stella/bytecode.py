@@ -3,9 +3,6 @@ import sys
 import types
 from abc import abstractproperty
 
-# import llvmlite.ir as ll
-import llvmlite.binding as llvm
-
 from . import tp
 from . import exc
 from . import utils
@@ -1378,6 +1375,66 @@ class UNARY_NEGATIVE(Bytecode):
         self.result.llvm = f(
             self.result.type.constant(0),
             self.args[0].translate(cge))
+
+
+class UNPACK_SEQUENCE(Bytecode):
+    n = 0
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    def addRawArg(self, arg):
+        self.n = arg
+
+    @pop_stack(1)
+    def stack_eval(self, func, stack):
+        self.result = []
+        for i in range(self.n):
+            reg = Register(func)
+            stack.push(self)
+            self.result.append(reg)
+
+    def type_eval(self, func):
+        self.grab_stack()
+        i = 0
+        for reg in reversed(self.result):
+            reg.unify_type(self.args[0].type.getElementType(i), self.debuginfo)
+            i += 1
+
+    def translate(self, cge):
+        if self.args[0].type.isReference():
+            type_ = self.args[0].type.dereference()
+        else:
+            type_ = self.args[0].type
+        i = 0
+        for reg in reversed(self.result):
+            reg.llvm = type_.loadSubscript(cge, self.args[0], i)
+            i += 1
+
+
+class BUILD_TUPLE(Bytecode):
+    n = 0
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    def addRawArg(self, arg):
+        self.n = arg
+
+    def stack_eval(self, func, stack):
+        self.stack_args = []
+        for i in range(self.n):
+            self.stack_args.append(stack.pop())
+        stack.push(self)
+
+    def type_eval(self, func):
+        self.grab_stack()
+        if not self.result:
+            self.result = tp.Tuple(self.args)
+        else:
+            self.result.unify_type(self.args)
+
+    def translate(self, cge):
+        self.result.translate(cge)
+
 
 opconst = {}
 # Get all contrete subclasses of Bytecode and register them

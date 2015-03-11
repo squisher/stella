@@ -32,4 +32,4 @@ def current_work(run=False, **kwargs):
         ir = not run
     else:
         ir = run
-    print(stella.wrap(test.langconstr.numpy_array, ir=ir, **kwargs)(a))
+    print(stella.wrap(test.langconstr.iterateTuple, ir=ir, **kwargs)())

@@ -9,7 +9,7 @@ import inspect
 from . import exc
 
 
-class Type(object):
+class Type(metaclass=ABCMeta):
     type_ = None
     _llvm = None
     ptr = 0
@@ -26,8 +26,7 @@ class Type(object):
         return self.ptr > 0
 
     def isUntyped(self):
-        # TODO this is hack-ish
-        return str(self)[-1] == '?'
+        return False
 
     def dereference(self):
         if self.ptr == 1:
@@ -36,8 +35,9 @@ class Type(object):
         else:
             raise exc.TypeError("Cannot dereference the non-reference type {}".format(self))
 
+    @abstractmethod
     def __str__(self):
-        return '?'
+        pass
 
     def llvmType(self):
         # some types just come as a reference (e.g. external numpy array). For
@@ -59,6 +59,24 @@ class Type(object):
                 "Cannot create ctype for an unknown type. This should have been cought earlier.")
         else:
             return self.ctype
+
+    def getElementType(self, idx):
+        return NoType
+
+
+class UnknownType(Type):
+    def isUntyped(self):
+        return False
+
+    def __str__(self):
+        return '?'
+
+    def dereference(self):
+        return self
+
+
+NoType = UnknownType()
+
 
 class Reference(Type):
     def __init__(self, type_):
@@ -85,13 +103,6 @@ class Subscriptable(metaclass=ABCMeta):
     @abstractmethod
     def storeSubscript(cge, container, idx, value):
         pass
-
-    @abstractmethod
-    def getElementType(self, idx):
-        pass
-
-
-NoType = Type()
 
 
 class PyWrapper(Type):
@@ -170,6 +181,8 @@ def getIndex(i):
 
 def invalid_none_use(msg):
     raise exc.StellaException(msg)
+
+
 None_ = ScalarType(
     "NONE",
     type(None), tp_void, None,
@@ -186,44 +199,6 @@ _pyscalars = {
     bool: Bool,
 }
 
-class Tuple(ScalarType, Subscriptable):
-    # TODO really derive from scalarType?
-    # TODO add a separate representation for a tuple value?
-    def __init__(self, values):
-        self.values = [wrapValue(v) for v in values]
-
-    def _llvmType(self):
-        return ll.LiteralStructType([v.type.llvmType() for v in self.values])
-
-    def genericValue(self, value):
-        raise exc.UnimplementedError("???")
-
-    def constant(self, value, cge = None):
-        if not self._llvm:
-            self._llvm = ll.Constant.literal_struct([v.translate(cge) for v in self.values])
-        return self._llvm
-
-    def __str__(self):
-        return "(tuple, {} elems)".format(len(self.values))
-
-    def __repr__(self):
-        return "({})".format(", ".join( [str(v) for v in self.values]))
-
-
-    def getElementType(self, idx):
-        if not isinstance(idx, Const):
-            raise exc.TypeError("Tuple index must be constant, not {}".format(type(idx)))
-        if idx.value >= len(self.values):
-            raise exc.IndexError("tuple index out of range")
-        return self.values[idx.value].type
-
-    def loadSubscript(self, cge, container, idx):
-        assert isinstance(idx, Const)
-        return cge.builder.extract_value(container.translate(cge), [idx.value])
-
-    def storeSubscript(self, cge, container, idx, value):
-        assert isinstance(idx, Const)
-        cge.builder.insert_value(container.translate(cge), [idx.value], value.translate(cge))
 
 def get_scalar(obj):
     """obj can either be a value, or a type
@@ -266,10 +241,16 @@ def supported_scalar_name(name):
 
 
 class CType(object):
+    """
+    Dynamically create a ctype Structure.
+    """
     _registry = {}
 
     @classmethod
-    def get(klass, name, fields):
+    def getStruct(klass, name, fields):
+        """
+        Creates a Structure with the given fields. Caches based on (name, fields).
+        """
         fields = tuple(fields)
         if (name, fields) not in klass._registry:
             type_ = type(name, (ctypes.Structure, ), {'_fields_': fields})
@@ -376,7 +357,7 @@ class StructType(Type):
                 fields.append((name, ctypes.POINTER(self.attrib_type[name].ctype)))
             else:
                 fields.append((name, self.attrib_type[name].ctype))
-        self._ctype = CType.get("_" + self.name + "_transfer", fields)
+        self._ctype = CType.getStruct("_" + self.name + "_transfer", fields)
         return self._ctype
 
     def ctypeInit(self, value, transfer_value):
@@ -432,6 +413,64 @@ class StructType(Type):
 
     def __ne__(self, other):
         return not self.__eq__(other)
+
+
+class TupleType(ScalarType, Subscriptable):
+    def __init__(self, types):
+        self.types = types
+
+    def _getConst(self, idx):
+        if isinstance(idx, int):
+            return idx
+        elif isinstance(idx, Const):
+            return idx.value
+        else:
+            raise exc.TypeError("Tuple index must be constant, not {}".format(type(idx)))
+
+    def getElementType(self, idx):
+        val = self._getConst(idx)
+        if val >= len(self.types):
+            raise exc.IndexError("tuple index out of range")
+        return self.types[val]
+
+    def loadSubscript(self, cge, container, idx):
+        val = self._getConst(idx)
+        return cge.builder.extract_value(container.translate(cge), [val])
+
+    def storeSubscript(self, cge, container, idx, value):
+        # TODO Needs tests!
+        idx_val = self._getConst(idx)
+        cge.builder.insert_value(container.translate(cge), value.translate(cge), idx_val)
+
+    def Ctype(self):
+        fields = [("f{}".format(i), val.ctype) for i, val in enumerate(self.types)]
+        return CType.getStruct("__tuple__", fields)
+
+    @classmethod
+    def unpack(klass, val):
+        """
+        Convert a ctypes.Structure wrapper into a native tuple.
+        """
+        l = [getattr(val, n) for n, _ in val._fields_]
+        return tuple(l)
+
+    def unify_type(self, values):
+        for mv, ov in zip(self.values, values):
+            mv.type.unify_type(ov.type)
+
+    def _llvmType(self):
+        return ll.LiteralStructType([t.llvmType() for t in self.types])
+
+    def constant(self, values, cge = None):
+        if not self._llvm:
+            self._llvm = ll.Constant.literal_struct([wrapValue(v).translate(cge) for v in values])
+        return self._llvm
+
+    def __str__(self):
+        return "tuple, {} elems".format(len(self.types))
+
+    def __repr__(self):
+        return "{}".format(", ".join([str(t) for t in self.types]))
 
 
 class ArrayType(Type, Subscriptable):
@@ -565,10 +604,6 @@ class ListType(ArrayType):
 
 
 class Callable(metaclass=ABCMeta):
-    @abstractmethod
-    def getResult(self, func):
-        pass
-
     def combineArgs(self, args, kwargs):
         """Combine concrete args and kwargs according to calling conventions.
 
@@ -651,10 +686,6 @@ class FunctionType(Type):
     arg_names = []
     arg_types = []
     def_offset = 0
-
-    @abstractmethod
-    def getReturnType(self, args, kw_args):
-        pass
 
     def readSignature(self, f):
         argspec = inspect.getargspec(f)
@@ -809,6 +840,7 @@ def get(obj):
         #raise exc.UnimplementedError("Unknown type {0}".format(type_))
         return StructType.fromObj(obj)
 
+
 _cscalars = {
     ctypes.c_double: Float,
     ctypes.c_uint: uInt,
@@ -864,6 +896,8 @@ class Typable(object):
         return self.type.llvmType()
 
     def translate(self, cge):
+        # TODO assert self.llvm here? This fails with uninitialized values like
+        # test.langconstr.new_global_var
         return self.llvm
 
     def ctype2Python(self, cge):
@@ -890,7 +924,7 @@ class Const(Typable):
         self.value = value
         try:
             if type(value) == tuple:
-                self.type = Tuple(value)
+                self.type = TupleType([get(v) for v in value])
             else:
                 self.type = get_scalar(value)
             self.name = str(value)
@@ -1052,7 +1086,42 @@ class List(Typable):
         cge.builder.store(value.translate(cge), p)
 
 
+class Tuple(Typable):
+    def __init__(self, values):
+        self.values = [wrapValue(v) for v in values]
+        self.type = TupleType([v.type for v in self.values])
+
+    def __str__(self):
+        return "(tuple, {} elems)".format(len(self.values))
+
+    def __repr__(self):
+        return "({})".format(", ".join( [str(v) for v in self.values]))
+
+    def translate(self, cge):
+        if self.llvm:
+            return self.llvm
+
+        # A struct is a constant and can only be initialize with constants.
+        # Insert the non-constants afterwards
+        init = []
+        self.inserts = []
+        for i, v in enumerate(self.values):
+            if isinstance(v, Const):
+                init.append(v.translate(cge))
+            else:
+                init.append(ll.Constant(v.type.llvmType(), None))
+                self.inserts.append((i, v))
+
+        self.llvm = ll.Constant.literal_struct(init)
+        for i, v in self.inserts:
+            self.llvm = cge.builder.insert_value(self.llvm, v.translate(cge), i)
+        return self.llvm
+
+
 def wrapValue(value):
+    if isinstance(value, Typable):
+        # already wrapped, nothing to do
+        return value
     type_ = type(value)
     if supported_scalar(type_) or type_ == tuple:
         return Const(value)

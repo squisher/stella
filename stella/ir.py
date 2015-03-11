@@ -62,8 +62,15 @@ class IR(metaclass=ABCMeta):
         """
         if self.stack_args:
             for arg in self.stack_args:
-                arg.result.bc = arg
-                self.args.append(arg.result)
+                # TODO should arg.result always be a list?
+                if isinstance(arg.result, list):
+                    result = arg.result.pop()
+                    # keep the result, we need it for retyping
+                    arg.result.insert(0, result)
+                else:
+                    result = arg.result
+                result.bc = arg
+                self.args.append(result)
             self.stack_args = None
 
     @abstractmethod

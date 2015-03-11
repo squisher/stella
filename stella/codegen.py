@@ -174,6 +174,10 @@ class Program(object):
             arg.ctype2Python(self.cge)  # may be a no-op if not necessary
             arg.destruct()  # may be a no-op if not necessary
 
+        ret_type = self.module.entry.result.type
+        if isinstance(ret_type, tp.TupleType):
+            retval = ret_type.unpack(retval)
+
         logging.debug("Returning...")
         self.destruct()
 
