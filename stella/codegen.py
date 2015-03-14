@@ -98,7 +98,7 @@ class Program(object):
 
     def makeStub(self):
         impl = self.module.entry
-        func_tp = ll.FunctionType(impl.result.type.llvmType(), [])
+        func_tp = ll.FunctionType(impl.result.type.llvmType(self.module), [])
         func = ll.Function(self.module.llvm, func_tp, name=str(impl.function)+'__stub__')
         bb = func.append_basic_block("entry")
         builder = ll.IRBuilder(bb)

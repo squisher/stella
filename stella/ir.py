@@ -151,7 +151,7 @@ class PhiNode(IR):
     def translate(self, cge):
         if len(self.args) == 0:
             return
-        phi = cge.builder.phi(self.result.llvmType(), self.result.name)
+        phi = cge.builder.phi(self.result.llvmType(cge.module), self.result.name)
         for arg in self.args:
             phi.add_incoming(arg.llvm, arg.bc.block)
 
@@ -382,10 +382,10 @@ class Module(object):
         return len(self._todo)
 
     def translate(self):
-        self.llvm = ll.Module('__stella__'+str(self.__class__.i))
+        self.llvm = ll.Module('__stella__'+str(self.__class__.i), context=ll.context.Context())
         self.__class__.i += 1
         for _, impl in self.namestore.all(Function):
-            impl.translate(self.llvm)
+            impl.translate(self)
 
     def destruct(self):
         """Clean up this objects so that gc will succeed.
@@ -505,10 +505,10 @@ class Function(Scope):
         self.analyzed = True
 
     def translate(self, module):
-        self.arg_types = [arg.llvmType() for arg in self.args]
+        self.arg_types = [arg.llvmType(module) for arg in self.args]
 
-        func_tp = ll.FunctionType(self.result.type.llvmType(), self.arg_types)
-        self.llvm = ll.Function(module, func_tp, name=self.name)
+        func_tp = ll.FunctionType(self.result.type.llvmType(module), self.arg_types)
+        self.llvm = ll.Function(module.llvm, func_tp, name=self.name)
 
         for i in range(len(self.args)):
             self.llvm.args[i].name = self.args[i].name
@@ -671,9 +671,9 @@ class ExtFunction(object):
         f = getattr(clib, self.name)
         llvm.add_symbol(self.name, ctypes.cast(f, ctypes.c_void_p).value)
 
-        llvm_arg_types = [arg.llvmType() for arg in self.type_.arg_types]
+        llvm_arg_types = [arg.llvmType(module) for arg in self.type_.arg_types]
 
-        func_tp = ll.FunctionType(self.type_.return_type.llvmType(), llvm_arg_types)
+        func_tp = ll.FunctionType(self.type_.return_type.llvmType(module), llvm_arg_types)
         self.llvm = ll.Function(module, func_tp, self.name)
 
 
@@ -699,8 +699,9 @@ class ExtFunctionRef(tp.Callable):
             if arg.type != arg_type:
                 # TODO: trunc is not valid for all type combinations.
                 # Needs to be generalized.
-                llvm = cge.builder.trunc(arg.translate(cge), arg_type.llvmType(), '({0}){1}'.format(
-                    arg_type, arg.name))
+                llvm = cge.builder.trunc(arg.translate(cge),
+                                         arg_type.llvmType(cge.module),
+                                         '({0}){1}'.format(arg_type, arg.name))
             else:
                 llvm = arg.llvm
             args_llvm.append(llvm)

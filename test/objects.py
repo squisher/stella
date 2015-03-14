@@ -98,6 +98,14 @@ class F(object):
         return "{}[l={}]".format(str(type(self))[8:-2], self.l)
 
 
+class G(B):
+    def __init__(self, x=1, y=2):
+        super().__init__(x, y)
+
+
+G.origin = G(0, 0)
+
+
 def justPassing(a):
     x = 1  # noqa
 
@@ -171,6 +179,7 @@ def objList2(l):
         r += l[i].x
     return r
 
+
 def objList3(l):
     r = 0
     for i in range(len(l)):
@@ -199,6 +208,13 @@ def objContainingList3(f):
     for i in range(len(f.l)):
         f.l[i].x = i
 
+
+def selfRef(g):
+    return ((g.x - G.origin.x)**2 + (g.y - G.origin.y)**2)**0.5
+
+
+def nextB(b):
+    return b.x == b.next.x and b.y == b.next.y
 
 args1 = [(1, 1), (24, 42), (0.0, 1.0), (1.0, 1.0), (3.0, 0.0)]
 
@@ -466,3 +482,36 @@ def test_mutation8(f):
     st = stella.wrap(f)(f2)
 
     assert f1 == f2 and py == st
+
+
+args3 = [(4, 8), (9.0, 27.0)]
+
+@mark.parametrize('f', [selfRef])
+@mark.parametrize('args', args3)
+@unimplemented
+def test_no_mutation9(f, args):
+    b1 = B(*args)
+    b2 = B(*args)
+
+    b1.next = b1
+    b2.next = b2
+
+    assert b1 == b2
+    py = f(b1)
+    st = stella.wrap(f)(b2)
+
+    assert b1 == b2 and py == st
+
+
+@mark.parametrize('f', [selfRef])
+@mark.parametrize('args', args3)
+@unimplemented
+def test_no_mutation9_u(f, args):
+    b1 = G(*args)
+    b2 = G(*args)
+
+    assert b1 == b2
+    py = f(b1)
+    st = stella.wrap(f)(b2)
+
+    assert b1 == b2 and py == st

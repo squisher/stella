@@ -42,7 +42,7 @@ class Zeros(Intrinsic):
         return atype
 
     def call(self, cge, args, kw_args):
-        type_ = self.getReturnType(args, kw_args).llvmType()
+        type_ = self.getReturnType(args, kw_args).llvmType(cge.module)
         return cge.builder.alloca(type_)
 
 
@@ -87,7 +87,7 @@ class Log(Intrinsic):
             args[0] = tp.Cast(args[0], tp.Float)
 
         # TODO llvmlite
-        llvm_f = cge.module.llvm.declare_intrinsic(self.intr, [args[0].llvmType()])
+        llvm_f = cge.module.llvm.declare_intrinsic(self.intr, [args[0].llvmType(cge.module)])
         result = cge.builder.call(llvm_f, [args[0].translate(cge)])
         return result
 

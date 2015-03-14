@@ -17,10 +17,13 @@ class Type(metaclass=ABCMeta):
     req_transfer = False
     ctype = False  # init to false because None is a valid ctype
 
-    def makePointer(self):
+    def makePointer(self, ensure = False):
         if self.on_heap:
-            assert self.ptr == 0
-            self.ptr += 1
+            if ensure:
+                self.ptr = 1
+            else:
+                assert self.ptr == 0
+                self.ptr += 1
 
     def isReference(self):
         return self.ptr > 0
@@ -39,17 +42,17 @@ class Type(metaclass=ABCMeta):
     def __str__(self):
         pass
 
-    def llvmType(self):
+    def llvmType(self, module):
         # some types just come as a reference (e.g. external numpy array). For
         # references within stella use class Reference.
         assert self.ptr <= 1
-        type_ = self._llvmType()
+        type_ = self._llvmType(module)
         if self.ptr:
             return type_.as_pointer()
         else:
             return type_
 
-    def _llvmType(self):
+    def _llvmType(self, module):
         raise exc.TypeError(
             "Cannot create llvm type for an unknown type. This should have been cought earlier.")
 
@@ -83,8 +86,8 @@ class Reference(Type):
         self.type_ = type_
         self.ptr = type_.ptr + 1
 
-    def llvmType(self):
-        type_ = self.type_.llvmType()
+    def llvmType(self, module):
+        type_ = self.type_.llvmType(module)
         # for i in range(self.ptr):
         return type_.as_pointer()
 
@@ -125,7 +128,7 @@ class PyWrapper(Type):
     def __str__(self):
         return str(self.py)
 
-    def _llvmType(self):
+    def _llvmType(self, module):
         raise exc.TypeError("Cannot create an LLVM type for Python type {}".format(self.py))
 
 
@@ -136,7 +139,10 @@ class ScalarType(Type):
         self.ctype = ctype
         self._llvm = llvm
 
-    def _llvmType(self):
+    def llvmType(self, module = None):
+        return super().llvmType(module)
+
+    def _llvmType(self, module):
         return self._llvm
 
     def constant(self, value, cge = None):
@@ -247,17 +253,28 @@ class CType(object):
     _registry = {}
 
     @classmethod
-    def getStruct(klass, name, fields):
+    def getStruct(klass, name, fields = []):
         """
         Creates a Structure with the given fields. Caches based on (name, fields).
         """
         fields = tuple(fields)
-        if (name, fields) not in klass._registry:
-            type_ = type(name, (ctypes.Structure, ), {'_fields_': fields})
-            klass._registry[(name, fields)] = type_
+        if name not in klass._registry:
+            if fields:
+                attribs = {'_fields_': fields}
+            else:
+                attribs = {}
+            type_ = type(name, (ctypes.Structure, ), attribs)
+            klass._registry[name] = type_
             return type_
         else:
-            return klass._registry[(name, fields)]
+            struct = klass._registry[name]
+            if fields:
+                assert fields == struct._fields_
+            return struct
+
+    @classmethod
+    def destruct(klass):
+        klass._registry.clear()
 
 
 class StructType(Type):
@@ -268,26 +285,36 @@ class StructType(Type):
     attrib_type = None
     attrib_idx = None
     _ctype = None
+    _llvmtype = None
     type_store = {}  # Class variable
 
     @classmethod
     def fromObj(klass, obj):
         type_name = str(type(obj)).split("'")[1]
+
+        # cache it early, which allows fields of this type to be resolved
+        # immediately
+        if type_name in klass.type_store:
+            return klass.type_store[type_name]
+
+        type_ = StructType(type_name)
+        type_.makePointer()  # by default
+        klass.type_store[type_name] = type_
+
         attrib_type = {}
         attrib_idx = {}
         attrib_names = sorted(list(filter(lambda s: not s.startswith('_'),
                                           dir(obj))))  # TODO: only exclude __?
         for name in attrib_names:
             attrib = getattr(obj, name)
-            # TODO: catch the exception and improve the error message?
             try:
-                type_ = get (attrib)
+                a_type = get (attrib)
             except TypeError:
                 raise exc.TypeError("{}({}).{}({}) is not supported".format(obj, type(obj), name, type(attrib)))
-            if type_.on_heap:
-                #type_ = Reference(type_)
-                type_.makePointer()
-            attrib_type[name] = type_
+            if a_type.on_heap:
+                #a_type = Reference(type_)
+                a_type.makePointer(True)
+            attrib_type[name] = a_type
 
         # Sort attrib_names so that function types are after attribute types.
         # This allows me to keep them around, because even though they aren't
@@ -305,15 +332,18 @@ class StructType(Type):
             attrib_idx[name] = i
             i += 1
 
-        type_ = StructType(type_name, attrib_names, attrib_type, attrib_idx)
-        type_.makePointer()  # by default
+        type_.attrib_type = attrib_type
+        type_.attrib_idx = attrib_idx
+        type_.attrib_names = attrib_names
+
         return type_
 
-    def __init__(self, name, attrib_names, attrib_type, attrib_idx):
+    @classmethod
+    def destruct(klass):
+        klass.type_store.clear()
+
+    def __init__(self, name):
         self.name = name
-        self.attrib_names = attrib_names
-        self.attrib_type = attrib_type
-        self.attrib_idx = attrib_idx
 
     def getMemberType(self, name):
         return self.attrib_type[name]
@@ -330,34 +360,37 @@ class StructType(Type):
         """
         # TODO turn this into an iterator?
         return [(name, self.attrib_type[name]) for name in self.attrib_names]
-    def _llvmType(self):
-        mangled_name = self.name
+    def _llvmType(self, module):
+        if self._llvmtype is not None:
+            return self._llvmtype
 
-        if mangled_name not in self.__class__.type_store:
-            llvm_types = []
-            for name in self._scalarAttributeNames():
-                type_ = self.attrib_type[name]
-                llvm_types.append(type_.llvmType())
-            # TODO: IdentifiedStructType here? No way to name a literal
-            # struct..., name=mangled_name)
-            type_ = ll.LiteralStructType(llvm_types)
-            self.__class__.type_store[mangled_name] = type_
-        else:
-            type_ = self.__class__.type_store[mangled_name]
+        self._llvmtype = module.llvm.context.get_identified_type(self.name)
+        assert self._llvmtype.is_opaque
 
-        return type_
+        llvm_types = []
+        for name in self._scalarAttributeNames():
+            type_ = self.attrib_type[name]
+            llvm_types.append(type_.llvmType(module))
+        #type_ = ll.LiteralStructType(llvm_types)
+        #self._llvmtype = type_
+        self._llvmtype.set_body(*llvm_types)
+
+        return self._llvmtype
 
     @property
     def ctype(self):
         if self._ctype:
             return self._ctype
         fields = []
+        self._ctype = CType.getStruct("_" + self.name + "_transfer")
         for name in self._scalarAttributeNames():
             if isinstance(self.attrib_type[name], ListType):
                 fields.append((name, ctypes.POINTER(self.attrib_type[name].ctype)))
+            elif self.attrib_type[name] is self:
+                fields.append((name, ctypes.POINTER(self._ctype)))
             else:
                 fields.append((name, self.attrib_type[name].ctype))
-        self._ctype = CType.getStruct("_" + self.name + "_transfer", fields)
+        self._ctype._fields_ = fields
         return self._ctype
 
     def ctypeInit(self, value, transfer_value):
@@ -370,6 +403,8 @@ class StructType(Type):
                 l = List.fromObj(item)
                 l.ctypeInit()
                 item = ctypes.cast(ctypes.addressof(l.transfer_value), ctypes.POINTER(l.type.ctype))
+            elif self.attrib_type[name] is self:
+                item = ctypes.cast(ctypes.addressof(transfer_value), ctypes.POINTER(self.ctype))
             setattr(transfer_value, name, item)
 
     def constant(self, value, cge):
@@ -381,7 +416,7 @@ class StructType(Type):
         self.ctypeInit(value, transfer_value)
 
         addr_llvm = Int.constant(int(ctypes.addressof(transfer_value)))
-        result_llvm = ll.Constant(tp_int, addr_llvm).inttoptr(self.llvmType())
+        result_llvm = ll.Constant(tp_int, addr_llvm).inttoptr(self.llvmType(cge.module))
         return (result_llvm, transfer_value)
 
     def ctype2Python(self, transfer_value, value):
@@ -403,8 +438,11 @@ class StructType(Type):
         return "{}{}".format('*'*self.ptr, self.name)
 
     def __repr__(self):
-        #return "<{}>".format(self)
-        return "<{}{}: {}>".format('*'*self.ptr, self.name, list(self.attrib_type.keys()))
+        if self.attrib_type:
+            type_info = list(self.attrib_type.keys())
+        else:
+            type_info = '?'
+        return "<{}{}: {}>".format('*'*self.ptr, self.name, type_info)
 
     def __eq__(self, other):
         return (type(self) == type(other)
@@ -458,8 +496,8 @@ class TupleType(ScalarType, Subscriptable):
         for mv, ov in zip(self.values, values):
             mv.type.unify_type(ov.type)
 
-    def _llvmType(self):
-        return ll.LiteralStructType([t.llvmType() for t in self.types])
+    def _llvmType(self, module):
+        return ll.LiteralStructType([t.llvmType(module) for t in self.types])
 
     def constant(self, values, cge = None):
         if not self._llvm:
@@ -514,8 +552,8 @@ class ArrayType(Type, Subscriptable):
         self._boundsCheck(idx)
         return self.type_
 
-    def _llvmType(self):
-        type_ = ll.ArrayType(self.type_.llvmType(), self.shape)
+    def _llvmType(self, module):
+        type_ = ll.ArrayType(self.type_.llvmType(module), self.shape)
 
         return type_
 
@@ -565,14 +603,18 @@ class ListType(ArrayType):
         type_ = klass(base_type, len(obj))
         return type_
 
+    @classmethod
+    def destruct(klass):
+        klass.type_store.clear()
+
     def __init__(self, base_type, shape):
         super().__init__(base_type, shape)
 
-    def _llvmType(self):
+    def _llvmType(self, module):
         mangled_name = str(self)
 
         if mangled_name not in self.__class__.type_store:
-            type_ = ll.ArrayType(self.type_.llvmType(), self.shape)
+            type_ = ll.ArrayType(self.type_.llvmType(module), self.shape)
             self.__class__.type_store[mangled_name] = type_
             return type_
         else:
@@ -768,7 +810,7 @@ class FunctionType(Type):
         else:
             return self.name
 
-    def _llvmType(self):
+    def _llvmType(self, module):
         raise exc.InternalError("This is an intermediate type presentation only!")
 
 
@@ -891,9 +933,9 @@ class Typable(object):
 
         return False, False
 
-    def llvmType(self):
+    def llvmType(self, module):
         """Map from Python types to LLVM types."""
-        return self.type.llvmType()
+        return self.type.llvmType(module)
 
     def translate(self, cge):
         # TODO assert self.llvm here? This fails with uninitialized values like
@@ -912,9 +954,9 @@ class ImmutableType(object):
         raise TypeError("Type {} is immutable, it cannot be unified with {} at {}".format(
             self.type, tp2, debuginfo))
 
-    def llvmType(self):
+    def llvmType(self, module):
         """Map from Python types to LLVM types."""
-        return self.type.llvmType()
+        return self.type.llvmType(module)
 
 
 class Const(Typable):
@@ -959,10 +1001,13 @@ class NumpyArray(Typable):
         self.type = Reference(ArrayType.fromObj(array))
         self.value = array
 
-        ptr_int = self.value.ctypes.data  # int
+    def translate(self, cge):
+        ptr_int = self.value.ctypes.data
         ptr_int_llvm = Int.constant(ptr_int)
-        type_ = self.type.llvmType()
+
+        type_ = self.type.llvmType(cge.module)
         self.llvm = ll.Constant(tp_int, ptr_int_llvm).inttoptr(type_)
+        return self.llvm
 
     def __str__(self):
         return str(self.type)
@@ -989,7 +1034,13 @@ class Struct(Typable):
         self.transfer_attributes = {}
         for name, type_ in self.type.items():
             if type_.req_transfer:
-                self.transfer_attributes[name] = wrapValue(getattr(obj, name))
+                attrib = getattr(obj, name)
+                if id(attrib) == id(obj):
+                    # self-reference TODO does it even need a transfer then?
+                    # self.transfer_attributes[name] = self
+                    pass
+                else:
+                    self.transfer_attributes[name] = wrapValue(attrib)
 
     def __str__(self):
         return str(self.type)
@@ -1058,7 +1109,7 @@ class List(Typable):
         self.ctypeInit()
 
         addr_llvm = Int.constant(int(ctypes.addressof(self.transfer_value)))
-        self.llvm = ll.Constant(tp_int, addr_llvm).inttoptr(self.type.llvmType())
+        self.llvm = ll.Constant(tp_int, addr_llvm).inttoptr(self.type.llvmType(cge.module))
         return self.llvm
 
     def ctype2Python(self, cge):
@@ -1109,7 +1160,7 @@ class Tuple(Typable):
             if isinstance(v, Const):
                 init.append(v.translate(cge))
             else:
-                init.append(ll.Constant(v.type.llvmType(), None))
+                init.append(ll.Constant(v.type.llvmType(cge.module), None))
                 self.inserts.append((i, v))
 
         self.llvm = ll.Constant.literal_struct(init)
@@ -1163,7 +1214,7 @@ class Cast(Typable):
             value = float(self.obj.value)
             self.llvm = self.type.constant(value)
         else:
-            self.llvm = cge.builder.sitofp(self.obj.llvm, Float.llvmType(), self.name)
+            self.llvm = cge.builder.sitofp(self.obj.llvm, Float.llvmType(cge.module), self.name)
         return self.llvm
 
     def __str__(self):
@@ -1172,5 +1223,7 @@ class Cast(Typable):
 
 def destruct():
     FunctionType.destruct()
-    StructType.type_store.clear()
+    StructType.destruct()
+    ListType.destruct()
+    CType.destruct()
     List.destructList()

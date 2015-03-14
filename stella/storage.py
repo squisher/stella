@@ -50,7 +50,7 @@ class GlobalVariable(tp.Typable):
         else:
             self.initial_value = tp.wrapValue(initial_value)
         self.type = self.initial_value.type
-        self.type.makePointer()
+        self.type.makePointer(True)
 
     def __str__(self):
         return "+{0}<{1}>".format(self.name, self.type)
@@ -62,7 +62,7 @@ class GlobalVariable(tp.Typable):
         if self.llvm:
             return self.llvm
 
-        self.llvm = ll.GlobalVariable(cge.module.llvm, self.llvmType(), self.name)
+        self.llvm = ll.GlobalVariable(cge.module.llvm, self.llvmType(cge.module), self.name)
         # TODO: this condition is too complicated and likely means that my
         # code is not working consistently with the attribute
         llvm_init = None
@@ -71,7 +71,8 @@ class GlobalVariable(tp.Typable):
             llvm_init = self.initial_value.translate(cge)
 
         if llvm_init is None:
-            self.llvm.initializer = ll.Constant(self.initial_value.type.llvmType(), ll.Undefined)
+            self.llvm.initializer = ll.Constant(self.initial_value.type.llvmType(cge.module),
+                                                ll.Undefined)
         else:
             self.llvm.initializer = llvm_init
 

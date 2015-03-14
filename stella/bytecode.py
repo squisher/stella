@@ -151,9 +151,9 @@ class STORE_FAST(Bytecode):
         arg = self.args[0]
         if self.new_allocate:
             if arg.type.on_heap:
-                type_ = tp.Reference(arg.type).llvmType()
+                type_ = tp.Reference(arg.type).llvmType(cge.module)
             else:
-                type_ = arg.type.llvmType()
+                type_ = arg.type.llvmType(cge.module)
             self.result.llvm = cge.builder.alloca(type_, name=self.result.name)
         cge.builder.store(arg.translate(cge), self.result.translate(cge))
 
@@ -314,13 +314,13 @@ class BINARY_POWER(BinaryOp):
             power = self.args[1].translate(cge)
 
         llvm_pow = cge.module.llvm.declare_intrinsic(self.b_func[self.args[1].type],
-                                                     [self.args[0].llvmType()])
+                                                     [self.args[0].llvmType(cge.module)])
         pow_result = cge.builder.call(llvm_pow, [self.args[0].translate(cge), power])
 
         if isinstance(self.args[0], Cast) and \
                 self.args[0].obj.type == tp.Int and self.args[1].type == tp.Int:
             # cast back to an integer
-            self.result.llvm = cge.builder.fptosi(pow_result, tp.Int.llvmType())
+            self.result.llvm = cge.builder.fptosi(pow_result, tp.Int.llvmType(cge.module))
         else:
             self.result.llvm = pow_result
 
@@ -362,7 +362,7 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
             self.args[0].translate(cge),
             self.args[1].translate(cge))
         llvm_floor = cge.module.llvm.declare_intrinsic('llvm.floor',
-                                                       [tp.Float.llvmType()])
+                                                       [tp.Float.llvmType(cge.module)])
         self.result.llvm = cge.builder.call(llvm_floor, [tmp])
 
         # TODO this is peaking too deeply into the cast
@@ -372,7 +372,7 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
             # analysis stage.
             self.result.llvm = cge.builder.fptosi(
                 self.result.translate(cge),
-                tp.Int.llvmType(),
+                tp.Int.llvmType(cge.module),
                 "(int)" +
                 self.result.name)
 
