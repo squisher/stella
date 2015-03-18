@@ -172,7 +172,6 @@ class Program(object):
 
         for arg in self.module.entry_args:
             arg.ctype2Python(self.cge)  # may be a no-op if not necessary
-            arg.destruct()  # may be a no-op if not necessary
 
         ret_type = self.module.entry.result.type
         if isinstance(ret_type, tp.TupleType):
@@ -189,8 +188,8 @@ class Program(object):
     def getLlvmIR(self):
         ret = self.module.getLlvmIR()
 
-        for arg in self.module.entry_args:
-            arg.destruct()  # may be a no-op if not necessary
+        #for arg in self.module.entry_args:
+        #    arg.destruct()  # may be a no-op if not necessary
 
         logging.debug("Returning...")
         self.destruct()

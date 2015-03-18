@@ -290,7 +290,12 @@ class StructType(Type):
 
     @classmethod
     def fromObj(klass, obj):
-        type_name = str(type(obj)).split("'")[1]
+        if type(obj) == type(int):
+            # class
+            type_name = str(obj).split("'")[1] + ".__class__"
+        else:
+            # instance
+            type_name = str(type(obj)).split("'")[1]
 
         # cache it early, which allows fields of this type to be resolved
         # immediately
@@ -405,6 +410,10 @@ class StructType(Type):
                 item = ctypes.cast(ctypes.addressof(l.transfer_value), ctypes.POINTER(l.type.ctype))
             elif self.attrib_type[name] is self:
                 item = ctypes.cast(ctypes.addressof(transfer_value), ctypes.POINTER(self.ctype))
+            elif not supported_scalar(type(item)):
+                # struct, has to be the last check because everything is an
+                # object in Python
+                item = wrapValue(item).transfer_value
             setattr(transfer_value, name, item)
 
     def constant(self, value, cge):
@@ -895,6 +904,10 @@ def from_ctype(type_):
     return _cscalars[type_]
 
 
+
+# values which need to be destructed: Any complex type that is wrapped.
+_stella_values_ = []
+
 class Typable(object):
     type = NoType
     llvm = None
@@ -1025,6 +1038,7 @@ class Struct(Typable):
         """
         if not hasattr(obj, '__stella_wrapper__'):
             obj.__stella_wrapper__ = Struct(obj)
+            _stella_values_.append(obj.__stella_wrapper__)
         assert isinstance(obj.__stella_wrapper__, klass)
         return obj.__stella_wrapper__
 
@@ -1053,6 +1067,7 @@ class Struct(Typable):
             wrapped.translate(cge)
         if not self.llvm:
             (self.llvm, self.transfer_value) = self.type.constant(self.value, cge)
+        assert self.transfer_value
         return self.llvm
 
     def ctype2Python(self, cge):
@@ -1080,6 +1095,7 @@ class List(Typable):
         if id(obj) not in klass._registry:
             wrapped = klass(obj)
             klass._registry[id(obj)] = wrapped
+            _stella_values_.append(wrapped)
         return klass._registry[id(obj)]
 
     @classmethod
@@ -1222,6 +1238,10 @@ class Cast(Typable):
 
 
 def destruct():
+    global _stella_values_
+    for value in _stella_values_:
+        value.destruct()
+    _stella_values_ = []
     FunctionType.destruct()
     StructType.destruct()
     ListType.destruct()

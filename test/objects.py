@@ -487,6 +487,7 @@ def test_mutation8(f):
 
 args3 = [(4, 8), (9.0, 27.0)]
 
+
 @mark.parametrize('f', [nextB])
 @mark.parametrize('args', args3)
 def test_no_mutation9(f, args):
@@ -505,8 +506,7 @@ def test_no_mutation9(f, args):
 
 @mark.parametrize('f', [selfRef])
 @mark.parametrize('args', args3)
-@unimplemented
-def test_no_mutation9_u(f, args):
+def test_no_mutation10(f, args):
     b1 = G(*args)
     b2 = G(*args)
 
