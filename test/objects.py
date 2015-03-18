@@ -216,6 +216,7 @@ def selfRef(g):
 def nextB(b):
     return b.x == b.next.x and b.y == b.next.y
 
+
 args1 = [(1, 1), (24, 42), (0.0, 1.0), (1.0, 1.0), (3.0, 0.0)]
 
 
@@ -486,9 +487,8 @@ def test_mutation8(f):
 
 args3 = [(4, 8), (9.0, 27.0)]
 
-@mark.parametrize('f', [selfRef])
+@mark.parametrize('f', [nextB])
 @mark.parametrize('args', args3)
-@unimplemented
 def test_no_mutation9(f, args):
     b1 = B(*args)
     b2 = B(*args)
