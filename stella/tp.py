@@ -410,7 +410,7 @@ class StructType(Type):
                 item = ctypes.cast(ctypes.addressof(l.transfer_value), ctypes.POINTER(l.type.ctype))
             elif self.attrib_type[name] is self:
                 item = ctypes.cast(ctypes.addressof(transfer_value), ctypes.POINTER(self.ctype))
-            elif not supported_scalar(type(item)):
+            elif not supported_scalar(type(item)) and not isinstance(item, types.MethodType):
                 # struct, has to be the last check because everything is an
                 # object in Python
                 item = wrapValue(item).transfer_value
@@ -1081,7 +1081,10 @@ class Struct(Typable):
             wrapped.ctype2Python(cge)
 
     def destruct(self):
-        del self.transfer_value
+        # TODO why don't we always have a transfer_value?
+        if hasattr(self, 'transfer_value'):
+            logging.debug("{}<{}>/{} destruct()".format(self, type(self), id(self)))
+            del self.transfer_value
         del self.value.__stella_wrapper__
 
 
