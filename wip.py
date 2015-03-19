@@ -35,4 +35,4 @@ def current_work(run=False, **kwargs):
         ir = not run
     else:
         ir = run
-    print(stella.wrap(test.objects.cmpAttrib, ir=ir, **kwargs)(b))
+    print(stella.wrap(sim.run, ir=ir, **kwargs)())

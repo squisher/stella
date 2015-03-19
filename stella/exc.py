@@ -24,6 +24,26 @@ class UnsupportedOpcode(StellaException):
         self.addDebug(debuginfo)
 
 
+class UnsupportedTypeError(StellaException, TypeError):
+    def __init__(self, msg, debuginfo=None):
+        self.name_stack = []
+        self.type_stack = []
+        super().__init__(msg)
+
+        self.addDebug(debuginfo)
+
+    def prepend(self, name, type):
+        self.name_stack.append(name)
+        self.type_stack.append(type)
+
+
+    def __str__(self):
+        fields = ".".join(reversed(self.name_stack))
+        if fields:
+            fields += ': '
+        return fields + super().__str__()
+
+
 class TypeError(StellaException, TypeError):
     def __init__(self, msg, debuginfo=None):
         super().__init__(msg)

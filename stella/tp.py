@@ -314,8 +314,9 @@ class StructType(Type):
             attrib = getattr(obj, name)
             try:
                 a_type = get (attrib)
-            except TypeError:
-                raise exc.TypeError("{}({}).{}({}) is not supported".format(obj, type(obj), name, type(attrib)))
+            except exc.UnsupportedTypeError as e:
+                e.prepend(name, type(attrib))
+                raise e
             if a_type.on_heap:
                 #a_type = Reference(type_)
                 a_type.makePointer(True)
@@ -595,16 +596,16 @@ class ListType(ArrayType):
     def fromObj(klass, obj):
         # type checking: only continue if the list can be represented.
         if len(obj) == 0:
-            raise exc.TypeError("Empty lists are not supported, because they are not typable.")
+            raise exc.UnsupportedTypeError("Empty lists are not supported, because they are not typable.")
         type_ = type(obj[0])
         for o in obj[1:]:
             if type_ != type(o):
-                raise exc.TypeError("List contains elements of type {} and type {}, but lists must not contain objects of more than one type.".format(type_, type(o)))
+                raise exc.UnsupportedTypeError("List contains elements of type {} and type {}, but lists must not contain objects of more than one type.".format(type_, type(o)))
 
         base_type = get(obj[0])
         if not isinstance(base_type, StructType):
             msg = "Python lists must contain objects, not {}. Use numpy arrays for simple types.".format(base_type)
-            raise exc.TypeError(msg)
+            raise exc.UnsupportedTypeError(msg)
         base_type.resetReference()
         # assert !klass.isValidType(dtype)
 
@@ -722,7 +723,11 @@ class FunctionType(Type):
         # -> self is a struct, which has as one of its members a bound function
         if self._bound is None:
             return None
-        return get(self._bound)
+        try:
+            return get(self._bound)
+        except exc.UnsupportedTypeError as e:
+            e.prepend(str(self._bound), type(self._bound))
+            raise e
 
     @bound.setter
     def bound(self, obj):
