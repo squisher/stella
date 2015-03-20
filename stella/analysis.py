@@ -1,5 +1,6 @@
 import dis
 import logging
+import inspect
 
 from . import exc
 from . import bytecode
@@ -394,24 +395,36 @@ def main(f, args, kwargs):
     # destructors from running.
     cleanup()
 
-    module = ir.Module()
-    f_type = tp.get(f)
-    funcref = module.getFunctionRef(f_type)
+    try:
+        module = ir.Module()
+        f_type = tp.get(f)
+        funcref = module.getFunctionRef(f_type)
 
-    if f_type.bound:
-        f_self = tp.wrapValue(f.__self__)
-        funcref.f_self = f_self
+        if f_type.bound:
+            f_self = tp.wrapValue(f.__self__)
+            funcref.f_self = f_self
 
-    # TODO: why do I use wrapValue for args but Const for kwargs...?
-    const_kw = {}
-    for k, v in kwargs.items():
-        const_kw[k] = tp.Const(v)
-    funcref.makeEntry(list(map(tp.wrapValue, args)), const_kw)
+        # TODO: why do I use wrapValue for args but Const for kwargs...?
+        const_kw = {}
+        for k, v in kwargs.items():
+            const_kw[k] = tp.Const(v)
+        funcref.makeEntry(list(map(tp.wrapValue, args)), const_kw)
 
-    f = Function.get(funcref, module)
+        f = Function.get(funcref, module)
 
-    wrapped_args = [tp.wrapValue(arg) for arg in args]
-    wrapped_kwargs = {k: tp.wrapValue(v) for k, v in kwargs.items()}
+        wrapped_args = [tp.wrapValue(arg) for arg in args]
+        wrapped_kwargs = {k: tp.wrapValue(v) for k, v in kwargs.items()}
+
+    except exc.StellaException as e:
+        # An error occurred while preparing the entry call, so at this point
+        # it's best to attribute it to the caller
+        (frame, filename, line_number,
+         function_name, lines, index) = inspect.getouterframes(inspect.currentframe())[2]
+                #print(frame, filename, line_number, function_name, lines, index)
+        debuginfo = DebugInfo(filename, line_number)
+        e.addDebug(debuginfo)
+        raise e
+
     f.analyzeCall(wrapped_args, wrapped_kwargs)
 
     f.log.debug("called functions: " + str(module.todoCount()))

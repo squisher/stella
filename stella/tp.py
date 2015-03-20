@@ -596,15 +596,17 @@ class ListType(ArrayType):
     def fromObj(klass, obj):
         # type checking: only continue if the list can be represented.
         if len(obj) == 0:
-            raise exc.UnsupportedTypeError("Empty lists are not supported, because they are not typable.")
+            raise exc.UnsupportedTypeError("Empty lists are not supported, because they are not typable")
         type_ = type(obj[0])
         for o in obj[1:]:
             if type_ != type(o):
-                raise exc.UnsupportedTypeError("List contains elements of type {} and type {}, but lists must not contain objects of more than one type.".format(type_, type(o)))
+                msg = "List contains elements of type {} and type {}, but lists must not contain objects of more than one type".format(
+                    type_, type(o))
+                raise exc.UnsupportedTypeError(msg)
 
         base_type = get(obj[0])
         if not isinstance(base_type, StructType):
-            msg = "Python lists must contain objects, not {}. Use numpy arrays for simple types.".format(base_type)
+            msg = "Python lists must contain objects, not {}. Use numpy arrays for simple types".format(base_type)
             raise exc.UnsupportedTypeError(msg)
         base_type.resetReference()
         # assert !klass.isValidType(dtype)
