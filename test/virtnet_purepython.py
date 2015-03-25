@@ -4,35 +4,11 @@ import mtpy # cython wrapper around mtwist
 from math import log
 import sys
 from copy import deepcopy
-import numpy
+from numpy import zeros, copy
 try:
     from .virtnet_utils import Settings
 except ValueError:
     from test.virtnet_utils import Settings
-
-#### Numpy emulators #####
-
-int8 = int
-
-def zeros(shape=1, dtype=None):
-    """Emulate certain features of `numpy.zeros`
-
-    Note that `dtype` is ignored.
-    """
-    try:
-        dim = len(shape)
-        if dim == 1:
-            shape=shape[0]
-            raise TypeError()
-    except TypeError:
-        return [0 for i in range(shape)]
-
-    # here dim > 1, build up the inner most dimension
-    inner = [0 for i in range(shape[dim-1])]
-    for i in range(dim-2,-1,-1):
-        new_inner = [list(inner) for j in range(shape[i])]
-        inner = new_inner
-    return inner
 
 
 #### HELPERS ####
@@ -73,7 +49,7 @@ class Point(object):
         if pos == None:
             self.pos = zeros(shape=Point.dim)
         elif type(pos) == Point:
-            self.pos = list(pos.pos)
+            self.pos = copy(pos.pos)
         else:
             self.pos = pos
 
@@ -220,7 +196,7 @@ class Surface(object):
         self.dim = params['dim']
         self.r = params['r']
         self.koff = params['koff']
-        self.s = zeros(shape=[params['center']*2 for d in range(self.dim)], dtype=int8)
+        self.s = zeros(shape=[params['center']*2 for d in range(self.dim)], dtype=int)
 
     def __getitem__ (self, idx):
         a = self.s
@@ -279,7 +255,7 @@ class Simulation(object):
                 yield init_params
         self.spiders = Spider.make(params['nspiders'], spiderInit())
         max_observations = 15  # pre-allocate space for observations, this is arbitrary and only limited by memory
-        self.observations = numpy.zeros(max_observations, dtype=float)
+        self.observations = zeros(max_observations, dtype=float)
         self.obs_i = 0
         self.radius = params['radius']
 
