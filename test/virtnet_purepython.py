@@ -258,6 +258,8 @@ class Simulation(object):
         self.observations = zeros(max_observations, dtype=float)
         self.obs_i = 0
         self.radius = params['radius']
+        self.t = 0
+        self.nextObsDist = 1
 
     def end(self):
         return self.nextObsDist > self.radius or self.obs_i >= len(self.observations)
