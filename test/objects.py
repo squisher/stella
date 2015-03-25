@@ -103,6 +103,23 @@ class G(B):
         super().__init__(x, y)
 
 
+class H(object):
+    def __init__(self):
+        self.es = [E(), E(), E()]
+        self.i = 0
+
+    def next(self):
+        e = self.es[self.i]
+        self.i = (self.i + 1) % len(self.es)
+        return e
+
+    def __eq__(self, other):
+        return self.es == other.es and self.i == other.i
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+
 G.origin = G(0, 0)
 
 
@@ -216,6 +233,15 @@ def selfRef(g):
 def nextB(b):
     return b.x == b.next.x and b.y == b.next.y
 
+
+def getObjThenUse(h):
+    e = h.next()
+    return e.x
+
+
+def getObjThenCall(h):
+    e = h.next()
+    return e.inc()
 
 args1 = [(1, 1), (24, 42), (0.0, 1.0), (1.0, 1.0), (3.0, 0.0)]
 
@@ -509,6 +535,19 @@ def test_no_mutation9(f, args):
 def test_no_mutation10(f, args):
     b1 = G(*args)
     b2 = G(*args)
+
+    assert b1 == b2
+    py = f(b1)
+    st = stella.wrap(f)(b2)
+
+    assert b1 == b2 and py == st
+
+
+@mark.parametrize('f', [getObjThenUse, getObjThenCall])
+@unimplemented
+def test_no_mutation11(f):
+    b1 = H()
+    b2 = H()
 
     assert b1 == b2
     py = f(b1)

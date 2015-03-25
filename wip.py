@@ -28,6 +28,7 @@ sim = test.virtnet_purepython.Simulation(settings)
 l1 = [test.objects.E(2), test.objects.E(4)]
 f = test.objects.F(l1)
 g = test.objects.G(2, 9)
+h = test.objects.H()
 
 
 def current_work(run=False, **kwargs):
@@ -35,4 +36,4 @@ def current_work(run=False, **kwargs):
         ir = not run
     else:
         ir = run
-    print(stella.wrap(sim.run, ir=ir, **kwargs)())
+    print(stella.wrap(test.objects.getObjThenCall, ir=ir, **kwargs)(h))
