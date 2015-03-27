@@ -15,6 +15,7 @@ class Type(metaclass=ABCMeta):
     _llvm = None
     ptr = 0
     on_heap = False
+    complex_on_stack = False
     req_transfer = False
     ctype = False  # init to false because None is a valid ctype
 

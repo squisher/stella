@@ -147,7 +147,7 @@ class STORE_FAST(Bytecode):
         self.cast(cge)
         arg = self.args[0]
         if self.new_allocate:
-            if arg.type.on_heap:
+            if arg.type.complex_on_stack:
                 type_ = tp.Pointer(arg.type)
             else:
                 type_ = arg.type

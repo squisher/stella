@@ -269,6 +269,11 @@ def numpy_array(a):
     a[3] = -1
 
 
+def numpy_assign(a):
+    b = a
+    b[1] = 4
+
+
 def numpy_len_indirect(a):
     l = len(a)
     for i in range(l):
@@ -449,7 +454,7 @@ def test11(args):
 
 @mark.parametrize('arg', single_args([np.zeros(5, dtype=int)]))
 @mark.parametrize('f', [numpy_array, numpy_len_indirect, numpy_receiving, numpy_passing,
-                        numpy_len_direct])
+                        numpy_len_direct]) # numpy_assign
 def test12(f, arg):
     make_eq_test(f, arg)
 
