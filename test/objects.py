@@ -209,6 +209,12 @@ def objList4(l):
     for i in range(len(l)):
         l[i].x = i
 
+def first(l):
+    return l[0]
+
+def objList5(l):
+    o = first(l)
+    return o.x
 
 def objContainingList1(f):
     return f.l[0].x + f.l[1].x
@@ -463,7 +469,7 @@ def test_mutation6(f):
     assert e1 == e2 and e3 == e4 and py == st
 
 
-@mark.parametrize('f', [objList1, objList2, objList3])
+@mark.parametrize('f', [objList1, objList2, objList3]) #, objList5
 def test_no_mutation7(f):
     l1 = [E(4), E(1)]
     l2 = [E(4), E(1)]

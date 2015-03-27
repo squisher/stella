@@ -747,29 +747,27 @@ class LOAD_ATTR(Bytecode):
         self.grab_stack()
 
         arg1 = self.args[1]
-        if self.result is None:
-            if isinstance(arg1, types.ModuleType):
-                self.result = func.module.loadExt(arg1, self.args[0])
-                self.discard = True
-            elif isinstance(arg1.type, tp.StructType):
-                try:
-                    type_ = self.args[1].type.getMemberType(self.args[0])
-                    if isinstance(type_, tp.FunctionType):
-                        # TODO: WIP: This does not exist yet.
+        if isinstance(arg1, types.ModuleType):
+            self.result = func.module.loadExt(arg1, self.args[0])
+            self.discard = True
+        elif isinstance(arg1.type, tp.StructType):
+            try:
+                type_ = self.args[1].type.getMemberType(self.args[0])
+                if isinstance(type_, tp.FunctionType):
+                    if self.result is None:
                         self.result = func.module.getFunctionRef(type_)
                     else:
+                        assert isinstance(self.result, ir.FunctionRef)
+                else:
+                    if self.result is None:
                         self.result = Register(func.impl)
-                        self.result.unify_type(type_, self.debuginfo)
-                except KeyError:
-                    raise exc.AttributeError("Unknown field {} of type {}".format(self.args[0],
-                                                                                arg1.type),
-                                            self.debuginfo)
-            else:
-                self.result = Register(func.impl)
-#        else:
-#            raise exc.UnimplementedError(
-#                "Cannot load attribute {0} of an object with type {1}".format(
-#                    self.args[0], type(arg1)))
+                    self.result.unify_type(type_, self.debuginfo)
+            except KeyError:
+                raise exc.AttributeError("Unknown field {} of type {}".format(self.args[0],
+                                                                              arg1.type),
+                                         self.debuginfo)
+        else:
+            self.result = Register(func.impl)
 
 
 class STORE_ATTR(Bytecode):

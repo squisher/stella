@@ -36,4 +36,5 @@ def current_work(run=False, **kwargs):
         ir = not run
     else:
         ir = run
-    print(stella.wrap(test.objects.getObjThenCall, ir=ir, **kwargs)(h))
+    #print(stella.wrap(test.objects.getObjThenUse, ir=ir, **kwargs)(h))
+    print(stella.wrap(test.objects.objList5, ir=ir, **kwargs)(l1))
