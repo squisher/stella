@@ -37,4 +37,5 @@ def current_work(run=False, **kwargs):
     else:
         ir = run
     #print(stella.wrap(test.objects.getObjThenUse, ir=ir, **kwargs)(h))
-    print(stella.wrap(test.objects.objList5, ir=ir, **kwargs)(l1))
+    #print(stella.wrap(test.langconstr.array_allocation, ir=ir, **kwargs)())
+    print(stella.wrap(test.langconstr.numpy_passing, ir=ir, **kwargs)(a))

@@ -115,7 +115,6 @@ class LOAD_FAST(Bytecode):
 
 
 class STORE_FAST(Bytecode):
-
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
         self.new_allocate = False
@@ -137,19 +136,23 @@ class STORE_FAST(Bytecode):
             self.result = self.popFirstArg()
 
         arg = self.args[0]
-        widened, needs_cast = self.result.unify_type(arg.type, self.debuginfo, is_reference=True)
+        widened, needs_cast = self.result.unify_type(arg.type, self.debuginfo)
         if widened:
             # TODO: can I avoid a retype in some cases?
             func.retype()
         if needs_cast:
-            self.args[0] = Cast(arg, self.result.type.dereference())
+            self.args[0] = Cast(arg, self.result.type)
 
     def translate(self, cge):
         self.cast(cge)
         arg = self.args[0]
         if self.new_allocate:
-            type_ = arg.type.llvmType(cge.module)
-            self.result.llvm = cge.builder.alloca(type_, name=self.result.name)
+            if arg.type.on_heap:
+                type_ = tp.Pointer(arg.type)
+            else:
+                type_ = arg.type
+            llvm_type = type_.llvmType(cge.module)
+            self.result.llvm = cge.builder.alloca(llvm_type, name=self.result.name)
         cge.builder.store(arg.translate(cge), self.result.translate(cge))
 
 
