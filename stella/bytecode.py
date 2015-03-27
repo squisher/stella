@@ -135,8 +135,6 @@ class STORE_FAST(Bytecode):
         # func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
         if self.result is None:
             self.result = self.popFirstArg()
-            if self.result.type.isUntyped():
-                self.result.type = tp.Reference(self.result.type)
 
         arg = self.args[0]
         widened, needs_cast = self.result.unify_type(arg.type, self.debuginfo, is_reference=True)
@@ -150,10 +148,7 @@ class STORE_FAST(Bytecode):
         self.cast(cge)
         arg = self.args[0]
         if self.new_allocate:
-            if arg.type.on_heap:
-                type_ = tp.Reference(arg.type).llvmType(cge.module)
-            else:
-                type_ = arg.type.llvmType(cge.module)
+            type_ = arg.type.llvmType(cge.module)
             self.result.llvm = cge.builder.alloca(type_, name=self.result.name)
         cge.builder.store(arg.translate(cge), self.result.translate(cge))
 

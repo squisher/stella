@@ -469,7 +469,7 @@ def test_mutation6(f):
     assert e1 == e2 and e3 == e4 and py == st
 
 
-@mark.parametrize('f', [objList1, objList2, objList3]) #, objList5
+@mark.parametrize('f', [objList1, objList2, objList3, objList5])
 def test_no_mutation7(f):
     l1 = [E(4), E(1)]
     l2 = [E(4), E(1)]
