@@ -2,4 +2,3 @@ pytest
 faulthandler
 numpy
 pystache
-wrapt

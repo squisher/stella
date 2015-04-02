@@ -5,7 +5,6 @@ import logging
 import types
 from abc import ABCMeta, abstractmethod
 import inspect
-import wrapt
 
 from . import exc
 
@@ -103,6 +102,7 @@ class Reference(Type):
     @property
     def on_heap(self):
         return self.type_.on_heap
+
 
 class Subscriptable(metaclass=ABCMeta):
     """Mixin"""
@@ -282,24 +282,6 @@ class CType(object):
     @classmethod
     def destruct(klass):
         klass._registry.clear()
-
-
-class Pointer(wrapt.ObjectProxy):
-    def __init__(self, wrapped):
-        super().__init__(wrapped)
-        self._self_ptr = wrapped.ptr + 1
-
-    def llvmType(self, module):
-        type_ = self._llvmType(module)
-        i = self._self_ptr
-        while i > 0:
-            type_ = type_.as_pointer()
-            i -= 1
-        return type_
-
-    @property
-    def ptr(self):
-        return self._self_ptr
 
 
 class StructType(Type):
@@ -641,7 +623,7 @@ class ListType(ArrayType):
         return type_
 
     def getElementType(self, idx):
-        return Pointer(super().getElementType(idx))
+        return Reference(super().getElementType(idx))
 
     @classmethod
     def destruct(klass):

@@ -731,12 +731,12 @@ class LOAD_ATTR(Bytecode):
         arg1 = self.args[1]
         if isinstance(arg1, types.ModuleType):
             return
-        elif isinstance(arg1.type, tp.StructType):
-            tp_attr = arg1.type.getMemberType(self.args[0])
+        elif isinstance(arg1.type.dereference(), tp.StructType):
+            tp_attr = arg1.type.dereference().getMemberType(self.args[0])
             if isinstance(tp_attr, tp.FunctionType):
                 self.result.f_self = arg1
                 return
-            idx = arg1.type.getMemberIdx(self.args[0])
+            idx = arg1.type.dereference().getMemberIdx(self.args[0])
             idx_llvm = tp.getIndex(idx)
             struct_llvm = arg1.translate(cge)
             p = cge.builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
@@ -751,9 +751,9 @@ class LOAD_ATTR(Bytecode):
         if isinstance(arg1, types.ModuleType):
             self.result = func.module.loadExt(arg1, self.args[0])
             self.discard = True
-        elif isinstance(arg1.type, tp.StructType):
+        elif isinstance(arg1.type.dereference(), tp.StructType):
             try:
-                type_ = self.args[1].type.getMemberType(self.args[0])
+                type_ = arg1.type.dereference().getMemberType(self.args[0])
                 if isinstance(type_, tp.FunctionType):
                     if self.result is None:
                         self.result = func.module.getFunctionRef(type_)
@@ -772,7 +772,6 @@ class LOAD_ATTR(Bytecode):
 
 
 class STORE_ATTR(Bytecode):
-
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
         # TODO: Does the result have to be a register? Don't I only need it for
@@ -788,8 +787,9 @@ class STORE_ATTR(Bytecode):
 
     def type_eval(self, func):
         self.grab_stack()
-        if isinstance(self.args[2].type, tp.StructType):
-            member_type = self.args[2].type.getMemberType(self.args[0])
+        type_ = self.args[2].type.dereference()
+        if isinstance(type_, tp.StructType):
+            member_type = type_.getMemberType(self.args[0])
             arg_type = self.args[1].type
             if member_type != arg_type:
                 if member_type == tp.Float and arg_type == tp.Int:
@@ -810,9 +810,9 @@ class STORE_ATTR(Bytecode):
 
     def translate(self, cge):
         if (isinstance(self.args[2], tp.Typable)
-              and isinstance(self.args[2].type, tp.StructType)):
+              and isinstance(self.args[2].type.dereference(), tp.StructType)):
             struct_llvm = self.args[2].translate(cge)
-            idx = self.args[2].type.getMemberIdx(self.args[0])
+            idx = self.args[2].type.dereference().getMemberIdx(self.args[0])
             idx_llvm = tp.getIndex(idx)
             val_llvm = self.args[1].translate(cge)
             p = cge.builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
