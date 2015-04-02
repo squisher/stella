@@ -40,6 +40,7 @@ class Zeros(Intrinsic):
             raise exc.TypeError("Invalid array element type {0}".format(type_))
         atype = tp.ArrayType(type_, shape)
         atype.complex_on_stack = True
+        atype.on_heap = False
         return atype
 
     def call(self, cge, args, kw_args):

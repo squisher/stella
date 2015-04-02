@@ -100,6 +100,10 @@ class Reference(Type):
     def __str__(self):
         return '*{}'.format(self.type_)
 
+    @property
+    def on_heap(self):
+        return self.type_.on_heap
+
 class Subscriptable(metaclass=ABCMeta):
     """Mixin"""
     @abstractmethod
@@ -943,29 +947,22 @@ class Typable(object):
     type = NoType
     llvm = None
 
-    def unify_type(self, tp2, debuginfo, is_reference=False):
+    def unify_type(self, tp2, debuginfo):
         """Returns: widened:bool, needs_cast:bool
         widened: this type changed
         needs_cast: tp2 needs to be cast to this type
         """
-        if is_reference:
-            tp1 = self.type.dereference()
-        else:
-            tp1 = self.type
+        tp1 = self.type
+        if tp1 != NoType and tp2 != NoType and tp1.ptr != tp2.ptr:
+            raise exc.TypeError("Inconsistent pointers: {} does not match {}".format(tp1, tp2))
         if tp1 == tp2:
             pass
         elif tp1 == NoType:
-            if is_reference:
-                self.type = Reference(tp2)
-            else:
-                self.type = tp2
+            self.type = tp2
         elif tp2 == NoType:
             pass
         elif tp1 == Int and tp2 == Float:
-            if is_reference:
-                self.type = Reference(Float)
-            else:
-                self.type = Float
+            self.type = Float
             return True, False
         elif tp1 == Float and tp2 == Int:
             # Note that the type does not have to change here because Float is

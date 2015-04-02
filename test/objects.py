@@ -104,8 +104,8 @@ class G(B):
 
 
 class H(object):
-    def __init__(self):
-        self.es = [E(), E(), E()]
+    def __init__(self, a, b, c):
+        self.es = [E(a), E(b), E(c)]
         self.i = 0
 
     def next(self):
@@ -119,6 +119,8 @@ class H(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def __repr__(self):
+        return "H{{es: {}, i:{}}}".format(self.es, self.i)
 
 G.origin = G(0, 0)
 
@@ -209,12 +211,15 @@ def objList4(l):
     for i in range(len(l)):
         l[i].x = i
 
+
 def first(l):
     return l[0]
+
 
 def objList5(l):
     o = first(l)
     return o.x
+
 
 def objContainingList1(f):
     return f.l[0].x + f.l[1].x
@@ -549,11 +554,23 @@ def test_no_mutation10(f, args):
     assert b1 == b2 and py == st
 
 
-@mark.parametrize('f', [getObjThenUse, getObjThenCall])
-@unimplemented
+@mark.parametrize('f', [getObjThenUse])
 def test_no_mutation11(f):
-    b1 = H()
-    b2 = H()
+    b1 = H(1, 2, 3)
+    b2 = H(1, 2, 3)
+
+    assert b1 == b2
+    py = f(b1)
+    st = stella.wrap(f)(b2)
+
+    assert b1 == b2 and py == st
+
+
+@mark.parametrize('f', [getObjThenCall])
+@unimplemented
+def test_no_mutation11u(f):
+    b1 = H(1, 2, 3)
+    b2 = H(1, 2, 3)
 
     assert b1 == b2
     py = f(b1)
