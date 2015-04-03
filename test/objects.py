@@ -254,6 +254,7 @@ def getObjThenCall(h):
     e = h.next()
     return e.inc()
 
+
 args1 = [(1, 1), (24, 42), (0.0, 1.0), (1.0, 1.0), (3.0, 0.0)]
 
 
