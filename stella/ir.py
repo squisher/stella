@@ -19,7 +19,7 @@ from . import intrinsics
 @utils.linkedlist
 class IR(metaclass=ABCMeta):
     args = None
-    stack_args = None
+    stack_bc = None
     result = None
     debuginfo = None
     llvm = None
@@ -60,8 +60,8 @@ class IR(metaclass=ABCMeta):
         Call first during type evaluation. Gets the results from the stack and
         adds them to args.
         """
-        if self.stack_args:
-            for arg in self.stack_args:
+        if self.stack_bc:
+            for arg in self.stack_bc:
                 # TODO should arg.result always be a list?
                 if isinstance(arg.result, list):
                     result = arg.result.pop()
@@ -71,7 +71,7 @@ class IR(metaclass=ABCMeta):
                     result = arg.result
                 result.bc = arg
                 self.args.append(result)
-            self.stack_args = None
+            self.stack_bc = None
 
     @abstractmethod
     def stack_eval(self, func, stack):
@@ -120,7 +120,7 @@ class PhiNode(IR):
 
         self.blocks = []
         self.stacked = False
-        self.stack_args = []
+        self.stack_bc = []
 
     def stack_eval(self, func, stack):
         tos = stack.peek()
@@ -135,8 +135,8 @@ class PhiNode(IR):
         if tos:
             if not self.result:
                 self.result = Register(func)
-            self.stack_args.append(stack.pop())
-            self.blocks.append(self.stack_args[-1])
+            self.stack_bc.append(stack.pop())
+            self.blocks.append(self.stack_bc[-1])
             stack.push(self)
 
         self.stacked = True

@@ -24,7 +24,7 @@ def pop_stack(n):
                 args.append(stack.pop())
             args.reverse()
 
-            self.stack_args = args
+            self.stack_bc = args
             return f(self, func, stack)
         return extract_from_stack
     return extract_n
@@ -543,7 +543,7 @@ class Jump_if_X_or_pop(Jump):
         stack2 = stack.clone()
         r = []
         # if X, push back onto stack and jump:
-        stack.push(self.stack_args[0])
+        stack.push(self.stack_bc[0])
         r.append((self.target_bc, stack))
         # else continue with the next instruction (and keep the popped value)
         r.append((self.next, stack2))
@@ -849,11 +849,11 @@ class CALL_FUNCTION(Bytecode):
         self.args = args
 
     def stack_eval(self, func, stack):
-        self.stack_args = []
+        self.stack_bc = []
         for i in range(self.num_pos_args + 2*self.num_kw_args + 1):
             arg = stack.pop()
-            self.stack_args.append(arg)
-        self.stack_args.reverse()
+            self.stack_bc.append(arg)
+        self.stack_bc.reverse()
 
         stack.push(self)
 
@@ -1276,8 +1276,8 @@ class DUP_TOP(Bytecode):
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
-        stack.push(self.stack_args[0])
-        stack.push(self.stack_args[0])
+        stack.push(self.stack_bc[0])
+        stack.push(self.stack_bc[0])
 
     def type_eval(self, func):
         self.grab_stack()
@@ -1294,10 +1294,10 @@ class DUP_TOP_TWO(Bytecode):
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        stack.push(self.stack_args[0])
-        stack.push(self.stack_args[1])
-        stack.push(self.stack_args[0])
-        stack.push(self.stack_args[1])
+        stack.push(self.stack_bc[0])
+        stack.push(self.stack_bc[1])
+        stack.push(self.stack_bc[0])
+        stack.push(self.stack_bc[1])
 
     def type_eval(self, func):
         self.grab_stack()
@@ -1314,8 +1314,8 @@ class ROT_TWO(Bytecode, Poison):
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
-        stack.push(self.stack_args[1])
-        stack.push(self.stack_args[0])
+        stack.push(self.stack_bc[1])
+        stack.push(self.stack_bc[0])
 
     def type_eval(self, func):
         self.grab_stack()
@@ -1332,9 +1332,9 @@ class ROT_THREE(Bytecode, Poison):
 
     @pop_stack(3)
     def stack_eval(self, func, stack):
-        stack.push(self.stack_args[2])
-        stack.push(self.stack_args[0])
-        stack.push(self.stack_args[1])
+        stack.push(self.stack_bc[2])
+        stack.push(self.stack_bc[0])
+        stack.push(self.stack_bc[1])
 
     def type_eval(self, func):
         self.grab_stack()
@@ -1419,9 +1419,9 @@ class BUILD_TUPLE(Bytecode):
         self.n = arg
 
     def stack_eval(self, func, stack):
-        self.stack_args = []
+        self.stack_bc = []
         for i in range(self.n):
-            self.stack_args.append(stack.pop())
+            self.stack_bc.append(stack.pop())
         stack.push(self)
 
     def type_eval(self, func):
