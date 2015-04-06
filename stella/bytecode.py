@@ -74,41 +74,49 @@ class ResultOnlyBytecode(Poison, ir.IR):
 
 
 class LOAD_FAST(Bytecode):
-
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
+        self.source = None
 
     def addLocalName(self, func, name):
         # TODO: crude?
         try:
-            self.args.append(func.getRegister(name))
+            self.source = func.getRegister(name)
         except exc.UndefinedError:
-            self.args.append(func.getStackLoc(name))
+            self.source = func.getStackLoc(name)
+
+    def addArg(self, arg):
+        assert self.source is None
+        self.source = arg
+
+    @property
+    def _str_args(self):
+        return str(self.source)
 
     def stack_eval(self, func, stack):
         stack.push(self)
 
     def type_eval(self, func):
         self.grab_stack()
-        arg_type = self.args[0].type
+        arg_type = self.source.type
         if self.result is None:
-            type_ = type(self.args[0])
+            type_ = type(self.source)
             if type_ == StackLoc:
                 self.result = Register(func.impl)
             elif type_ == Register:
-                self.result = self.args[0]
+                self.result = self.source
             else:
                 raise exc.StellaException(
                     "Invalid LOAD_FAST argument type `{0}'".format(type_))
-        if type(self.args[0]) == StackLoc:
+        if type(self.source) == StackLoc:
             if arg_type.isReference():
                     arg_type = arg_type.dereference()
             self.result.unify_type(arg_type, self.debuginfo)
 
     def translate(self, cge):
-        type_ = type(self.args[0])
+        type_ = type(self.source)
         if type_ == StackLoc:
-            self.result.llvm = cge.builder.load(self.args[0].translate(cge))
+            self.result.llvm = cge.builder.load(self.source.translate(cge))
         elif type_ == Register:
             # nothing to load, it's a pseudo instruction in this case
             pass
@@ -118,12 +126,15 @@ class STORE_FAST(Bytecode):
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
         self.new_allocate = False
+        self.needs_cast = False
 
     def addLocalName(self, func, name):
         # Python does not allocate new names, it just refers to them
-        (var, self.new_allocate) = func.getOrNewStackLoc(name)
+        (self.result, self.new_allocate) = func.getOrNewStackLoc(name)
 
-        self.args.append(var)
+    def addArg(self, arg):
+        assert self.result is None
+        self.result = arg
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
@@ -132,8 +143,6 @@ class STORE_FAST(Bytecode):
     def type_eval(self, func):
         self.grab_stack()
         # func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
-        if self.result is None:
-            self.result = self.popFirstArg()
 
         arg = self.args[0]
         if arg.type.complex_on_stack or arg.type.on_heap:
@@ -144,7 +153,8 @@ class STORE_FAST(Bytecode):
         if widened:
             # TODO: can I avoid a retype in some cases?
             func.retype()
-        if needs_cast:
+        if needs_cast or self.needs_cast:
+            self.needs_cast = True
             self.args[0] = Cast(arg, self.result.type)
 
     def translate(self, cge):
@@ -160,18 +170,15 @@ class STORE_FAST(Bytecode):
 
 
 class STORE_GLOBAL(Bytecode):
-
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
     def addName(self, func, name):
         # Python does not allocate new names, it just refers to them
         try:
-            var = func.loadGlobal(name)
+            self.result = func.loadGlobal(name)
         except exc.UndefinedError:
-            var = func.newGlobal(name)
-
-        self.args.append(var)
+            self.result = func.newGlobal(name)
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
@@ -180,8 +187,6 @@ class STORE_GLOBAL(Bytecode):
     def type_eval(self, func):
         self.grab_stack()
         # func.retype(self.result.unify_type(self.args[1].type, self.debuginfo))
-        if self.result is None:
-            self.result = self.popFirstArg()
         arg = self.args[0]
 
         if self.result.initial_value is None:
@@ -208,23 +213,26 @@ class LOAD_CONST(Bytecode):
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
+    def addArg(self, arg):
+        assert self.const_arg is None
+        self.const_arg = arg
+
     def stack_eval(self, func, stack):
+        self.result = self.const_arg
         stack.push(self)
 
     def type_eval(self, func):
-        self.grab_stack()
-        if self.result is None:
-            self.result = self.popFirstArg()
+        pass
 
     def translate(self, cge):
         pass
 
 
 class BinaryOp(Bytecode):
-
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
         self.result = Register(func)
+        self.needs_cast = [False, False]
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
@@ -234,6 +242,15 @@ class BinaryOp(Bytecode):
         self.grab_stack()
         for i in range(len(self.args)):
             arg = self.args[i]
+            if arg.type == self.result.type:
+                # a cast may have been necessary in the previous iteration,
+                # but now the argument may have changed type, so check before
+                # continuing
+                self.needs_cast[i] = False
+            if self.needs_cast[i]:
+                # install the cast before unify_type() because otherwise we're
+                # in an infinite loop retyping the function
+                self.args[i] = Cast(arg, self.result.type)
             widened, needs_cast = self.result.unify_type(arg.type, self.debuginfo)
             if widened:
                 # TODO: can I avoid a retype in some cases?
@@ -241,6 +258,8 @@ class BinaryOp(Bytecode):
                 # directly if need be.
                 func.retype()
             if needs_cast:
+                self.needs_cast[i] = True
+                # install the cast here because we may not get re-typed
                 self.args[i] = Cast(arg, self.result.type)
 
     def builderFuncName(self):
@@ -340,23 +359,14 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
     def type_eval(self, func):
         self.grab_stack()
         for arg in self.args:
-            # TODO: this is a HACK
-            if isinstance(arg, Cast):
-                type_ = arg.obj.type
-            else:
-                type_ = arg.type
-            self.result.unify_type(type_, self.debuginfo)
-
-        # convert all arguments to float, since fp division is required to
-        # apply floor
-        for i in range(len(self.args)):
-            arg = self.args[i]
-            do_cast = arg.type != tp.Float
-            if do_cast:
-                self.args[i] = Cast(arg, tp.Float)
-                func.retype()
+            widened, _ = self.result.unify_type(arg.type, self.debuginfo)
+            func.retype(widened)
 
     def translate(self, cge):
+        is_int = all([arg.type == tp.Int for arg in self.args])
+        for i in range(len(self.args)):
+            if self.args[i].type != tp.Float:
+                self.args[i] = Cast(self.args[i], tp.Float)
         self.cast(cge)
 
         tmp = cge.builder.fdiv(
@@ -366,8 +376,7 @@ class BINARY_FLOOR_DIVIDE(BinaryOp):
                                                        [tp.Float.llvmType(cge.module)])
         self.result.llvm = cge.builder.call(llvm_floor, [tmp])
 
-        # TODO this is peaking too deeply into the cast
-        if all([isinstance(a, Cast) and a.obj.type == tp.Int for a in self.args]):
+        if is_int:
             # TODO this may be superflous if both args got converted to float
             # in the translation stage -> move toFloat partially to the
             # analysis stage.
@@ -469,8 +478,7 @@ class RETURN_VALUE(utils.BlockTerminal, Bytecode):
 
     def type_eval(self, func):
         self.grab_stack()
-        if self.result is None:
-            self.result = self.popFirstArg()
+        self.result = self.args[0]
         for arg in self.args:
             func.retype(self.result.unify_type(arg.type, self.debuginfo))
 
@@ -721,39 +729,39 @@ class LOAD_ATTR(Bytecode):
         super().__init__(func, debuginfo)
 
     def addName(self, func, name):
-        self.args.append(name)
+        self.name = name
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
         stack.push(self)
 
     def translate(self, cge):
-        arg1 = self.args[1]
-        if isinstance(arg1, types.ModuleType):
+        arg = self.args[0]
+        if isinstance(arg, types.ModuleType):
             return
-        elif isinstance(arg1.type.dereference(), tp.StructType):
-            tp_attr = arg1.type.dereference().getMemberType(self.args[0])
+        elif isinstance(arg.type.dereference(), tp.StructType):
+            tp_attr = arg.type.dereference().getMemberType(self.name)
             if isinstance(tp_attr, tp.FunctionType):
-                self.result.f_self = arg1
+                self.result.f_self = arg
                 return
-            idx = arg1.type.dereference().getMemberIdx(self.args[0])
+            idx = arg.type.dereference().getMemberIdx(self.name)
             idx_llvm = tp.getIndex(idx)
-            struct_llvm = arg1.translate(cge)
+            struct_llvm = arg.translate(cge)
             p = cge.builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
             self.result.llvm = cge.builder.load(p)
         else:
-            raise exc.UnimplementedError(type(arg1))
+            raise exc.UnimplementedError(type(arg))
 
     def type_eval(self, func):
         self.grab_stack()
 
-        arg1 = self.args[1]
-        if isinstance(arg1, types.ModuleType):
-            self.result = func.module.loadExt(arg1, self.args[0])
+        arg = self.args[0]
+        if isinstance(arg, types.ModuleType):
+            self.result = func.module.loadExt(arg, self.name)
             self.discard = True
-        elif isinstance(arg1.type.dereference(), tp.StructType):
+        elif isinstance(arg.type.dereference(), tp.StructType):
             try:
-                type_ = arg1.type.dereference().getMemberType(self.args[0])
+                type_ = arg.type.dereference().getMemberType(self.name)
                 if isinstance(type_, tp.FunctionType):
                     if self.result is None:
                         self.result = func.module.getFunctionRef(type_)
@@ -764,8 +772,8 @@ class LOAD_ATTR(Bytecode):
                         self.result = Register(func.impl)
                     self.result.unify_type(type_, self.debuginfo)
             except KeyError:
-                raise exc.AttributeError("Unknown field {} of type {}".format(self.args[0],
-                                                                              arg1.type),
+                raise exc.AttributeError("Unknown field {} of type {}".format(self.name,
+                                                                              arg.type),
                                          self.debuginfo)
         else:
             self.result = Register(func.impl)
@@ -779,7 +787,7 @@ class STORE_ATTR(Bytecode):
         self.result = Register(func)
 
     def addName(self, func, name):
-        self.args.append(name)
+        self.name = name
 
     @pop_stack(2)
     def stack_eval(self, func, stack):
@@ -787,13 +795,13 @@ class STORE_ATTR(Bytecode):
 
     def type_eval(self, func):
         self.grab_stack()
-        type_ = self.args[2].type.dereference()
+        type_ = self.args[1].type.dereference()
         if isinstance(type_, tp.StructType):
-            member_type = type_.getMemberType(self.args[0])
-            arg_type = self.args[1].type
+            member_type = type_.getMemberType(self.name)
+            arg_type = self.args[0].type
             if member_type != arg_type:
                 if member_type == tp.Float and arg_type == tp.Int:
-                    self.args[1] = tp.Cast(self.args[1], tp.Float)
+                    self.args[0] = tp.Cast(self.args[0], tp.Float)
                     return
                 # TODO would it speed up the algorithm if arg_type is set to be
                 # member_type here?
@@ -805,20 +813,20 @@ class STORE_ATTR(Bytecode):
         else:
             raise exc.UnimplementedError(
                 "Cannot store attribute {0} of an object with type {1}".format(
-                    self.args[0],
-                    type(self.args[2])))
+                    self.name,
+                    type(self.args[1])))
 
     def translate(self, cge):
-        if (isinstance(self.args[2], tp.Typable)
-              and isinstance(self.args[2].type.dereference(), tp.StructType)):
-            struct_llvm = self.args[2].translate(cge)
-            idx = self.args[2].type.dereference().getMemberIdx(self.args[0])
+        if (isinstance(self.args[1], tp.Typable)
+              and isinstance(self.args[1].type.dereference(), tp.StructType)):
+            struct_llvm = self.args[1].translate(cge)
+            idx = self.args[1].type.dereference().getMemberIdx(self.name)
             idx_llvm = tp.getIndex(idx)
-            val_llvm = self.args[1].translate(cge)
+            val_llvm = self.args[0].translate(cge)
             p = cge.builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
             self.result.llvm = cge.builder.store(val_llvm, p)
         else:
-            raise exc.UnimplementedError(type(self.args[2]))
+            raise exc.UnimplementedError(type(self.args[1]))
 
 
 class CALL_FUNCTION(Bytecode):
@@ -859,9 +867,9 @@ class CALL_FUNCTION(Bytecode):
 
     def type_eval(self, func):
         self.grab_stack()
-        if self.result is None:
-            self.separateArgs()
+        self.separateArgs()
 
+        if self.result is None:
             self.result = self.func.getResult(func.impl)
 
             if not isinstance(self.func, Intrinsic):
@@ -884,8 +892,6 @@ class CALL_FUNCTION(Bytecode):
 
 
 class GET_ITER(Poison, Bytecode):
-
-    """WIP"""
     discard = True
 
     def __init__(self, func, debuginfo):
@@ -918,7 +924,6 @@ class JUMP_FORWARD(Jump, Bytecode):
 
 
 class ForLoop(HasTarget, ir.IR):
-
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
@@ -956,10 +961,10 @@ class ForLoop(HasTarget, ir.IR):
         cur = bc.prev
         # TODO: this if..elif should be more general!
         if isinstance(cur, LOAD_FAST):
-            limit = cur.args[0]
+            limit = cur.source
             cur.remove()
         elif isinstance(cur, LOAD_CONST):
-            limit = cur.args[0]
+            limit = cur.const_arg
             cur.remove()
         elif isinstance(cur, CALL_FUNCTION):
             cur.remove()
@@ -1012,7 +1017,7 @@ class ForLoop(HasTarget, ir.IR):
         cur = bc.next
         if not isinstance(cur, STORE_FAST):
             raise exc.UnimplementedError('unsupported for loop')
-        loop_var = cur.args[0]
+        loop_var = cur.result
         self.setLoopVar(loop_var)
         cur.remove()
 

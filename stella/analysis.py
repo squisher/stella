@@ -228,7 +228,6 @@ class Function(object):
                             bc.linearNext() is not None and \
                             bc.linearNext() not in self.incoming_jumps:
                         self.log.debug("Unreachable {0}, aborting".format(bc.linearNext()))
-                        #import pdb; pdb.set_trace()  # XXX BREAKPOINT
                         break
                 except exc.StellaException as e:
                     e.addDebug(bc.debuginfo)

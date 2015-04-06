@@ -19,7 +19,9 @@ from . import intrinsics
 @utils.linkedlist
 class IR(metaclass=ABCMeta):
     args = None
+    bc_args = None
     stack_bc = None
+    const_arg = None
     result = None
     debuginfo = None
     llvm = None
@@ -29,26 +31,19 @@ class IR(metaclass=ABCMeta):
 
     def __init__(self, func, debuginfo):
         self.debuginfo = debuginfo
+        self.bc_args = []
         self.args = []
 
     def addConst(self, arg):
-        self.addArg(tp.wrapValue(arg))
-
-    def addArg(self, arg):
-        self.args.append(arg)
+        self.const_arg = tp.wrapValue(arg)
 
     def addRawArg(self, arg):
         raise exc.UnimplementedError("{0}.addRawArg() is not implemented".format(
             self.__class__.__name__))
 
     def addLocalName(self, func, name):
-        self.args.append(func.getStackLoc(name))
+        self.bc_args.append(func.getStackLoc(name))
         # TODO: is a base implementation needed??
-
-    def popFirstArg(self):
-        first = self.args[0]
-        self.args = self.args[1:]
-        return first
 
     def cast(self, cge):
         for arg in self.args:
@@ -61,6 +56,7 @@ class IR(metaclass=ABCMeta):
         adds them to args.
         """
         if self.stack_bc:
+            self.args = []
             for arg in self.stack_bc:
                 # TODO should arg.result always be a list?
                 if isinstance(arg.result, list):
@@ -71,7 +67,6 @@ class IR(metaclass=ABCMeta):
                     result = arg.result
                 result.bc = arg
                 self.args.append(result)
-            self.stack_bc = None
 
     @abstractmethod
     def stack_eval(self, func, stack):
@@ -92,11 +87,16 @@ class IR(metaclass=ABCMeta):
         else:
             b = e = ''
 
+        if hasattr(self, '_str_args'):
+            args = self._str_args
+        else:
+            args = ", ".join([str(v) for v in self.args])
+
         return "{0}{1} {2} {3}{4}".format(
             b,
             self.__class__.__name__,
             self.result,
-            ", ".join([str(v) for v in self.args]),
+            args,
             e)
 
     def __repr__(self):
