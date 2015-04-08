@@ -731,9 +731,40 @@ class LOAD_ATTR(Bytecode):
     def addName(self, func, name):
         self.name = name
 
+    @property
+    def _str_args(self):
+        if len(self.args) > 0:
+            obj = self.args[0]
+        else:
+            obj = '?'
+        return "{}.{}".format(obj, self.name)
+
     @pop_stack(1)
     def stack_eval(self, func, stack):
         stack.push(self)
+
+    def type_eval(self, func):
+        self.grab_stack()
+
+        arg = self.args[0]
+        if isinstance(arg, types.ModuleType):
+            self.result = func.module.loadExt(arg, self.name)
+            self.discard = True
+        elif isinstance(arg.type.dereference(), tp.StructType):
+            try:
+                type_ = arg.type.dereference().getMemberType(self.name)
+                if isinstance(type_, tp.FunctionType):
+                    self.result = func.module.getFunctionRef(type_)
+                else:
+                    if self.result is None:
+                        self.result = Register(func.impl)
+                    self.result.unify_type(type_, self.debuginfo)
+            except KeyError:
+                raise exc.AttributeError("Unknown field {} of type {}".format(self.name,
+                                                                              arg.type),
+                                         self.debuginfo)
+        else:
+            self.result = Register(func.impl)
 
     def translate(self, cge):
         arg = self.args[0]
@@ -751,32 +782,6 @@ class LOAD_ATTR(Bytecode):
             self.result.llvm = cge.builder.load(p)
         else:
             raise exc.UnimplementedError(type(arg))
-
-    def type_eval(self, func):
-        self.grab_stack()
-
-        arg = self.args[0]
-        if isinstance(arg, types.ModuleType):
-            self.result = func.module.loadExt(arg, self.name)
-            self.discard = True
-        elif isinstance(arg.type.dereference(), tp.StructType):
-            try:
-                type_ = arg.type.dereference().getMemberType(self.name)
-                if isinstance(type_, tp.FunctionType):
-                    if self.result is None:
-                        self.result = func.module.getFunctionRef(type_)
-                    else:
-                        assert isinstance(self.result, ir.FunctionRef)
-                else:
-                    if self.result is None:
-                        self.result = Register(func.impl)
-                    self.result.unify_type(type_, self.debuginfo)
-            except KeyError:
-                raise exc.AttributeError("Unknown field {} of type {}".format(self.name,
-                                                                              arg.type),
-                                         self.debuginfo)
-        else:
-            self.result = Register(func.impl)
 
 
 class STORE_ATTR(Bytecode):
@@ -838,6 +843,10 @@ class CALL_FUNCTION(Bytecode):
         self.num_kw_args = (arg >> 8) & 0xFF
         self.num_stack_args = self.num_pos_args + self.num_kw_args*2
 
+    @property
+    def _str_args(self):
+        return str(self.func)
+
     def separateArgs(self):
         self.func = self.args[0]
         args = self.args[1:]
@@ -868,6 +877,13 @@ class CALL_FUNCTION(Bytecode):
     def type_eval(self, func):
         self.grab_stack()
         self.separateArgs()
+
+        if not isinstance(self.func, ir.FunctionRef):
+            # we don't officially know yet that what we're calling is a
+            # function, so install a dummy result and redo the analysis later
+            func.impl.analyzeAgain()
+            self.result = Register(func.impl)
+            return
 
         if self.result is None:
             self.result = self.func.getResult(func.impl)
