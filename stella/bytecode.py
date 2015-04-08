@@ -878,7 +878,7 @@ class CALL_FUNCTION(Bytecode):
         self.grab_stack()
         self.separateArgs()
 
-        if not isinstance(self.func, ir.FunctionRef):
+        if not isinstance(self.func, (ir.FunctionRef, Intrinsic, ir.ExtFunctionRef)):
             # we don't officially know yet that what we're calling is a
             # function, so install a dummy result and redo the analysis later
             func.impl.analyzeAgain()

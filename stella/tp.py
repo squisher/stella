@@ -718,6 +718,7 @@ class FunctionType(Type):
         self.name = obj.__name__
         self._func = obj
         self.bound = bound
+        self._bound_type = None
         self._builtin = builtin
 
         self.readSignature(obj)
@@ -735,11 +736,13 @@ class FunctionType(Type):
         # -> self is a struct, which has as one of its members a bound function
         if self._bound is None:
             return None
-        try:
-            return get(self._bound)
-        except exc.UnsupportedTypeError as e:
-            e.prepend(str(self._bound), type(self._bound))
-            raise e
+        if not self._bound_type:
+            try:
+                self._bound_type = get(self._bound)
+            except exc.UnsupportedTypeError as e:
+                e.prepend(str(self._bound), type(self._bound))
+                raise e
+        return self._bound_type
 
     @bound.setter
     def bound(self, obj):
