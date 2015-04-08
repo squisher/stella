@@ -122,6 +122,7 @@ class H(object):
     def __repr__(self):
         return "H{{es: {}, i:{}}}".format(self.es, self.i)
 
+
 G.origin = G(0, 0)
 
 

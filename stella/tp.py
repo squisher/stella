@@ -833,9 +833,13 @@ class FunctionType(Type):
     def fq(self):
         """Returns the fully qualified type name."""
         if self._bound:
-            # bound is a reference, we don't want the * as part of the name
-            assert self.bound.isReference()
-            return "{}.{}".format(str(self.bound)[1:], self.name)
+            # TODO this should probably always be a reference
+            #assert self.bound.isReference()
+            if self.bound.isReference():
+                # bound is a reference, we don't want the * as part of the name
+                return "{}.{}".format(str(self.bound)[1:], self.name)
+            else:
+                return "{}.{}".format(str(self.bound), self.name)
         else:
             return self.name
 
@@ -908,8 +912,8 @@ def get(obj):
         return FunctionType.get(obj, bound=True, builtin=True)
     else:
         # TODO: How to identify unspported objects? Everything is an object...
-        #raise exc.UnimplementedError("Unknown type {0}".format(type_))
         return StructType.fromObj(obj)
+
 
 
 _cscalars = {
@@ -939,7 +943,7 @@ class Typable(object):
         """
         tp1 = self.type
         if tp1 != NoType and tp2 != NoType and tp1.ptr != tp2.ptr:
-            raise exc.TypeError("Inconsistent pointers: {} does not match {}".format(tp1, tp2))
+            raise exc.TypeError("Inconsistent pointers: {} does not match {}".format(tp1, tp2), debuginfo)
         if tp1 == tp2:
             pass
         elif tp1 == NoType:
@@ -953,6 +957,12 @@ class Typable(object):
             # Note that the type does not have to change here because Float is
             # already wider than Int
             return False, True
+        elif isinstance(tp1, Reference) and isinstance(tp2, Reference):
+            while isinstance(tp1, Reference) and isinstance(tp2, Reference):
+                tp1 = tp1.type_
+                tp2 = tp2.type_
+            if tp1 != tp2:
+                raise exc.TypeError("{} is not compatible with {}".format(tp1, tp2), debuginfo)
         else:
             raise exc.TypeError("Unifying of types {} and {} (not yet) implemented".format(
                 tp1, tp2), debuginfo)
