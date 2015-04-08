@@ -23,6 +23,7 @@ class DebugInfo(object):
 
 class Function(object):
     funcs = {}
+    analysis_count = 0
 
     @classmethod
     def clearCache(klass):
@@ -431,6 +432,11 @@ def main(f, args, kwargs):
         # TODO add kwargs support!
         (call_impl, call_args, call_kwargs) = module.todoNext()
         call_f = Function.get(call_impl, module)
+        if call_f.analysis_count > 10:
+            # TODO: abitrary limit, it would be better to check if the return
+            # type changed or not
+            raise Exception("Stopping after {0} type analysis iterations (failsafe)".format(call_f.analysis_count))
         call_f.analyzeCall(call_args, call_kwargs)
+        call_f.analysis_count += 1
     module.addDestruct(cleanup)
     return module
