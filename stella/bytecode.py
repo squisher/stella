@@ -885,7 +885,7 @@ class CALL_FUNCTION(Bytecode):
             self.result = Register(func.impl)
             return
 
-        if self.result is None:
+        if self.result is None or self.result.type == tp.NoType:
             self.result = self.func.getResult(func.impl)
 
             if not isinstance(self.func, Intrinsic):
