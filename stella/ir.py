@@ -364,6 +364,10 @@ class Module(object):
             self.todoAdd(funcref, args, kwargs)
 
     def todoAdd(self, func, args, kwargs):
+        # If the function was already in the list to be analyzed, remove it
+        # so that it is only present once at the end
+        # TODO look at args and kwargs
+        self._todo = list(filter(lambda t: t[0] != func, self._todo))
         self._todo.append((func, args, kwargs))
 
     def todoLastFunc(self, func):
