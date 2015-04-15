@@ -693,7 +693,7 @@ class FunctionType(Type):
     @classmethod
     def get(klass, obj, bound=None, builtin=False):
         if bound:
-            key = (type(bound), obj.__name__)
+            key = (str(bound), obj.__name__)
         else:
             key = obj
 
@@ -718,7 +718,6 @@ class FunctionType(Type):
         self.name = obj.__name__
         self._func = obj
         self.bound = bound
-        self._bound_type = None
         self._builtin = builtin
 
         self.readSignature(obj)
@@ -732,20 +731,15 @@ class FunctionType(Type):
 
         Note that unbound methods are not yet supported
         """
-        # Lazily get the type of bound to avoid recursion:
-        # -> self is a struct, which has as one of its members a bound function
-        if self._bound is None:
-            return None
-        if not self._bound_type:
-            try:
-                self._bound_type = get(self._bound)
-            except exc.UnsupportedTypeError as e:
-                e.prepend(str(self._bound), type(self._bound))
-                raise e
-        return self._bound_type
+        # This is not very elegant, but correct. Self should always be a
+        # reference and never get passed in by value.
+        if self._bound and not self._bound.isReference():
+            return Reference(self._bound)
+        return self._bound
 
     @bound.setter
     def bound(self, obj):
+        assert obj is None or isinstance(obj, Type)
         self._bound = obj
 
     @property
@@ -904,7 +898,7 @@ def get(obj):
     elif isinstance(obj, types.FunctionType):
         return FunctionType.get(obj)
     elif isinstance(obj, types.MethodType):
-        return FunctionType.get(obj, bound=obj.__self__)
+        return FunctionType.get(obj, bound=get(obj.__self__))
     elif isinstance(obj, types.BuiltinFunctionType):
         return FunctionType.get(obj, builtin=True)
     elif isinstance(obj, types.BuiltinMethodType):

@@ -556,7 +556,7 @@ def test_no_mutation10(f, args):
     assert b1 == b2 and py == st
 
 
-@mark.parametrize('f', [getObjThenUse])
+@mark.parametrize('f', [getObjThenUse, getObjThenCall])
 def test_no_mutation11(f):
     b1 = H(1, 2, 3)
     b2 = H(1, 2, 3)
@@ -568,7 +568,7 @@ def test_no_mutation11(f):
     assert b1 == b2 and py == st
 
 
-@mark.parametrize('f', [getObjThenCall])
+@mark.parametrize('f', [])
 @unimplemented
 def test_no_mutation11u(f):
     b1 = H(1, 2, 3)
