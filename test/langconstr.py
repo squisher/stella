@@ -82,6 +82,13 @@ def for_loop_var(x):
     return x
 
 
+def for3(a):
+    r = 0
+    for x in a:
+        r += x
+    return r
+
+
 def while1(x):
     r = 0
     while x > 0:
@@ -454,7 +461,7 @@ def test11(args):
 
 @mark.parametrize('arg', single_args([np.zeros(5, dtype=int)]))
 @mark.parametrize('f', [numpy_array, numpy_len_indirect, numpy_receiving, numpy_passing,
-                        numpy_len_direct]) # numpy_assign
+                        numpy_len_direct, numpy_assign])
 def test12(f, arg):
     make_eq_test(f, arg)
 
@@ -553,4 +560,11 @@ def test14_u(f):
 @mark.parametrize('arg', single_args([(10, 20), (4.0, 2.0), (13.0, 14)]))
 @mark.parametrize('f', [addTuple])
 def test15(f, arg):
+    make_eq_test(f, arg)
+
+
+@mark.parametrize('arg', single_args([np.array([1, 2, 5, 7])]))
+@mark.parametrize('f', [for3])
+@unimplemented
+def test16(f, arg):
     make_eq_test(f, arg)

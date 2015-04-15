@@ -971,7 +971,10 @@ class ForLoop(HasTarget, ir.IR):
             raise exc.UnimplementedError('unsupported for loop')
         cur.remove()
         cur = bc.prev
-        if not isinstance(cur, CALL_FUNCTION):
+        if isinstance(cur, (LOAD_ATTR, LOAD_GLOBAL, LOAD_FAST)):
+            # we iterate directly over an object
+            pass
+        elif not isinstance(cur, CALL_FUNCTION):
             raise exc.UnimplementedError('unsupported for loop')
         cur.remove()
         cur = bc.prev

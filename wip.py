@@ -15,7 +15,8 @@ import mtpy  # noqa
 import ctypes  # noqa
 
 
-a = np.zeros(5, dtype=int)
+# a = np.zeros(5, dtype=int)
+a = np.array([1, 2, 3])
 b = test.objects.B()
 b2 = test.objects.B(0.0, 1.0)
 b3 = test.objects.B(0.0, 1.0)
@@ -36,4 +37,4 @@ def current_work(run=False, **kwargs):
         ir = not run
     else:
         ir = run
-    print(stella.wrap(test.objects.getObjThenCall, ir=ir, **kwargs)(h))
+    print(stella.wrap(test.langconstr.for3, ir=ir, **kwargs)(a))
