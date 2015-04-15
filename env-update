@@ -2,7 +2,7 @@
 local base=$(readlink -f $(dirname $0))
 
 #export PYTHONPATH=$base/llvmpy
-export PYTHONPATH=$base/mtpy:$base/llvmlite/build/lib.linux-x86_64-3.2
+export PYTHONPATH=$base/mtpy:$base/llvmlite/build/current
 source ve/bin/activate
 export PATH=$PATH:$PWD/bin
 alias  ish='ipython3 -i ipythoninit.py'

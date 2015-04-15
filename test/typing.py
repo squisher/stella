@@ -45,7 +45,7 @@ def test3fail(args):
 
 @mark.parametrize('args', single_args([np.zeros(5, dtype=int),
                                        np.array([1, 2, 3, 4, 5], dtype=int)]))
-@mark.parameterize('f', numpy_return_element)
+@mark.parametrize('f', [numpy_return_element])
 @mark.xfail()
 def test4fail(f, args):
     make_eq_test(f, args)
