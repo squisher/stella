@@ -895,8 +895,8 @@ class CALL_FUNCTION(Bytecode):
         tp_change = self.result.unify_type(type_, self.debuginfo)
 
         if self.result.type == tp.NoType:
-            # redo analysis, right now return type is not known
-            func.impl.analyzeAgain()
+            # abort here because mostly everything downstream will be unknown types
+            return True
         else:
             func.retype(tp_change)
 

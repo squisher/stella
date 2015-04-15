@@ -220,7 +220,7 @@ class Function(object):
 
             for bc in bc_list:
                 try:
-                    bc.type_eval(self)
+                    abort = bc.type_eval(self)
                     self.log.debug("TYPE'D " + bc.locStr())
                     if isinstance(bc, bytecode.RETURN_VALUE):
                         self.retype(self.impl.result.unify_type(bc.result.type,
@@ -229,6 +229,10 @@ class Function(object):
                             bc.linearNext() is not None and \
                             bc.linearNext() not in self.incoming_jumps:
                         self.log.debug("Unreachable {0}, aborting".format(bc.linearNext()))
+                        break
+                    if abort:
+                        self.log.debug("Aborting typing, resuming later.")
+                        self.impl.analyzeAgain()
                         break
                 except exc.StellaException as e:
                     e.addDebug(bc.debuginfo)
