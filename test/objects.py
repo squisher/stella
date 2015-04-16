@@ -237,7 +237,6 @@ def objContainingList3(f):
     for i in range(len(f.l)):
         f.l[i].x = i
 
-
 def selfRef(g):
     return ((g.x - G.origin.x)**2 + (g.y - G.origin.y)**2)**0.5
 
@@ -255,6 +254,12 @@ def getObjThenCall(h):
     e = h.next()
     return e.inc()
 
+
+def forObjAttr(c):
+    r = 1
+    for x in c.a:
+        r *= x
+    return r
 
 args1 = [(1, 1), (24, 42), (0.0, 1.0), (1.0, 1.0), (3.0, 0.0)]
 
@@ -384,10 +389,10 @@ def test_no_mutation2(f, args):
     assert b1 == b2 and py == st
 
 
-@mark.parametrize('f', [])
+@mark.parametrize('f', [forObjAttr])
 @mark.parametrize('args', args2)
 @unimplemented
-def test_no_mutation2_f(f, args):
+def test_no_mutation2_u(f, args):
     b1 = C(args)
     b2 = C(args)
 

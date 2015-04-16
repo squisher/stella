@@ -28,6 +28,10 @@ def make_eq_test(f, args):
 
 
 def make_numpy_eq_test(f, args):
+    """
+    TODO stella right now won't return numpy types.
+    This test will treat them as equal to the python counterparts.
+    """
     args1 = []
     args2 = []
     for a in args:
@@ -39,12 +43,12 @@ def make_numpy_eq_test(f, args):
             args2.append(a)
     x = f(*args1)
     y = wrap(f)(*args2)
-    # TODO stella currently doesn't support int64 directly, so this will treat it
-    # like int for now
+
     type_x = type(x)
     for type_name in ('int', 'float'):
         if type(x).__name__.startswith(type_name):
             type_x = __builtins__[type_name]
+
     assert x == y and type_x == type(y)
 
 

@@ -37,4 +37,4 @@ def current_work(run=False, **kwargs):
         ir = not run
     else:
         ir = run
-    print(stella.wrap(test.langconstr.array_alloc_assignment2, ir=ir, **kwargs)())
+    print(stella.wrap(test.objects.forObjAttr, ir=ir, **kwargs)(c))
