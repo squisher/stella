@@ -563,8 +563,8 @@ def test15(f, arg):
     make_eq_test(f, arg)
 
 
-@mark.parametrize('arg', single_args([np.array([1, 2, 5, 7])]))
+@mark.parametrize('arg', single_args([np.array([1, 2, 5, 7]), np.array([-1, -2, 0, 45]),
+                                      np.array([1.0, 9.0, -3.14, 0.0001, 11111.0])]))
 @mark.parametrize('f', [for3])
-@unimplemented
 def test16(f, arg):
-    make_eq_test(f, arg)
+    make_numpy_eq_test(f, arg)

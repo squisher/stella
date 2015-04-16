@@ -27,6 +27,27 @@ def make_eq_test(f, args):
     assert x == y and type(x) == type(y)
 
 
+def make_numpy_eq_test(f, args):
+    args1 = []
+    args2 = []
+    for a in args:
+        if type(a) == np.ndarray:
+            args1.append(np.copy(a))
+            args2.append(np.copy(a))
+        else:
+            args1.append(a)
+            args2.append(a)
+    x = f(*args1)
+    y = wrap(f)(*args2)
+    # TODO stella currently doesn't support int64 directly, so this will treat it
+    # like int for now
+    type_x = type(x)
+    for type_name in ('int', 'float'):
+        if type(x).__name__.startswith(type_name):
+            type_x = __builtins__[type_name]
+    assert x == y and type_x == type(y)
+
+
 def make_eq_kw_test(f, args):
     x = f(**args)
     y = wrap(f)(**args)

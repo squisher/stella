@@ -942,6 +942,7 @@ class JUMP_FORWARD(Jump, Bytecode):
 class ForLoop(HasTarget, ir.IR):
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
+        self.iterable = None
 
     def setLoopVar(self, loop_var):
         self.loop_var = loop_var
@@ -962,9 +963,14 @@ class ForLoop(HasTarget, ir.IR):
         """The location of FOR_ITER which may be referenced as 'restart loop'"""
         self.iter_loc = loc
 
+    def setIterable(self, iterable):
+        """The LOAD of X which we are iterating over: for _ in X:"""
+        self.iterable = iterable
+
     def basicSetup(self, bc):
         iter_loc = bc.loc
         start = None
+        iterable = None
 
         cur = bc.prev
         if not isinstance(cur, GET_ITER):
@@ -972,40 +978,43 @@ class ForLoop(HasTarget, ir.IR):
         cur.remove()
         cur = bc.prev
         if isinstance(cur, (LOAD_ATTR, LOAD_GLOBAL, LOAD_FAST)):
-            # we iterate directly over an object
-            pass
-        elif not isinstance(cur, CALL_FUNCTION):
-            raise exc.UnimplementedError('unsupported for loop')
-        cur.remove()
-        cur = bc.prev
-        # TODO: this if..elif should be more general!
-        if isinstance(cur, LOAD_FAST):
-            limit = cur.source
+            iterable = cur.source
+            limit = Const(0)
             cur.remove()
-        elif isinstance(cur, LOAD_CONST):
-            limit = cur.const_arg
-            cur.remove()
-        elif isinstance(cur, CALL_FUNCTION):
-            cur.remove()
-            limit = [cur]
-            num_args = cur.num_stack_args+1  # +1 for the function name
-            i = 0
-            while i < num_args:
-                cur = cur.prev
-                # TODO: HACK. How to make this general and avoid duplicating
-                # stack_eval() knowledge?
-                if isinstance(cur, LOAD_ATTR):
-                    # LOAD_ATTR has an argument; num_args is stack values NOT
-                    # the number of bytecodes which i is counting
-                    num_args +=1
-                cur.remove()
-                limit.append(cur)
-
-                i += 1
+            cur = bc.prev
         else:
-            raise exc.UnimplementedError(
-                'unsupported for loop: limit {0}'.format(
-                    type(cur)))
+            if not isinstance(cur, CALL_FUNCTION):
+                raise exc.UnimplementedError('unsupported for loop')
+            cur.remove()
+            cur = bc.prev
+            # TODO: this if..elif should be more general!
+            if isinstance(cur, LOAD_FAST):
+                limit = cur.source
+                cur.remove()
+            elif isinstance(cur, LOAD_CONST):
+                limit = cur.const_arg
+                cur.remove()
+            elif isinstance(cur, CALL_FUNCTION):
+                cur.remove()
+                limit = [cur]
+                num_args = cur.num_stack_args+1  # +1 for the function name
+                i = 0
+                while i < num_args:
+                    cur = cur.prev
+                    # TODO: HACK. How to make this general and avoid duplicating
+                    # stack_eval() knowledge?
+                    if isinstance(cur, LOAD_ATTR):
+                        # LOAD_ATTR has an argument; num_args is stack values NOT
+                        # the number of bytecodes which i is counting
+                        num_args +=1
+                    cur.remove()
+                    limit.append(cur)
+
+                    i += 1
+            else:
+                raise exc.UnimplementedError(
+                    'unsupported for loop: limit {0}'.format(
+                        type(cur)))
         cur = bc.prev
 
         # this supports a start argument to range
@@ -1014,16 +1023,18 @@ class ForLoop(HasTarget, ir.IR):
             cur.remove()
             cur = bc.prev
 
-        if not isinstance(cur, LOAD_GLOBAL):
-            raise exc.UnimplementedError('unsupported for loop')
-        cur.remove()
-        cur = bc.prev
         if not isinstance(cur, SETUP_LOOP):
-            raise exc.UnimplementedError('unsupported for loop')
+            if not isinstance(cur, LOAD_GLOBAL):
+                raise exc.UnimplementedError('unsupported for loop')
+            cur.remove()
+            cur = bc.prev
+            if not isinstance(cur, SETUP_LOOP):
+                raise exc.UnimplementedError('unsupported for loop')
         end_loc = cur.target_label
 
         self.loc = cur.loc
         # TODO set location for self and transfer jumps!
+        self.setIterable(iterable)
         self.setStart(start)
         self.setLimit(limit)
         self.setEndLoc(end_loc)
@@ -1043,9 +1054,49 @@ class ForLoop(HasTarget, ir.IR):
         bc.remove()
 
     def rewrite(self, func):
+        def load_loop_value(last, after = True):
+            b = LOAD_FAST(func.impl, self.debuginfo)
+            b.addArg(self.iterable)
+            if after:
+                last.insert_after(b)
+                last = b
+            else:
+                last.insert_before(b)
+
+            b = LOAD_FAST(func.impl, self.debuginfo)
+            b.addArg(self.loop_var)
+            if after:
+                last.insert_after(b)
+                last = b
+            else:
+                last.insert_before(b)
+
+            b = BINARY_SUBSCR(func.impl, self.debuginfo)
+            if after:
+                last.insert_after(b)
+                last = b
+            else:
+                last.insert_before(b)
+
+            b = STORE_FAST(func.impl, self.debuginfo)
+            b.new_allocate = True
+            b.addArg(self.loop_value)
+            if after:
+                last.insert_after(b)
+                last = b
+            else:
+                last.insert_before(b)
+
+            return last
+
+
         last = self
         (self.limit_minus_one, _) = func.impl.getOrNewStackLoc(
             str(self.test_loc) + "__limit")
+        if self.iterable:
+            self.loop_value = self.loop_var
+            (self.loop_var, _) = func.impl.getOrNewStackLoc(
+                self.loop_value.name + "__idx")
 
         # init
         if self.start:
@@ -1070,7 +1121,7 @@ class ForLoop(HasTarget, ir.IR):
         last.insert_after(b)
         last = b
 
-        if isinstance(self.limit, StackLoc):
+        if isinstance(self.limit, (StackLoc, Register)):
             b = LOAD_FAST(func.impl, self.debuginfo)
             b.addArg(self.limit)
             last.insert_after(b)
@@ -1111,7 +1162,7 @@ class ForLoop(HasTarget, ir.IR):
         last = b
 
         # my_limit = limit -1
-        if isinstance(self.limit, StackLoc):
+        if isinstance(self.limit, (StackLoc, Register)):
             b = LOAD_FAST(func.impl, self.debuginfo)
             b.addArg(self.limit)
             last.insert_after(b)
@@ -1144,6 +1195,9 @@ class ForLoop(HasTarget, ir.IR):
         b.new_allocate = True
         last.insert_after(b)
         last = b
+
+        if self.iterable:
+            last = load_loop_value(last)
 
         # $body, keep, find the end of it
         body_loc = b.linearNext().loc
@@ -1208,6 +1262,9 @@ class ForLoop(HasTarget, ir.IR):
         b.addArg(self.loop_var)
         last.insert_before(b)
 
+        if self.iterable:
+            load_loop_value(last, False)
+
         # JUMP to COMPARE_OP is already part of the bytecodes
         last.setTarget(body_loc)
 
@@ -1221,8 +1278,9 @@ class ForLoop(HasTarget, ir.IR):
 
     def type_eval(self, func):
         self.grab_stack()
-        # self.result.unify_type(int, self.debuginfo)
-        pass
+        if self.iterable and self.iterable.type != tp.NoType:
+            type_ = self.iterable.type.dereference()
+            self.limit.value = type_.shape
 
 
 class STORE_SUBSCR(Bytecode):
