@@ -10,6 +10,7 @@ from . import ir
 from .storage import Register, StackLoc, GlobalVariable
 from .tp import Cast, Const
 from .intrinsics import Intrinsic
+from copy import copy
 
 
 def pop_stack(n):
@@ -978,10 +979,15 @@ class ForLoop(HasTarget, ir.IR):
         cur.remove()
         cur = bc.prev
         if isinstance(cur, (LOAD_ATTR, LOAD_GLOBAL, LOAD_FAST)):
-            iterable = cur.source
+            iterable = cur
             limit = Const(0)
             cur.remove()
             cur = bc.prev
+            if isinstance(iterable, LOAD_ATTR):
+                # LOAD_ATTR requires the object to load, and iterable.prev
+                # still refers to it
+                cur.remove()
+                cur = bc.prev
         else:
             if not isinstance(cur, CALL_FUNCTION):
                 raise exc.UnimplementedError('unsupported for loop')
@@ -1055,8 +1061,7 @@ class ForLoop(HasTarget, ir.IR):
 
     def rewrite(self, func):
         def load_loop_value(last, after = True):
-            b = LOAD_FAST(func.impl, self.debuginfo)
-            b.addArg(self.iterable)
+            b = copy(self.iterable)
             if after:
                 last.insert_after(b)
                 last = b
@@ -1278,8 +1283,8 @@ class ForLoop(HasTarget, ir.IR):
 
     def type_eval(self, func):
         self.grab_stack()
-        if self.iterable and self.iterable.type != tp.NoType:
-            type_ = self.iterable.type.dereference()
+        if self.iterable and self.iterable.source.type != tp.NoType:
+            type_ = self.iterable.source.type.dereference()
             self.limit.value = type_.shape
 
 
