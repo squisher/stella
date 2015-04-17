@@ -987,6 +987,11 @@ class ForLoop(HasTarget, ir.IR):
                 # LOAD_ATTR requires the object to load, and iterable.prev
                 # still refers to it
                 cur.remove()
+
+                # iterable should point to the first instruction required
+                cur.next = iterable
+                iterable = cur
+
                 cur = bc.prev
         else:
             if not isinstance(cur, CALL_FUNCTION):
@@ -1061,12 +1066,28 @@ class ForLoop(HasTarget, ir.IR):
 
     def rewrite(self, func):
         def load_loop_value(last, after = True):
-            b = copy(self.iterable)
-            if after:
-                last.insert_after(b)
-                last = b
+            if isinstance(self.iterable.next, LOAD_ATTR):
+                b = copy(self.iterable)
+                if after:
+                    last.insert_after(b)
+                    last = b
+                else:
+                    last.insert_before(b)
+                b = copy(self.iterable.next)
+                if after:
+                    self.iterable_attr = b
+                if after:
+                    last.insert_after(b)
+                    last = b
+                else:
+                    last.insert_before(b)
             else:
-                last.insert_before(b)
+                b = copy(self.iterable)
+                if after:
+                    last.insert_after(b)
+                    last = b
+                else:
+                    last.insert_before(b)
 
             b = LOAD_FAST(func.impl, self.debuginfo)
             b.addArg(self.loop_var)
@@ -1283,9 +1304,21 @@ class ForLoop(HasTarget, ir.IR):
 
     def type_eval(self, func):
         self.grab_stack()
-        if self.iterable and self.iterable.source.type != tp.NoType:
-            type_ = self.iterable.source.type.dereference()
-            self.limit.value = type_.shape
+        if self.iterable:
+            # TODO if we have an iterable, then we must populate the limit
+            # here. Yet I am not sure how to detect when this was never
+            # successful
+            if isinstance(self.iterable.next, LOAD_ATTR):
+                if self.iterable_attr.result:
+                    iterable = self.iterable_attr.result
+                else:
+                    func.retype()
+                    return
+            else:
+                iterable = self.iterable.source
+            if iterable.type != tp.NoType:
+                type_ = iterable.type.dereference()
+                self.limit.value = type_.shape
 
 
 class STORE_SUBSCR(Bytecode):
