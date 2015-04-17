@@ -258,7 +258,7 @@ class Simulation(object):
         self.observations = zeros(max_observations, dtype=float)
         self.obs_i = 0
         self.radius = params['radius']
-        self.t = 0
+        self.t = 0.0  # added for Stella
         self.nextObsDist = 1
 
     def end(self):
@@ -280,7 +280,7 @@ class Simulation(object):
         return (self.observations == o.observations).all()
 
     def run(self):
-        self.t = 0
+        # self.t = 0  # removed for Stella, widening of self.t not yet supported
         self.nextObsDist = 1
         while not self.end():
             spider = Spider.pick(self.spiders)
