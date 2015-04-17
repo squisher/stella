@@ -236,10 +236,10 @@ class Module(object):
         else:
             f_type = tp.get(item)
         try:
-            f = self.namestore[f_type.name]
+            f = self.namestore[f_type.fq]
         except exc.UndefinedGlobalError:
             f = Function(f_type, self)
-            self.namestore[f_type.name] = f
+            self.namestore[f_type.fq] = f
 
         return f
 
