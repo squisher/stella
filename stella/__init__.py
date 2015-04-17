@@ -4,16 +4,18 @@ import faulthandler
 
 from . import analysis
 from . import codegen
+from . import utils
 
 _f = open('faulthandler.err', 'w')
 faulthandler.enable(_f)
+logging.addLevelName(utils.VERBOSE, 'VERBOSE')
 
 
 def wrap(f, debug=True, p=False, ir=False, lazy=False, opt=None, stats=None):
     if debug:
         logging.getLogger().setLevel(logging.DEBUG)
     else:
-        logging.getLogger().setLevel(logging.INFO)
+        logging.getLogger().setLevel(utils.VERBOSE)
 
     def run(*args, **kwargs):
         if stats is None:

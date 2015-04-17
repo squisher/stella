@@ -228,6 +228,7 @@ class Module(object):
         self.namestore = Globals()
         self.external_modules = dict()
         self._cleanup = []
+        self.log = logging.getLogger(str(self))
 
     def _getFunction(self, item):
         if isinstance(item, tp.FunctionType):
@@ -380,6 +381,7 @@ class Module(object):
     def todoNext(self):
         n = self._todo[0]
         self._todo = self._todo[1:]
+        self.log.log(utils.VERBOSE, "current  TODO function  %s", n)
         return n
 
     def todoCount(self):

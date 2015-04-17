@@ -1,5 +1,7 @@
 import logging
 
+# log level value for logging
+VERBOSE = 25
 
 class Stack(object):
     backend = None

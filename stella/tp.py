@@ -7,6 +7,7 @@ from abc import ABCMeta, abstractmethod
 import inspect
 
 from . import exc
+from . import utils
 
 
 class Type(metaclass=ABCMeta):
@@ -98,6 +99,9 @@ class Reference(Type):
 
     def __str__(self):
         return '*{}'.format(self.type_)
+
+    def __repr__(self):
+        return '{} of {}>'.format(super().__repr__()[:-1], self.type_)
 
     @property
     def on_heap(self):
@@ -818,7 +822,7 @@ class FunctionType(Type):
 
     def __str__(self):
         if self._bound:
-            tp_name = str(type(self._bound)).split("'")[1]
+            tp_name = str(self._bound)
             return "<bound method {}.{}>".format(tp_name, self._func.__name__)
         else:
             return "<function {}>".format(self._func.__name__)
