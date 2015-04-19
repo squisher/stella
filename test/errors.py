@@ -58,3 +58,14 @@ def test_indexerror(f):
 def test_indexerror_segfault(f):
     """Would crash"""
     make_exc_test(f, (), IndexError, exc.IndexError)
+
+
+def raise_exc():
+    raise Exception('foo')
+
+
+@mark.parametrize('f', [raise_exc])
+@unimplemented
+def test_exception(f):
+    """Would crash the program if run in Stella, so don't run it."""
+    f()

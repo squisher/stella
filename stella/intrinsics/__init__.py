@@ -5,6 +5,8 @@ Intrinsics
 import sys
 import math
 from abc import abstractmethod
+import builtins
+
 from . import python
 from .. import tp, exc
 from ..storage import Register
@@ -104,6 +106,23 @@ class Sqrt(Log):
     py_func = math.sqrt
     intr = 'llvm.sqrt'
     arg_names = ['x']
+
+
+class Exception(Intrinsic):
+    """
+    NoOP since Exceptions are not objects in Stella.
+    """
+    py_func = builtins.Exception
+    arg_names = ['msg']
+
+    def getReturnType(self, args, kw_args):
+        return tp.Void
+
+    def getResult(self, func):
+        return Register(func)
+
+    def call(self, cge, args, kw_args):
+        pass
 
 
 func2klass = {}

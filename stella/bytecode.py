@@ -1555,6 +1555,30 @@ class BUILD_TUPLE(Bytecode):
         self.result.translate(cge)
 
 
+class RAISE_VARARGS(Bytecode):
+    """TODO will abort the program with a crash"""
+    n = 0
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+
+    def addRawArg(self, arg):
+        self.n = arg
+
+    def stack_eval(self, func, stack):
+        for i in range(self.n):
+            stack.pop()
+
+    def type_eval(self, func):
+        self.grab_stack()
+
+    def translate(self, cge):
+        #arg1 = tp.Const(1)
+        #arg2 = tp.Const(0)
+        #cge.builder.idiv(arg1.translate(cge), rag2.translate(cge))
+        llvm_f = cge.module.llvm.declare_intrinsic('llvm.trap', [])
+        result = cge.builder.call(llvm_f, [])
+
+
 opconst = {}
 # Get all contrete subclasses of Bytecode and register them
 for name in dir(sys.modules[__name__]):
