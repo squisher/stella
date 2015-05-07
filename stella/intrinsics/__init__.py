@@ -124,11 +124,20 @@ class Exception(Intrinsic):
     def call(self, cge, args, kw_args):
         pass
 
+    @staticmethod
+    def is_a(item):
+        return isinstance(item, type) and issubclass(item, builtins.Exception)
+
+
+def is_extra(item):
+    """Is item an extra intrinsic which is specially detected?"""
+    return any([f(item) for f in [Exception.is_a]])
+
 
 def get(func):
     if func in func2klass:
         return func2klass[func]
-    elif isinstance(func, type) and issubclass(func, builtins.Exception):
+    elif Exception.is_a(func):
         return Exception
     else:
         return None

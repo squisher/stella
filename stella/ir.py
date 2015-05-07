@@ -268,7 +268,7 @@ class Module(object):
 
     def _wrapPython(self, key, item, module=None):
         if isinstance(item, (types.FunctionType,
-                             types.BuiltinFunctionType)) or issubclass(item, Exception):
+                             types.BuiltinFunctionType)) or intrinsics.is_extra(item):
             intrinsic = intrinsics.get(item)
 
             if intrinsic:
