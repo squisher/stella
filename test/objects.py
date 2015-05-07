@@ -237,6 +237,7 @@ def objContainingList3(f):
     for i in range(len(f.l)):
         f.l[i].x = i
 
+
 def selfRef(g):
     return ((g.x - G.origin.x)**2 + (g.y - G.origin.y)**2)**0.5
 
@@ -261,8 +262,6 @@ def forObjAttr(c):
         r *= x
     return r
 
-args1 = [(1, 1), (24, 42), (0.0, 1.0), (1.0, 1.0), (3.0, 0.0)]
-
 
 def getFirstArrayValue(c):
     return c.a[0]
@@ -275,6 +274,17 @@ def getSomeArrayValue(c, i):
 def sumC(c):
     for i in range(len(c.a)):
         c.i += c.a[i]
+
+
+def select(item, truth):
+    """This will only work when item is a pointer"""
+    if truth:
+        return item
+    else:
+        return None
+
+
+args1 = [(1, 1), (24, 42), (0.0, 1.0), (1.0, 1.0), (3.0, 0.0)]
 
 
 @mark.parametrize('f', [justPassing, addAttribs, getAttrib])
@@ -582,5 +592,19 @@ def test_no_mutation11u(f):
     assert b1 == b2
     py = f(b1)
     st = stella.wrap(f)(b2)
+
+    assert b1 == b2 and py == st
+
+
+@mark.parametrize('f', [select])
+@mark.parametrize('arg', [True, False])
+@unimplemented
+def test_no_mutation12u(f, arg):
+    b1 = H(1, 2, 3)
+    b2 = H(1, 2, 3)
+
+    assert b1 == b2
+    py = f(b1, arg)
+    st = stella.wrap(f)(b2, arg)
 
     assert b1 == b2 and py == st
