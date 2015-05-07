@@ -125,6 +125,15 @@ class Exception(Intrinsic):
         pass
 
 
+def get(func):
+    if func in func2klass:
+        return func2klass[func]
+    elif isinstance(func, type) and issubclass(func, builtins.Exception):
+        return Exception
+    else:
+        return None
+
+
 func2klass = {}
 
 

@@ -267,8 +267,9 @@ class Module(object):
         return self.external_modules.values()
 
     def _wrapPython(self, key, item, module=None):
-        if isinstance(item, (types.FunctionType, types.BuiltinFunctionType)) or item is Exception:
-            intrinsic = getIntrinsic(item)
+        if isinstance(item, (types.FunctionType,
+                             types.BuiltinFunctionType)) or issubclass(item, Exception):
+            intrinsic = intrinsics.get(item)
 
             if intrinsic:
                 wrapped = intrinsic
@@ -326,8 +327,6 @@ class Module(object):
             # TODO: too much nesting, there should be a cleaner way to detect these types
             if key == 'len':
                 item = len
-            elif key == 'Exception':
-                item = Exception
             elif key not in func.pyFunc().__globals__:
                 if tp.supported_scalar_name(key):
                     return __builtins__[key]
@@ -605,13 +604,6 @@ class BoundFunctionRef(FunctionRef):
     def combineArgs(self, args, kwargs):
         full_args = [self.f_self] + args
         return super().combineArgs(full_args, kwargs)
-
-
-def getIntrinsic(func):
-    if func in intrinsics.func2klass:
-        return intrinsics.func2klass[func]
-    else:
-        return None
 
 
 class ExtModule(object):

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from stella import exc
+from stella import exc, wrap
 from test import *  # noqa
 from stella.intrinsics.python import zeros
 
@@ -60,12 +60,22 @@ def test_indexerror_segfault(f):
     make_exc_test(f, (), IndexError, exc.IndexError)
 
 
+class TestException(Exception):
+    pass
+
+
 def raise_exc():
-    raise Exception('foo')
+    raise TestException('foo')
 
 
 @mark.parametrize('f', [raise_exc])
-@unimplemented
 def test_exception(f):
-    """Would crash the program if run in Stella, so don't run it."""
-    f()
+    """
+    Note: this isn't a real test. The NotImplementedError is thrown during
+    _compile-time_, not _run-time_!
+    """
+    with raises(Exception):
+        f()
+
+    with raises(NotImplementedError):
+        wrap(f)()
