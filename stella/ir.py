@@ -327,14 +327,16 @@ class Module(object):
             # TODO: too much nesting, there should be a cleaner way to detect these types
             if key == 'len':
                 item = len
-            elif key not in func.pyFunc().__globals__:
+            elif key in __builtins__:
+                # TODO eliminate the special case of scalars
                 if tp.supported_scalar_name(key):
                     return __builtins__[key]
                 else:
-                    raise exc.UndefinedError("Cannot find global variable `{0}'".format(key))
-                raise e
-            else:
+                    item = __builtins__[key]
+            elif key in func.pyFunc().__globals__:
                 item = func.pyFunc().__globals__[key]
+            else:
+                raise e
             wrapped = self._wrapPython(key, item)
 
             # _wrapPython will create an entry for functions _only_

@@ -36,7 +36,6 @@ class UnsupportedTypeError(StellaException, TypeError):
         self.name_stack.append(name)
         self.type_stack.append(type)
 
-
     def __str__(self):
         fields = ".".join(reversed(self.name_stack))
         if fields:
@@ -59,7 +58,7 @@ class UndefinedError(StellaException):
     pass
 
 
-class UndefinedGlobalError(StellaException):
+class UndefinedGlobalError(UndefinedError):
     pass
 
 

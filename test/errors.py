@@ -64,17 +64,23 @@ class TestException(Exception):
     pass
 
 
-def raise_exc():
+def raise_exc1():
     raise TestException('foo')
 
 
-@mark.parametrize('f', [raise_exc])
-def test_exception(f):
+def raise_exc2():
+    raise Exception('foo')
+
+
+@mark.parametrize('f_exc', [(raise_exc1, TestException), (raise_exc2, Exception)])
+def test_exception(f_exc):
     """
     Note: this isn't a real test. The NotImplementedError is thrown during
     _compile-time_, not _run-time_!
     """
-    with raises(Exception):
+    f, exc = f_exc
+
+    with raises(exc):
         f()
 
     with raises(NotImplementedError):
