@@ -472,6 +472,7 @@ class RETURN_VALUE(utils.BlockTerminal, Bytecode):
 
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
+        self.func = func
 
     @pop_stack(1)
     def stack_eval(self, func, stack):
@@ -484,12 +485,13 @@ class RETURN_VALUE(utils.BlockTerminal, Bytecode):
             func.retype(self.result.unify_type(arg.type, self.debuginfo))
 
     def translate(self, cge):
-        if self.result.type == tp.Void:
-            # return None == void, do not generate a ret instruction as that is
-            # invalid
-           cge.builder.ret_void()
+        if self.result.type is tp.Void:
+            if self.func.result.type is tp.Void:
+                cge.builder.ret_void()
+            else:
+                cge.builder.ret(self.func.result.type.null(cge.module))
         else:
-           cge.builder.ret(self.result.translate(cge))
+            cge.builder.ret(self.result.translate(cge))
 
 
 class HasTarget(object):

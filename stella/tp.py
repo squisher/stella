@@ -55,6 +55,9 @@ class Type(metaclass=ABCMeta):
         else:
             return type_
 
+    def null(self, module):
+        return ll.Constant(self.llvmType(module), None)
+
     def _llvmType(self, module):
         raise exc.TypeError(
             "Cannot create llvm type for an unknown type. This should have been cought earlier.")
@@ -941,7 +944,11 @@ class Typable(object):
         """
         tp1 = self.type
         if tp1 != NoType and tp2 != NoType and tp1.ptr != tp2.ptr:
-            raise exc.TypeError("Inconsistent pointers: {} does not match {}".format(tp1, tp2), debuginfo)
+            if tp2 is None_:
+                # special case: return NULL
+                return False, False
+            else:
+                raise exc.TypeError("Inconsistent pointers: {} does not match {}".format(tp1, tp2), debuginfo)
         if tp1 == tp2:
             pass
         elif tp1 == NoType:

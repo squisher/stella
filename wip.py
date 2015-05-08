@@ -37,4 +37,4 @@ def current_work(run=False, **kwargs):
         ir = not run
     else:
         ir = run
-    print(stella.wrap(test.objects.select, ir=ir, **kwargs)(g, False))
+    print(stella.wrap(test.objects.select, ir=ir, **kwargs)(g, True))
