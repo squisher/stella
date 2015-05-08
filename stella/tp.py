@@ -72,6 +72,10 @@ class Type(metaclass=ABCMeta):
     def getElementType(self, idx):
         return NoType
 
+    @classmethod
+    def unpack(klass, val):
+        return val
+
 
 class UnknownType(Type):
     def isUntyped(self):
@@ -434,6 +438,7 @@ class StructType(Type):
     def constant(self, value, cge):
         """Transfer values Python -> Stella"""
         transfer_value = self.ctype()
+        # logging.debug("StructType.constant() {}/{:x} -> {}/{:x}".format(self, id(self), transfer_value, id(transfer_value)))
 
         assert self.ptr == 1
 
@@ -441,6 +446,7 @@ class StructType(Type):
 
         addr_llvm = Int.constant(int(ctypes.addressof(transfer_value)))
         result_llvm = ll.Constant(tp_int, addr_llvm).inttoptr(self.llvmType(cge.module))
+        # logging.debug("{} constant() transfer {}:{}".format(value, transfer_value, id(transfer_value)))
         return (result_llvm, transfer_value)
 
     def ctype2Python(self, transfer_value, value):
@@ -476,6 +482,16 @@ class StructType(Type):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    @classmethod
+    def unpack(klass, val):
+        # logging.debug("{}/{:x} unpack()".format(val, id(val)))
+        # logging.debug("*{:x}".format(ctypes.addressof(val.contents)))
+        if (val):
+            addr = ctypes.addressof(val.contents)
+            return Struct.obj_store[addr].value
+        else:
+            # null pointer
+            return None
 
 class TupleType(ScalarType, Subscriptable):
     def __init__(self, types):
@@ -1058,7 +1074,7 @@ class NumpyArray(Typable):
 
 
 class Struct(Typable):
-    obj_store = {}  # Class variable
+    obj_store = {}  # Class variable, used to map returned objects back to the original Python
 
     @classmethod
     def fromObj(klass, obj):
@@ -1095,6 +1111,9 @@ class Struct(Typable):
             wrapped.translate(cge)
         if not self.llvm:
             (self.llvm, self.transfer_value) = self.type.constant(self.value, cge)
+            # logging.debug("translate() of {}: *{:x}".format(self.transfer_value, ctypes.addressof(self.transfer_value)))
+            addr = ctypes.addressof(self.transfer_value)
+            self.__class__.obj_store[addr] = self
         assert self.transfer_value
         return self.llvm
 
@@ -1111,7 +1130,9 @@ class Struct(Typable):
     def destruct(self):
         # TODO why don't we always have a transfer_value?
         if hasattr(self, 'transfer_value'):
-            logging.debug("{}<{}>/{} destruct()".format(self, type(self), id(self)))
+            # logging.debug("{}/{:x} destruct()".format(self, id(self.transfer_value)))
+            addr = ctypes.addressof(self.transfer_value)
+            del self.__class__.obj_store[addr]
             del self.transfer_value
         del self.value.__stella_wrapper__
 

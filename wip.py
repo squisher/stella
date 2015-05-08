@@ -30,6 +30,9 @@ l1 = [test.objects.E(2), test.objects.E(4)]
 f = test.objects.F(l1)
 g = test.objects.G(2, 9)
 h = test.objects.H(9, 7, 3)
+def ret(o):
+    o.i = 667
+    return o
 
 
 def current_work(run=False, **kwargs):
@@ -37,4 +40,4 @@ def current_work(run=False, **kwargs):
         ir = not run
     else:
         ir = run
-    print(stella.wrap(test.objects.select, ir=ir, **kwargs)(g, True))
+    print(stella.wrap(test.objects.returnObj, ir=ir, **kwargs)(g))

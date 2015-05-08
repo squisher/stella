@@ -158,13 +158,17 @@ class Program(object):
             ee.finalize_object()
 
             entry = self.module.entry
+            ret_type = entry.result.type
 
             logging.info("running {0}{1}".format(entry,
                                                  list(zip(entry.type_.arg_types,
                                                           self.module.entry_args))))
 
             entry_ptr = ee.get_pointer_to_global(self.llmod().get_function(self.llvm.name))
-            cfunc = ctypes.CFUNCTYPE(entry.result.type.Ctype())(entry_ptr)
+            ret_ctype = entry.result.type.Ctype()
+            if ret_type.on_heap:
+                ret_ctype = ctypes.POINTER(ret_ctype)
+            cfunc = ctypes.CFUNCTYPE(ret_ctype)(entry_ptr)
 
             time_start = time.time()
             retval = cfunc()
@@ -173,9 +177,7 @@ class Program(object):
         for arg in self.module.entry_args:
             arg.ctype2Python(self.cge)  # may be a no-op if not necessary
 
-        ret_type = self.module.entry.result.type
-        if isinstance(ret_type, tp.TupleType):
-            retval = ret_type.unpack(retval)
+        retval = ret_type.unpack(retval)
 
         logging.debug("Returning...")
         self.destruct()

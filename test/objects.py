@@ -276,6 +276,10 @@ def sumC(c):
         c.i += c.a[i]
 
 
+def returnObj(o):
+    return o
+
+
 def select(item, truth):
     """This will only work when item is a pointer"""
     if truth:
@@ -596,10 +600,21 @@ def test_no_mutation11u(f):
     assert b1 == b2 and py == st
 
 
+@mark.parametrize('f', [returnObj])
+def test_no_mutation12u(f):
+    b1 = H(1, 2, 3)
+    b2 = H(1, 2, 3)
+
+    assert b1 == b2
+    py = f(b1)
+    st = stella.wrap(f)(b2)
+
+    assert b1 == b2 and py == st
+
+
 @mark.parametrize('f', [select])
 @mark.parametrize('arg', [True, False])
-@unimplemented
-def test_no_mutation12u(f, arg):
+def test_no_mutation13u(f, arg):
     b1 = H(1, 2, 3)
     b2 = H(1, 2, 3)
 
