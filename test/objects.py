@@ -601,7 +601,7 @@ def test_no_mutation11u(f):
 
 
 @mark.parametrize('f', [returnObj])
-def test_no_mutation12u(f):
+def test_no_mutation12(f):
     b1 = H(1, 2, 3)
     b2 = H(1, 2, 3)
 
@@ -614,7 +614,7 @@ def test_no_mutation12u(f):
 
 @mark.parametrize('f', [select])
 @mark.parametrize('arg', [True, False])
-def test_no_mutation13u(f, arg):
+def test_no_mutation13(f, arg):
     b1 = H(1, 2, 3)
     b2 = H(1, 2, 3)
 
