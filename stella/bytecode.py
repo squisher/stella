@@ -530,7 +530,7 @@ class Jump(utils.BlockTerminal, HasTarget, ir.IR):
         pass
 
     def translate(self, cge):
-       cge.builder.branch(self.target_bc.block)
+        cge.builder.branch(self.target_bc.block)
 
 
 class Jump_if_X_or_pop(Jump):
@@ -568,10 +568,9 @@ class JUMP_IF_FALSE_OR_POP(Jump_if_X_or_pop, Bytecode):
         super().__init__(func, debuginfo)
 
     def translate(self, cge):
-       cge.builder.cbranch(
-            self.args[0].translate(cge),
-            self.next.block,
-            self.target_bc.block)
+        cge.builder.cbranch(self.args[0].translate(cge),
+                            self.next.block,
+                            self.target_bc.block)
 
 
 class JUMP_IF_TRUE_OR_POP(Jump_if_X_or_pop, Bytecode):
@@ -580,10 +579,9 @@ class JUMP_IF_TRUE_OR_POP(Jump_if_X_or_pop, Bytecode):
         super().__init__(func, debuginfo)
 
     def translate(self, cge):
-       cge.builder.cbranch(
-            self.args[0].translate(cge),
-            self.target_bc.block,
-            self.next.block)
+        cge.builder.cbranch(self.args[0].translate(cge),
+                            self.target_bc.block,
+                            self.next.block)
 
 
 class Pop_jump_if_X(Jump):
@@ -631,10 +629,9 @@ class POP_JUMP_IF_FALSE(Pop_jump_if_X, Bytecode):
         super().__init__(func, debuginfo)
 
     def translate(self, cge):
-       cge.builder.cbranch(
-            self.args[0].translate(cge),
-            self.next.block,
-            self.target_bc.block)
+        cge.builder.cbranch(self.args[0].translate(cge),
+                            self.next.block,
+                            self.target_bc.block)
 
 
 class POP_JUMP_IF_TRUE(Pop_jump_if_X, Bytecode):
@@ -643,10 +640,9 @@ class POP_JUMP_IF_TRUE(Pop_jump_if_X, Bytecode):
         super().__init__(func, debuginfo)
 
     def translate(self, cge):
-       cge.builder.cbranch(
-            self.args[0].translate(cge),
-            self.target_bc.block,
-            self.next.block)
+        cge.builder.cbranch(self.args[0].translate(cge),
+                            self.target_bc.block,
+                            self.next.block)
 
 
 class SETUP_LOOP(utils.BlockStart, HasTarget, Bytecode):
@@ -696,11 +692,12 @@ class LOAD_GLOBAL(Bytecode):
 
     def stack_eval(self, func, stack):
         stack.push(self)
+
     def translate(self, cge):
         if isinstance(self.var, ir.FunctionRef):
             pass
         elif isinstance(self.var, GlobalVariable):
-            self.result.llvm =cge.builder.load(self.var.translate(cge))
+            self.result.llvm = cge.builder.load(self.var.translate(cge))
 
     def type_eval(self, func):
         self.grab_stack()
@@ -826,7 +823,7 @@ class STORE_ATTR(Bytecode):
 
     def translate(self, cge):
         if (isinstance(self.args[1], tp.Typable)
-              and isinstance(self.args[1].type.dereference(), tp.StructType)):
+                and isinstance(self.args[1].type.dereference(), tp.StructType)):
             struct_llvm = self.args[1].translate(cge)
             idx = self.args[1].type.dereference().getMemberIdx(self.name)
             idx_llvm = tp.getIndex(idx)
@@ -1019,7 +1016,7 @@ class ForLoop(HasTarget, ir.IR):
                     if isinstance(cur, LOAD_ATTR):
                         # LOAD_ATTR has an argument; num_args is stack values NOT
                         # the number of bytecodes which i is counting
-                        num_args +=1
+                        num_args += 1
                     cur.remove()
                     limit.append(cur)
 
@@ -1067,7 +1064,7 @@ class ForLoop(HasTarget, ir.IR):
         bc.remove()
 
     def rewrite(self, func):
-        def load_loop_value(last, after = True):
+        def load_loop_value(last, after=True):
             if isinstance(self.iterable.next, LOAD_ATTR):
                 b = copy(self.iterable)
                 if after:
@@ -1116,7 +1113,6 @@ class ForLoop(HasTarget, ir.IR):
                 last.insert_before(b)
 
             return last
-
 
         last = self
         (self.limit_minus_one, _) = func.impl.getOrNewStackLoc(
@@ -1500,6 +1496,7 @@ class UNARY_NEGATIVE(Bytecode):
 
 class UNPACK_SEQUENCE(Bytecode):
     n = 0
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
@@ -1534,6 +1531,7 @@ class UNPACK_SEQUENCE(Bytecode):
 
 class BUILD_TUPLE(Bytecode):
     n = 0
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
@@ -1560,6 +1558,7 @@ class BUILD_TUPLE(Bytecode):
 class RAISE_VARARGS(Bytecode):
     """TODO will abort the program with a crash"""
     n = 0
+
     def __init__(self, func, debuginfo):
         super().__init__(func, debuginfo)
 
@@ -1574,11 +1573,8 @@ class RAISE_VARARGS(Bytecode):
         self.grab_stack()
 
     def translate(self, cge):
-        #arg1 = tp.Const(1)
-        #arg2 = tp.Const(0)
-        #cge.builder.idiv(arg1.translate(cge), rag2.translate(cge))
         llvm_f = cge.module.llvm.declare_intrinsic('llvm.trap', [])
-        result = cge.builder.call(llvm_f, [])
+        cge.builder.call(llvm_f, [])
 
 
 opconst = {}

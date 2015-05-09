@@ -30,6 +30,8 @@ l1 = [test.objects.E(2), test.objects.E(4)]
 f = test.objects.F(l1)
 g = test.objects.G(2, 9)
 h = test.objects.H(9, 7, 3)
+
+
 def ret(o):
     o.i = 667
     return o

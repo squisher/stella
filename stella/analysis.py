@@ -424,7 +424,6 @@ def main(f, args, kwargs):
         # it's best to attribute it to the caller
         (frame, filename, line_number,
          function_name, lines, index) = inspect.getouterframes(inspect.currentframe())[2]
-                #print(frame, filename, line_number, function_name, lines, index)
         debuginfo = DebugInfo(filename, line_number)
         e.addDebug(debuginfo)
         raise e
@@ -439,7 +438,8 @@ def main(f, args, kwargs):
         if call_f.analysis_count > 10:
             # TODO: abitrary limit, it would be better to check if the return
             # type changed or not
-            raise Exception("Stopping after {0} call analysis iterations (failsafe)".format(call_f.analysis_count))
+            raise Exception("Stopping after {0} call analysis iterations (failsafe)".format(
+                call_f.analysis_count))
         call_f.analyzeCall(call_args, call_kwargs)
         call_f.analysis_count += 1
     module.addDestruct(cleanup)

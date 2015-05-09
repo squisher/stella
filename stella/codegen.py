@@ -190,9 +190,6 @@ class Program(object):
     def getLlvmIR(self):
         ret = self.module.getLlvmIR()
 
-        #for arg in self.module.entry_args:
-        #    arg.destruct()  # may be a no-op if not necessary
-
         logging.debug("Returning...")
         self.destruct()
 

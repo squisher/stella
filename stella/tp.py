@@ -7,7 +7,6 @@ from abc import ABCMeta, abstractmethod
 import inspect
 
 from . import exc
-from . import utils
 
 
 class Type(metaclass=ABCMeta):
@@ -19,7 +18,7 @@ class Type(metaclass=ABCMeta):
     req_transfer = False
     ctype = False  # init to false because None is a valid ctype
 
-    def makePointer(self, ensure = False):
+    def makePointer(self, ensure=False):
         """Modifies this type to be a pointer"""
         if self.on_heap:
             if ensure:
@@ -137,12 +136,6 @@ class PyWrapper(Type):
         self.bc = None
         self.type = get_scalar(py)
 
-    #def makePointer(self):
-    #    raise exc.TypeError("Cannot make a pointer of Python type {}".format(self.py))
-
-    #def isPointer(self):
-    #    raise exc.TypeError("Cannot check pointer status of Python type {}".format(self.py))
-
     def __str__(self):
         return str(self.py)
 
@@ -157,13 +150,13 @@ class ScalarType(Type):
         self.ctype = ctype
         self._llvm = llvm
 
-    def llvmType(self, module = None):
+    def llvmType(self, module=None):
         return super().llvmType(module)
 
     def _llvmType(self, module):
         return self._llvm
 
-    def constant(self, value, cge = None):
+    def constant(self, value, cge=None):
         return ll.Constant(self._llvm, value)
 
     def __str__(self):
@@ -195,6 +188,7 @@ Bool = ScalarType(
     "Bool",
     bool, tp_bool, ctypes.c_bool,
 )
+
 
 def getIndex(i):
     if type(i) == int:
@@ -271,7 +265,7 @@ class CType(object):
     _registry = {}
 
     @classmethod
-    def getStruct(klass, name, fields = []):
+    def getStruct(klass, name, fields=[]):
         """
         Creates a Structure with the given fields. Caches based on (name, fields).
         """
@@ -331,12 +325,11 @@ class StructType(Type):
         for name in attrib_names:
             attrib = getattr(obj, name)
             try:
-                a_type = get (attrib)
+                a_type = get(attrib)
             except exc.UnsupportedTypeError as e:
                 e.prepend(name, type(attrib))
                 raise e
             if a_type.on_heap:
-                #a_type = Reference(type_)
                 a_type.makePointer(True)
             attrib_type[name] = a_type
 
@@ -380,10 +373,12 @@ class StructType(Type):
                       self.attrib_names)
 
     def items(self):
-        """Return (unordered) name, type tuples
+        """
+        Return (unordered) name, type tuples
         """
         # TODO turn this into an iterator?
         return [(name, self.attrib_type[name]) for name in self.attrib_names]
+
     def _llvmType(self, module):
         if self._llvmtype is not None:
             return self._llvmtype
@@ -395,8 +390,6 @@ class StructType(Type):
         for name in self._scalarAttributeNames():
             type_ = self.attrib_type[name]
             llvm_types.append(type_.llvmType(module))
-        #type_ = ll.LiteralStructType(llvm_types)
-        #self._llvmtype = type_
         self._llvmtype.set_body(*llvm_types)
 
         return self._llvmtype
@@ -438,7 +431,9 @@ class StructType(Type):
     def constant(self, value, cge):
         """Transfer values Python -> Stella"""
         transfer_value = self.ctype()
-        # logging.debug("StructType.constant() {}/{:x} -> {}/{:x}".format(self, id(self), transfer_value, id(transfer_value)))
+        # logging.debug("StructType.constant() {}/{:x} -> {}/{:x}".format(self, id(self),
+        #                                                                 transfer_value,
+        #                                                                 id(transfer_value)))
 
         assert self.ptr == 1
 
@@ -446,7 +441,8 @@ class StructType(Type):
 
         addr_llvm = Int.constant(int(ctypes.addressof(transfer_value)))
         result_llvm = ll.Constant(tp_int, addr_llvm).inttoptr(self.llvmType(cge.module))
-        # logging.debug("{} constant() transfer {}:{}".format(value, transfer_value, id(transfer_value)))
+        # logging.debug("{} constant() transfer {}:{}".format(value, transfer_value,
+        #                                                     id(transfer_value)))
         return (result_llvm, transfer_value)
 
     def ctype2Python(self, transfer_value, value):
@@ -492,6 +488,7 @@ class StructType(Type):
         else:
             # null pointer
             return None
+
 
 class TupleType(ScalarType, Subscriptable):
     def __init__(self, types):
@@ -539,7 +536,7 @@ class TupleType(ScalarType, Subscriptable):
     def _llvmType(self, module):
         return ll.LiteralStructType([t.llvmType(module) for t in self.types])
 
-    def constant(self, values, cge = None):
+    def constant(self, values, cge=None):
         if not self._llvm:
             self._llvm = ll.Constant.literal_struct([wrapValue(v).translate(cge) for v in values])
         return self._llvm
@@ -626,17 +623,18 @@ class ListType(ArrayType):
     def fromObj(klass, obj):
         # type checking: only continue if the list can be represented.
         if len(obj) == 0:
-            raise exc.UnsupportedTypeError("Empty lists are not supported, because they are not typable")
+            msg = "Empty lists are not supported, because they are not typable"
+            raise exc.UnsupportedTypeError(msg)
         type_ = type(obj[0])
         for o in obj[1:]:
             if type_ != type(o):
-                msg = "List contains elements of type {} and type {}, but lists must not contain objects of more than one type".format(
+                msg = "List contains elements of type {} and type {}, but lists must not contain objects of more than one type".format( # noqa
                     type_, type(o))
                 raise exc.UnsupportedTypeError(msg)
 
         base_type = get(obj[0])
         if not isinstance(base_type, StructType):
-            msg = "Python lists must contain objects, not {}. Use numpy arrays for simple types".format(base_type)
+            msg = "Python lists must contain objects, not {}. Use numpy arrays for simple types".format(base_type) # noqa
             raise exc.UnsupportedTypeError(msg)
         base_type.resetReference()
         # assert !klass.isValidType(dtype)
@@ -671,7 +669,6 @@ class ListType(ArrayType):
 
     @property
     def ctype(self):
-        #return ctypes.POINTER(self.type_.ctype * self.shape)
         return self.type_.ctype * self.shape
 
     def __eq__(self, other):
@@ -851,7 +848,6 @@ class FunctionType(Type):
         """Returns the fully qualified type name."""
         if self._bound:
             # TODO this should probably always be a reference
-            #assert self.bound.isReference()
             if self.bound.isReference():
                 # bound is a reference, we don't want the * as part of the name
                 return "{}.{}".format(str(self.bound)[1:], self.name)
@@ -885,7 +881,7 @@ class ExtFunctionType(Foreign, FunctionType):
 
     def __str__(self):
         return "<{} function({})>".format(self.return_type,
-                                           ", ".join(zip(self.arg_types, self.arg_names)))
+                                          ", ".join(zip(self.arg_types, self.arg_names)))
 
     def readSignature(self, f):
         # arg, inspect.getargspec(f) doesn't work for C/cython functions
@@ -932,7 +928,6 @@ def get(obj):
         return StructType.fromObj(obj)
 
 
-
 _cscalars = {
     ctypes.c_double: Float,
     ctypes.c_uint: uInt,
@@ -945,9 +940,9 @@ def from_ctype(type_):
     return _cscalars[type_]
 
 
-
 # values which need to be destructed: Any complex type that is wrapped.
 _stella_values_ = []
+
 
 class Typable(object):
     type = NoType
@@ -964,7 +959,8 @@ class Typable(object):
                 # special case: return NULL
                 return False, False
             else:
-                raise exc.TypeError("Inconsistent pointers: {} does not match {}".format(tp1, tp2), debuginfo)
+                raise exc.TypeError("Inconsistent pointers: {} does not match {}".format(tp1, tp2),
+                                    debuginfo)
         if tp1 == tp2:
             pass
         elif tp1 == NoType:
@@ -1030,7 +1026,6 @@ class Const(Typable):
         except exc.TypeError as e:
             self.name = "InvalidConst({0}, type={1})".format(value, type(value))
             raise e
-
 
     def unify_type(self, tp2, debuginfo):
         r = super().unify_type(tp2, debuginfo)
@@ -1111,7 +1106,8 @@ class Struct(Typable):
             wrapped.translate(cge)
         if not self.llvm:
             (self.llvm, self.transfer_value) = self.type.constant(self.value, cge)
-            # logging.debug("translate() of {}: *{:x}".format(self.transfer_value, ctypes.addressof(self.transfer_value)))
+            # logging.debug("translate() of {}: *{:x}".format(self.transfer_value,
+            #                                                 ctypes.addressof(self.transfer_value)))
             addr = ctypes.addressof(self.transfer_value)
             self.__class__.obj_store[addr] = self
         assert self.transfer_value
@@ -1214,7 +1210,7 @@ class Tuple(Typable):
         return "(tuple, {} elems)".format(len(self.values))
 
     def __repr__(self):
-        return "({})".format(", ".join( [str(v) for v in self.values]))
+        return "({})".format(", ".join([str(v) for v in self.values]))
 
     def translate(self, cge):
         if self.llvm:
