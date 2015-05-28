@@ -28,6 +28,7 @@ class IR(metaclass=ABCMeta):
     block = None
     loc = ''
     discard = False
+    reachable = True
 
     def __init__(self, func, debuginfo):
         self.debuginfo = debuginfo
@@ -324,15 +325,11 @@ class Module(object):
             if isinstance(wrapped, Function):
                 wrapped = self.getFunctionRef(wrapped)
         except exc.UndefinedGlobalError as e:
-            # TODO: too much nesting, there should be a cleaner way to detect these types
+            # TODO: is the order Ok? Should globals come before builtins?
             if key == 'len':
                 item = len
             elif key in __builtins__:
-                # TODO eliminate the special case of scalars
-                if tp.supported_scalar_name(key):
-                    return __builtins__[key]
-                else:
-                    item = __builtins__[key]
+                item = __builtins__[key]
             elif key in func.pyFunc().__globals__:
                 item = func.pyFunc().__globals__[key]
             else:
@@ -364,7 +361,7 @@ class Module(object):
 
         if kwargs is None:
             kwargs = {}
-        if not func.analyzed:
+        if not func.analyzed or func.result.type is tp.NoType:
             self.todoAdd(funcref, args, kwargs)
 
     def todoAdd(self, func, args, kwargs):
@@ -389,6 +386,9 @@ class Module(object):
 
     def todoCount(self):
         return len(self._todo)
+
+    def todoList(self):
+        return self._todo
 
     def translate(self):
         self.llvm = ll.Module('__stella__'+str(self.__class__.i), context=ll.context.Context())
@@ -620,7 +620,7 @@ class ExtModule(object):
         self.signatures = python.getCSignatures()
 
         for name, sig in self.signatures.items():
-            type_ = tp.ExtFunctionType(sig)
+            type_ = tp.ExtFunctionType(python, sig)
             self.funcs[name] = ExtFunction(name, type_)
         self.translated = False
 
@@ -651,7 +651,7 @@ class ExtModule(object):
                 func.translate(clib, module)
 
 
-class ExtFunction(object):
+class ExtFunction(tp.Foreign):
     llvm = None
     analyzed = True
     name = '?()'
@@ -679,19 +679,10 @@ class ExtFunction(object):
         self.llvm = ll.Function(module, func_tp, self.name)
 
 
-class ExtFunctionRef(tp.Callable):
-    def __init__(self, function):
-        self.function = function
-
-    @property
-    def type_(self):
-        return self.function.type_
-
-    def getReturnType(self, args, kwargs):
-        return self.function.getReturnType(args, kwargs)
-
-    def getResult(self, func):
-        return Register(func)
+class ExtFunctionRef(FunctionRef):
+    def makeEntry(self, args, kwargs):
+        msg = "External function {} cannot be the entry method for Stella".format(self.function)
+        raise exc.TypeError(msg)
 
     def call(self, cge, args, kw_args):
         args = self.combineArgs(args, kw_args)

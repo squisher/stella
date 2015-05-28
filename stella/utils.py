@@ -45,9 +45,15 @@ class Stack(object):
         return len(self.backend) == 0
 
     def clone(self):
-        s = Stack(self.name, self.log, self.quiet)
+        s = self.__class__(self.name, self.log, self.quiet)
         s.backend = [x for x in self.backend]
         return s
+
+    def contains(self, cond):
+        for item in self.backend:
+            if cond(item):
+                return True
+        return False
 
 
 class LinkedListIter(object):

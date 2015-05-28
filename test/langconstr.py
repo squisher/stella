@@ -311,6 +311,60 @@ def numpy_global():
     numpy_global_var[4] = 2
 
 
+def numpy_array2d1(a):
+    a[0, 0] = 1
+    a[0, 1] = 2
+    a[1, 0] = 3
+    a[1, 1] = 4
+
+
+def numpy_array2d2(a):
+    return a[0, 0] * a[1, 1] + a[1, 0] * a[0, 1]
+
+
+def numpy_array2d_for1(a):
+    r = 0
+    for i in range(2):
+        for j in range(2):
+            r += a[i, j]
+    return r
+
+
+def numpy_array2d_shape(a):
+    return a.shape
+
+
+def numpy_array2d_for2(a):
+    maxx = a.shape[0]
+    maxy = a.shape[1]
+    r = 0
+    for i in range(maxx):
+        for j in range(maxy):
+            r += 1
+    return r
+
+
+def numpy_array2d_for3(a, b):
+    maxx = a.shape[0]
+    maxy = a.shape[1]
+    r = 0
+    for i in range(maxx):
+        for j in range(maxy):
+            r += 1
+            b[i, j] += r
+    return r
+
+
+def numpy_array2d_for4(a):
+    maxx = a.shape[0]
+    maxy = a.shape[1]
+    r = 0
+    for i in range(maxx):
+        for j in range(maxy):
+            r += a[i, j]
+    return r
+
+
 def return_2():
     return 2
 
@@ -363,7 +417,19 @@ def switchTuple():
     return x - y
 
 
-def createTuple():
+def createTuple1():
+    x = 1
+    t1 = (x, -1)
+    return t1
+
+
+def createTuple2():
+    x = 7
+    t2 = (-2, x)
+    return t2
+
+
+def createTuple3():
     x = 1
     t1 = (x, -1)
     t2 = (t1[1], x)
@@ -546,7 +612,8 @@ def test13d():
 
 
 @mark.parametrize('f', [callFirst, firstPlusSecond, getReturnedTuple1,
-                        getReturnedTuple2, return_tuple, switchTuple, createTuple])
+                        getReturnedTuple2, return_tuple, switchTuple,
+                        createTuple1, createTuple2, createTuple3])
 def test14(f):
     make_eq_test(f, ())
 
@@ -568,3 +635,30 @@ def test15(f, arg):
 @mark.parametrize('f', [for3])
 def test16(f, arg):
     make_numpy_eq_test(f, arg)
+
+
+array2d_args = single_args([np.zeros((2, 2), dtype=int),
+                            np.array([[4, 3], [2, -1]]),
+                            np.array([[1.5, 2.5, 5.5], [-3.3, -5.7, 1.1]]),
+                            np.array([[42.0, 4.2], [5, 7], [0, 123]])
+                            ])
+
+
+@mark.parametrize('arg', array2d_args)
+@mark.parametrize('f', [numpy_array2d1, numpy_array2d2, numpy_array2d_for1, numpy_array2d_for2, numpy_array2d_for4])
+def test17(f, arg):
+    make_numpy_eq_test(f, arg)
+
+
+@mark.parametrize('arg', array2d_args)
+@mark.parametrize('f', [])
+@unimplemented
+def test17u(f, arg):
+    make_numpy_eq_test(f, arg)
+
+
+@mark.parametrize('arg', array2d_args)
+@mark.parametrize('f', [numpy_array2d_for3])
+def test18(f, arg):
+    arg2 = np.zeros(arg[0].shape)
+    make_numpy_eq_test(f, (arg[0], arg2))

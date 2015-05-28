@@ -2,7 +2,7 @@
 
 import os
 import os.path
-from subprocess import call
+from subprocess import check_call
 import time
 
 import pystache
@@ -38,7 +38,7 @@ def ccompile(fn, src, cc=None, flags=[]):
         os.unlink(obj)
     cmd = [CC, '-Wall', '-O' + str(opt)] + flags + ['-o', root, fn]
     print("Compiling: {0}".format(" ".join(cmd)))
-    call(cmd)
+    check_call(cmd)
     return root
 
 
@@ -67,7 +67,7 @@ def bench_it(name, c_src, args, extended=False, stella_f=None, full_f=None, flag
         cmd = [exe]
         print("Running C/{}: {}".format(cc, " ".join(cmd)))
         time_start = time.time()
-        call(cmd)
+        check_call(cmd)
         elapsed_c = time.time() - time_start
         r[cc] = elapsed_c
 
@@ -186,7 +186,7 @@ def bench_vs_template(module, extended, name, args, flags):
 
         return elapsed_stella
 
-    return bench_it(name, src, args, extended, flags=['-lm'], full_f=run_it)
+    return bench_it(name, src, args, extended, flags=flags, full_f=run_it)
 
 
 def bench_si1l1s(module, extended, suffix, duration):
@@ -220,8 +220,13 @@ def bench_nbody(n, extended):
     return bench_vs_template(test.nbody, extended, 'nbody', args, flags=['-lm'])
 
 
+def bench_heat(n, extended):
+    import test.heat
+    args = {'nsteps': n}
+    return bench_vs_template(test.heat, extended, 'heat', args, flags=['-lm', '-std=c99'])
+
+
 def speedup(bench):
-    #return bench['stella'] / bench['gcc']
     return bench['gcc'] / bench['stella']
 
 
@@ -268,3 +273,10 @@ def test_nbody(bench_result, bench_opt, bench_ext):
     duration = [250000, 10000000, 100000000][bench_opt]
     bench_result['nbody'] = bench_nbody(duration, bench_ext)
     assert speedup(bench_result['nbody']) >= min_speedup
+
+
+@bench
+def test_heat(bench_result, bench_opt, bench_ext):
+    duration = [13, 1000, 25000][bench_opt]
+    bench_result['heat'] = bench_heat(duration, bench_ext)
+    assert speedup(bench_result['heat']) >= min_speedup

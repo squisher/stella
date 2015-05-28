@@ -123,6 +123,19 @@ class H(object):
         return "H{{es: {}, i:{}}}".format(self.es, self.i)
 
 
+class J(object):
+    def __init__(self, t):
+        self.t = t
+
+    def __eq__(self, other):
+        return self.t == other.t
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __repr__(self):
+        return "J{{t: {}}}".format(self.t)
+
 G.origin = G(0, 0)
 
 
@@ -263,6 +276,14 @@ def forObjAttr(c):
     return r
 
 
+def forObjAttrRange(c):
+    c.i = len(c.a)
+    r = 1
+    for x in range(c.i):
+        r += x
+    return r
+
+
 def getFirstArrayValue(c):
     return c.a[0]
 
@@ -287,6 +308,9 @@ def select(item, truth):
     else:
         return None
 
+
+def objTuple1(j):
+    return j.t[0]
 
 args1 = [(1, 1), (24, 42), (0.0, 1.0), (1.0, 1.0), (3.0, 0.0)]
 
@@ -403,9 +427,8 @@ def test_no_mutation2(f, args):
     assert b1 == b2 and py == st
 
 
-@mark.parametrize('f', [forObjAttr])
+@mark.parametrize('f', [forObjAttr, forObjAttrRange])
 @mark.parametrize('args', args2)
-@unimplemented
 def test_no_mutation2_u(f, args):
     b1 = C(args)
     b2 = C(args)
@@ -617,6 +640,19 @@ def test_no_mutation12(f):
 def test_no_mutation13(f, arg):
     b1 = H(1, 2, 3)
     b2 = H(1, 2, 3)
+
+    assert b1 == b2
+    py = f(b1, arg)
+    st = stella.wrap(f)(b2, arg)
+
+    assert b1 == b2 and py == st
+
+@mark.parametrize('f', [objTuple1])
+@mark.parametrize('arg', [(42, -1)])
+@unimplemented
+def test_no_mutation14(f, arg):
+    b1 = J(arg)
+    b2 = J(arg)
 
     assert b1 == b2
     py = f(b1, arg)

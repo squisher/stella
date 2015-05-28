@@ -5,6 +5,8 @@ import logging
 import types
 from abc import ABCMeta, abstractmethod
 import inspect
+from functools import reduce
+import operator
 
 from . import exc
 
@@ -144,11 +146,16 @@ class PyWrapper(Type):
 
 
 class ScalarType(Type):
-    def __init__(self, name, type_, llvm, ctype):
+    def __init__(self, name, type_, llvm, ctype, cast_map):
+        """
+        cast_map: key is the type to map from, value is the builder function
+        name to call to convert to the type this object represents.
+        """
         self.name = name
         self.type_ = type_
         self.ctype = ctype
         self._llvm = llvm
+        self.cast_map = cast_map
 
     def llvmType(self, module=None):
         return super().llvmType(module)
@@ -175,18 +182,22 @@ tp_void = ll.VoidType()
 Int = ScalarType(
     "Int",
     int, tp_int, ctypes.c_int64,
+    {float: 'fptosi'},
 )
 uInt = ScalarType(  # TODO: unclear whether this is correct or not
     "uInt",
     int, tp_int32, ctypes.c_int32,
+    {},
 )
 Float = ScalarType(
     "Float",
     float, tp_double, ctypes.c_double,
+    {int: 'sitofp'},
 )
 Bool = ScalarType(
     "Bool",
     bool, tp_bool, ctypes.c_bool,
+    {},
 )
 
 
@@ -204,11 +215,13 @@ def invalid_none_use(msg):
 None_ = ScalarType(
     "NONE",
     type(None), tp_void, None,
+    {},
 )
 Void = None_  # TODO: Could there be differences later?
 Str = ScalarType(
     "Str",
     str, None, ctypes.c_char_p,
+    {},
 )
 
 _pyscalars = {
@@ -494,6 +507,16 @@ class TupleType(ScalarType, Subscriptable):
     def __init__(self, types):
         self.types = types
 
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and self.types == other.types
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    @property
+    def len(self):
+        return len(self.types)
+
     def _getConst(self, idx):
         if isinstance(idx, int):
             return idx
@@ -529,10 +552,6 @@ class TupleType(ScalarType, Subscriptable):
         l = [getattr(val, n) for n, _ in val._fields_]
         return tuple(l)
 
-    def unify_type(self, values):
-        for mv, ov in zip(self.values, values):
-            mv.type.unify_type(ov.type)
-
     def _llvmType(self, module):
         return ll.LiteralStructType([t.llvmType(module) for t in self.types])
 
@@ -566,11 +585,21 @@ class ArrayType(Type, Subscriptable):
                 obj.dtype))
 
         # TODO: multidimensional arrays
-        shape = obj.shape[0]
+        shape = obj.shape
 
         assert klass.isValidType(dtype)
 
-        return ArrayType(dtype, shape)
+        try:
+            ndim = len(shape)
+        except TypeError:
+            ndim = 1
+
+        if ndim == 0:
+            raise exc.UnimplementedError("Array with zero dimensions is not supported.")
+        elif ndim == 1:
+            return ArrayType(dtype, shape[0])
+        else:
+            return ArrayNdType(dtype, shape)
 
     @classmethod
     def isValidType(klass, type_):
@@ -591,7 +620,6 @@ class ArrayType(Type, Subscriptable):
 
     def _llvmType(self, module):
         type_ = ll.ArrayType(self.type_.llvmType(module), self.shape)
-
         return type_
 
     def __str__(self):
@@ -607,12 +635,76 @@ class ArrayType(Type, Subscriptable):
                             inbounds=True)
         return cge.builder.load(p)
 
+    def cast(self, value, cge):
+        if value.type == self.type_:
+            return value.translate(cge)
+        if value.type == Int and self.type_ == Float:
+            return Cast(value, Float).translate(cge)
+        raise TypeError("Cannot store {} into an array of {}".format(
+            value.type, self.type_))
+
     def storeSubscript(self, cge, container, idx, value):
         self._boundsCheck(idx)
         p = cge.builder.gep(
             container.translate(cge), [
                 Int.constant(0), idx.translate(cge)], inbounds=True)
-        cge.builder.store(value.translate(cge), p)
+        val = self.cast(value, cge)
+        cge.builder.store(val, p)
+
+
+class ArrayNdType(ArrayType):
+    def __init__(self, type_, shape):
+        super().__init__(type_, shape)
+
+    def _boundsCheck(self, idx):
+        """Check bounds, if possible. This is a compile time operation."""
+        if isinstance(idx, Const):
+            if isinstance(idx.type, TupleType):
+                ndim = len(idx.value)
+            else:
+                ndim = 1
+            if len(self.shape) != ndim:
+                msg = "TODO: indexing with {} dimensions into an {}-dimensional array".format(
+                    ndim, len(self.shape))
+                raise exc.TypeError(msg)
+            for i in range(len(self.shape)):
+                if idx.value[i] >= self.shape[i]:
+                    msg = "array index {} out of range: {} >= {}".format(i, idx.value[i],
+                                                                         self.shape[i])
+                    raise exc.IndexError(msg)
+
+    def _llvmType(self, module):
+        type_ = ll.ArrayType(self.type_.llvmType(module), reduce(operator.mul, self.shape))
+        return type_
+
+    def _generateIndex(self, cge, idx):
+        # TODO: test with dim > 2
+        assert idx.type.len > 1
+        flat_idx = Const(0).translate(cge)
+        for i in range(idx.type.len-1):
+            idx_val = idx.type.loadSubscript(cge, idx, i)
+            flat_idx = cge.builder.add(flat_idx,
+                                       cge.builder.mul(idx_val,
+                                                       Const(self.shape[i+1]).translate(cge)))
+
+        idx_val = idx.type.loadSubscript(cge, idx, idx.type.len-1)
+        flat_idx = cge.builder.add(flat_idx, idx_val)
+        return [Int.constant(0), flat_idx]
+
+    def loadSubscript(self, cge, container, idx):
+        self._boundsCheck(idx)
+        p = cge.builder.gep(container.translate(cge),
+                            self._generateIndex(cge, idx),
+                            inbounds=True)
+        return cge.builder.load(p)
+
+    def storeSubscript(self, cge, container, idx, value):
+        self._boundsCheck(idx)
+        p = cge.builder.gep(container.translate(cge),
+                            self._generateIndex(cge, idx),
+                            inbounds=True)
+        val = self.cast(value, cge)
+        cge.builder.store(val, p)
 
 
 class ListType(ArrayType):
@@ -872,8 +964,9 @@ class IntrinsicType(FunctionType):
         pass
 
 
-class ExtFunctionType(Foreign, FunctionType):
-    def __init__(self, signature):
+class ExtFunctionType(FunctionType):
+    def __init__(self, python, signature):
+        super().__init__(python, builtin=True)
         ret, arg_types = signature
         self.return_type = from_ctype(ret)
         self.arg_types = list(map(from_ctype, arg_types))
@@ -923,6 +1016,8 @@ def get(obj):
     elif isinstance(obj, types.BuiltinMethodType):
         assert False and "TODO: This case has not been completely implemented"
         return FunctionType.get(obj, bound=True, builtin=True)
+    elif isinstance(obj, tuple):
+        return TupleType([get(e) for e in obj])
     else:
         # TODO: How to identify unspported objects? Everything is an object...
         return StructType.fromObj(obj)
@@ -1202,6 +1297,29 @@ class List(Typable):
 
 
 class Tuple(Typable):
+    def unify_type(self, o, debuginfo):
+        assert isinstance(o, TupleType)
+        my_types = self.type.types
+        if len(my_types) != len(o.types):
+            raise exc.TypeError("A {}-tuple is not compatible with a {}-tuple".format(
+                len(my_types), len(o.types)))
+        for i in range(len(my_types)):
+            # TODO: unify this with Typable.unify_type somehow?
+            tp1 = my_types[i]
+            tp2 = o.types[i]
+            if tp1 == NoType:
+                my_types[i] = tp2
+            elif tp2 == NoType:
+                pass
+            elif tp1 == Int and tp2 == Float:
+                my_types[i] = Float
+                return True, False
+            elif tp1 == Float and tp2 == Int:
+                # Note that the type does not have to change here because Float is
+                # already wider than Int
+                return False, True
+            return False, False
+
     def __init__(self, values):
         self.values = [wrapValue(v) for v in values]
         self.type = TupleType([v.type for v in self.values])
@@ -1250,7 +1368,6 @@ def wrapValue(value):
 
 class Cast(Typable):
     def __init__(self, obj, tp):
-        assert obj.type != tp
         self.obj = obj
         self.type = tp
         self.emitted = False
@@ -1275,10 +1392,16 @@ class Cast(Typable):
             return self.llvm
 
         if isinstance(self.obj, Const):
-            value = float(self.obj.value)
+            value = self.type.type_(self.obj.value)
             self.llvm = self.type.constant(value)
         else:
-            self.llvm = cge.builder.sitofp(self.obj.llvm, Float.llvmType(cge.module), self.name)
+            pytype = self.obj.type.type_
+            try:
+                cast_name = self.type.cast_map[pytype]
+            except KeyError:
+                raise exc.TypeError("Cannot cast from {} to {}".format(self.obj.type, self.type))
+            cast_f = getattr(cge.builder, cast_name)
+            self.llvm = cast_f(self.obj.llvm, self.type.llvmType(cge.module), self.name)
         return self.llvm
 
     def __str__(self):

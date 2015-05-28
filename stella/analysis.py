@@ -36,7 +36,7 @@ class Function(object):
         elif isinstance(f, ir.Function):
             impl = f
         else:
-            raise exc.TypeError("{} is not a Function, it has type {}", f, type(f))
+            raise exc.TypeError("{} is not a Function, it has type {}".format(f, type(f)))
 
         logging.debug("Function.get({0}|{1}, {2})".format(
             impl, id(impl), module))
@@ -195,8 +195,14 @@ class Function(object):
                         # on the todo list, but first lets work inside the block
                         self.todo.push((bc.blockContent(), stack))
                 else:
-                    self.log.debug("Reached EOP.")
-                    assert stack.empty()
+                    if bc.linearNext() and not self.todo.contains(lambda x: x[0] == bc.linearNext()):
+                        # continue processing, because python does generate
+                        # dead code, unless that code is already on our TODO
+                        # list
+                        self.log.debug("Next instruction is not directly reachable, but continuing anyway")
+                        self.todo.push((bc.linearNext(), stack))
+                    else:
+                        assert stack.empty()
             else:
                 # there is (one or more) control flow changes, add them all to
                 # the todo list
@@ -213,6 +219,7 @@ class Function(object):
         self.todo.push(self.bytecodes)
 
         i = 0
+        reachable = True
         while not self.todo.empty():
             self.log.debug("Type analysis iteration {0}".format(i))
             self.analyze_again = False
@@ -220,18 +227,32 @@ class Function(object):
 
             for bc in bc_list:
                 try:
-                    abort = bc.type_eval(self)
-                    self.log.debug("TYPE'D " + bc.locStr())
-                    if isinstance(bc, bytecode.RETURN_VALUE):
-                        self.retype(self.impl.result.unify_type(bc.result.type,
+                    if reachable:
+                        abort = bc.type_eval(self)
+                        self.log.debug("TYPE'D " + bc.locStr())
+                        if isinstance(bc, bytecode.RETURN_VALUE):
+                            self.retype(self.impl.result.unify_type(bc.result.type,
                                                                 bc.debuginfo))
+                    else:
+                        self.log.debug("UNTYPE " + bc.locStr() + " -- unreachable")
+                        bc.reachable = False
+
                     if isinstance(bc, utils.BlockTerminal) and \
                             bc.linearNext() is not None and \
                             bc.linearNext() not in self.incoming_jumps:
-                        self.log.debug("Unreachable {0}, aborting".format(bc.linearNext()))
-                        break
+                        # Python does generate unreachable code which is then
+                        # followed by reachable code. This allows us to jump
+                        # over the section that needs to be ignored
+                        self.log.debug("Unreachable {0}, but continuing".format(bc.linearNext()))
+                        reachable = False
+                    elif bc.linearNext() in self.incoming_jumps:
+                        # Once there is an incoming jump, the following code is
+                        # reachable again
+                        reachable = True
+
                     if abort:
                         self.log.debug("Aborting typing, resuming later.")
+                        self.log.debug("{!r}".format(self.todo))
                         self.impl.analyzeAgain()
                         break
                 except exc.StellaException as e:
@@ -241,7 +262,7 @@ class Function(object):
             if self.analyze_again:
                 self.todo.push(bc_list)
 
-            if i > 10:
+            if i > 3:
                 raise Exception("Stopping after {0} type analysis iterations (failsafe)".format(i))
             i += 1
 
@@ -430,8 +451,8 @@ def main(f, args, kwargs):
 
     f.analyzeCall(wrapped_args, wrapped_kwargs)
 
-    f.log.debug("called functions: " + str(module.todoCount()))
     while module.todoCount() > 0:
+        f.log.debug("called functions: {} ({})".format(module.todoList(), module.todoCount()))
         # TODO add kwargs support!
         (call_impl, call_args, call_kwargs) = module.todoNext()
         call_f = Function.get(call_impl, module)

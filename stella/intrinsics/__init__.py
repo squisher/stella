@@ -10,6 +10,7 @@ import builtins
 from . import python
 from .. import tp, exc
 from ..storage import Register
+import numpy as np
 
 
 class Intrinsic(tp.Foreign, tp.Callable):
@@ -37,7 +38,12 @@ class Zeros(Intrinsic):
     def getReturnType(self, args, kw_args):
         combined = self.combineArgs(args, kw_args)
         shape = combined[0].value
-        type_ = tp.get_scalar(combined[1])
+
+        # the Python type when passed around in Stella is the intrinsic
+        # function which is a subtype of Cast
+        assert isinstance(combined[1], Cast)
+        type_ = tp.get_scalar(combined[1].py_func)
+
         if not tp.supported_scalar(type_):
             raise exc.TypeError("Invalid array element type {0}".format(type_))
         atype = tp.ArrayType(type_, shape)
@@ -129,9 +135,51 @@ class Exception(Intrinsic):
         return isinstance(item, type) and issubclass(item, builtins.Exception)
 
 
+class Cast(Intrinsic):
+    """
+    Abstract cast
+    """
+    arg_names = ['x']
+
+    def __init__(self):
+        super().__init__()
+
+    def getReturnType(self, args, kw_args):
+        return self.stella_type
+
+    def call(self, cge, args, kw_args):
+        obj = args[0]
+        cast = tp.Cast(obj, self.stella_type)
+        return cast.translate(cge)
+
+
+class Float(Cast):
+    stella_type = tp.Float
+    py_func = stella_type.type_
+
+
+class Int(Cast):
+    stella_type = tp.Int
+    py_func = stella_type.type_
+
+
+class Bool(Cast):
+    stella_type = tp.Bool
+    py_func = stella_type.type_
+
+
+casts = (int, float, bool)
+
+
 def is_extra(item):
-    """Is item an extra intrinsic which is specially detected?"""
-    return any([f(item) for f in [Exception.is_a]])
+    """Allow more flexible intrinsics detection than simple equality.
+
+    The example is Exception, where we want to catch subtypes as well.
+    """
+    # `numpy.ndarray` in `tuple` is broken, so work around it
+    if isinstance(item, np.ndarray):
+        return False
+    return any([f(item) for f in [Exception.is_a]]) or item in casts
 
 
 def get(func):

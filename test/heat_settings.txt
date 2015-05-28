@@ -1,0 +1,22 @@
+dt  = 0.000000002
+steps = 123
+paintsteps = 1000
+src = 0.4255
+sinktemp = -15
+scale = 4
+grid = 100 100
+source 10 10 10000000.0
+source 10 40 -10000000.0
+source 65 26 10000000.0
+source 80 36 -10000000.0
+temp 10 10 50.0
+temp 40 40 -50.0
+alpha 10 10 30.00
+alpha 11 10 30.00
+alpha 12 10 30.00
+alpha 10 11 30.00
+alpha 11 11 30.00
+alpha 12 11 30.00
+alpha 10 12 30.00
+alpha 11 12 30.00
+alpha 12 12 30.00

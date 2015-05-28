@@ -58,7 +58,6 @@ class Poison(object):
 
 
 class Bytecode(ir.IR):
-
     """
     Parent class for all Python bytecodes
     """
@@ -747,39 +746,55 @@ class LOAD_ATTR(Bytecode):
         self.grab_stack()
 
         arg = self.args[0]
+        # TODO would it be better to move some of this into arg.type?
+
         if isinstance(arg, types.ModuleType):
             self.result = func.module.loadExt(arg, self.name)
             self.discard = True
-        elif isinstance(arg.type.dereference(), tp.StructType):
+            return
+
+        type_ = arg.type.dereference()
+        if isinstance(type_, tp.StructType):
             try:
-                type_ = arg.type.dereference().getMemberType(self.name)
-                if isinstance(type_, tp.FunctionType):
-                    self.result = func.module.getFunctionRef(type_)
-                else:
-                    if self.result is None:
-                        self.result = Register(func.impl)
-                    self.result.unify_type(type_, self.debuginfo)
+                attr_type = arg.type.dereference().getMemberType(self.name)
             except KeyError:
                 raise exc.AttributeError("Unknown field {} of type {}".format(self.name,
                                                                               arg.type),
                                          self.debuginfo)
+            if isinstance(attr_type, tp.FunctionType):
+                self.result = func.module.getFunctionRef(attr_type)
+            else:
+                if self.result is None:
+                    self.result = Register(func.impl)
+                self.result.unify_type(attr_type, self.debuginfo)
+        elif isinstance(type_, tp.ArrayType):
+            if self.result is None:
+                self.result = Register(func.impl)
+            self.result.unify_type(tp.get(type_.shape), self.debuginfo)
         else:
-            self.result = Register(func.impl)
+            raise exc.TypeError("Cannot load attribute {} from type {}".format(self.name,
+                                                                               arg.type),
+                                self.debuginfo)
 
     def translate(self, cge):
         arg = self.args[0]
         if isinstance(arg, types.ModuleType):
             return
-        elif isinstance(arg.type.dereference(), tp.StructType):
-            tp_attr = arg.type.dereference().getMemberType(self.name)
+
+        type_ = arg.type.dereference()
+        if isinstance(type_, tp.StructType):
+            tp_attr = type_.getMemberType(self.name)
             if isinstance(tp_attr, tp.FunctionType):
                 self.result.f_self = arg
                 return
-            idx = arg.type.dereference().getMemberIdx(self.name)
+            idx = type_.getMemberIdx(self.name)
             idx_llvm = tp.getIndex(idx)
             struct_llvm = arg.translate(cge)
             p = cge.builder.gep(struct_llvm, [tp.Int.constant(0), idx_llvm], inbounds=True)
             self.result.llvm = cge.builder.load(p)
+        elif isinstance(type_, tp.ArrayType):
+            val = tp.wrapValue(type_.shape)
+            self.result.llvm = val.translate(cge)
         else:
             raise exc.UnimplementedError(type(arg))
 
@@ -1021,6 +1036,10 @@ class ForLoop(HasTarget, ir.IR):
                     limit.append(cur)
 
                     i += 1
+            elif isinstance(cur, LOAD_ATTR):
+                limit = [cur, cur.prev]
+                cur.prev.remove()
+                cur.remove()
             else:
                 raise exc.UnimplementedError(
                     'unsupported for loop: limit {0}'.format(
@@ -1546,10 +1565,12 @@ class BUILD_TUPLE(Bytecode):
 
     def type_eval(self, func):
         self.grab_stack()
+        self.args.reverse()
         if not self.result:
             self.result = tp.Tuple(self.args)
         else:
-            self.result.unify_type(self.args)
+            self.result.unify_type(tp.TupleType([arg.type for arg in self.args]),
+                                   self.debuginfo)
 
     def translate(self, cge):
         self.result.translate(cge)

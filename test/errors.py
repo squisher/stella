@@ -73,6 +73,7 @@ def raise_exc2():
 
 
 @mark.parametrize('f_exc', [(raise_exc1, TestException), (raise_exc2, Exception)])
+@unimplemented
 def test_exception(f_exc):
     """
     Note: this isn't a real test. The NotImplementedError is thrown during

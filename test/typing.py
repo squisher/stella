@@ -21,6 +21,18 @@ def equality(a, b):
     return a == b
 
 
+def cast_float(x):
+    return float(x)
+
+
+def cast_int(x):
+    return int(x)
+
+
+def cast_bool(x):
+    return bool(x)
+
+
 def test1():
     make_eq_test(return_bool, ())
 
@@ -48,4 +60,17 @@ def test3fail(args):
 @mark.parametrize('f', [numpy_return_element])
 @mark.xfail()
 def test4fail(f, args):
+    make_eq_test(f, args)
+
+
+@mark.parametrize('f', [cast_float, cast_int])
+@mark.parametrize('args', single_args([1, 42, -3, -5.5, 0, 3.14, randint(0, 10000000)]))
+def test5(f, args):
+    make_eq_test(f, args)
+
+
+@mark.parametrize('f', [cast_bool])
+@mark.parametrize('args', single_args([1, 42, -3, -5.5, 0, 3.14, randint(0, 10000000)]))
+@unimplemented
+def test5u(f, args):
     make_eq_test(f, args)
