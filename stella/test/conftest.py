@@ -1,3 +1,16 @@
+# Copyright 2013-2015 David Mohr
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import pytest
 from collections import defaultdict
 
@@ -6,7 +19,7 @@ def pytest_addoption(parser):
     parser.addoption('-B', "--bench", action="store",
                      type=str, default=False,
                      help="run benchmark tests: veryshort, short, or long")
-    parser.addoption('-E', "--extended-bench", action="store_true",
+    parser.addoption('-E', "--extended-bench", action="count",
                      default=False,
                      help="run also extended benchmark tests: in Python, and with clang")
 
@@ -22,13 +35,12 @@ def bench_result():
 def pytest_runtest_setup(item):
     if 'bench' in item.keywords and not item.config.getoption("--bench"):
         pytest.skip("need --bench option to run")
-    bench = item.config.getoption("--bench")
-    if bench not in (False, 'short', 'long', 'veryshort', 's', 'l', 'v'):
-        raise Exception("Invalid --bench option: " + bench)
 
 
 def pytest_configure(config):
-    pass
+    bench = config.getoption("--bench")
+    if bench not in (False, 'short', 'long', 'veryshort', 's', 'l', 'v'):
+        raise Exception("Invalid --bench option: " + bench)
 
 
 def pytest_terminal_summary(terminalreporter):
@@ -36,7 +48,11 @@ def pytest_terminal_summary(terminalreporter):
     if not tr.config.getoption("--bench"):
         return
     lines = []
-    name_width = max(map(len, results.keys())) + 2
+    if results:
+        name_width = max(map(len, results.keys())) + 2
+    else:
+        # TODO we were aborted, display a notice?
+        name_width = 2
     for benchmark, times in results.items():
         r = []
         s = []

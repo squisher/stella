@@ -4,9 +4,6 @@ import llvmlite.ir as ll
 import llvmlite.binding as llvm
 import pdb
 from pdb import pm
+from wip import *
 
-# try to load everything from wip.py
-try:
-    from wip import *
-except ImportError:
-    pass
+# pylama:ignore=W0611,W0401

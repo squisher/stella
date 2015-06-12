@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2013-2015 David Mohr
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import os
 import os.path
@@ -7,11 +20,11 @@ import time
 
 import pystache
 
-from test import *  # noqa
+from . import *  # noqa
 import stella
 
 opt = 3
-min_speedup = 0.8
+min_speedup = 0.75
 
 
 def ccompile(fn, src, cc=None, flags=[]):
@@ -42,7 +55,7 @@ def ccompile(fn, src, cc=None, flags=[]):
     return root
 
 
-def bench_it(name, c_src, args, extended=False, stella_f=None, full_f=None, flags=[]):
+def bench_it(name, c_src, args, extended=0, stella_f=None, full_f=None, flags=[]):
     """args = {k=v, ...}
     Args gets expanded to `k`_init: `k`=`v` for the C template
     """
@@ -85,7 +98,7 @@ def bench_it(name, c_src, args, extended=False, stella_f=None, full_f=None, flag
     r['stella'] = stats['elapsed']
     r['stella+compile'] = elapsed_stella
 
-    if extended:
+    if extended > 1:
         print("Running Python:")
         if stella_f:
             time_start = time.time()
@@ -99,7 +112,7 @@ def bench_it(name, c_src, args, extended=False, stella_f=None, full_f=None, flag
 
 
 def bench_fib(duration, extended):
-    from test.langconstr import fib
+    from .langconstr import fib
 
     args = {'x': duration}
     fib_c = """
@@ -129,7 +142,7 @@ int main(int argc, char ** argv) {
 
 
 def bench_fib_nonrecursive(duration, extended):
-    from test.langconstr import fib_nonrecursive
+    from .langconstr import fib_nonrecursive
 
     args = {'x': duration}
     fib_c = """
@@ -197,33 +210,33 @@ def bench_si1l1s(module, extended, suffix, duration):
 
 
 def bench_si1l1s_globals(duration, extended):
-    import test.si1l1s_globals
-    return bench_si1l1s(test.si1l1s_globals, extended, 'globals', duration)
+    from . import si1l1s_globals
+    return bench_si1l1s(si1l1s_globals, extended, 'globals', duration)
 
 
 def bench_si1l1s_struct(duration, extended):
-    import test.si1l1s_struct
-    return bench_si1l1s(test.si1l1s_struct, extended, 'struct', duration)
+    from . import si1l1s_struct
+    return bench_si1l1s(si1l1s_struct, extended, 'struct', duration)
 
 
 def bench_si1l1s_obj(duration, extended):
-    import test.si1l1s_obj
+    from . import si1l1s_obj
     # reuse the 'struct' version of C since there is no native OO
-    return bench_si1l1s(test.si1l1s_obj, extended, 'struct', duration)
+    return bench_si1l1s(si1l1s_obj, extended, 'struct', duration)
 
 
 def bench_nbody(n, extended):
-    import test.nbody
+    from . import nbody
     args = {'n': n,
             'dt': 0.01,
             }
-    return bench_vs_template(test.nbody, extended, 'nbody', args, flags=['-lm'])
+    return bench_vs_template(nbody, extended, 'nbody', args, flags=['-lm'])
 
 
 def bench_heat(n, extended):
-    import test.heat
+    from . import heat
     args = {'nsteps': n}
-    return bench_vs_template(test.heat, extended, 'heat', args, flags=['-lm', '-std=c99'])
+    return bench_vs_template(heat, extended, 'heat', args, flags=['-lm', '-std=c99'])
 
 
 def speedup(bench):
@@ -237,7 +250,7 @@ def test_fib(bench_result, bench_opt, bench_ext):
     assert speedup(bench_result['fib']) >= min_speedup
 
 
-@bench
+@mark.skipif(True, reason="Runs too fast to be a useful benchmark")
 def test_fib_nonrecursive(bench_result, bench_opt, bench_ext):
     duration = [50, 150, 175][bench_opt]
     bench_result['fib_nonrec'] = bench_fib_nonrecursive(duration, bench_ext)

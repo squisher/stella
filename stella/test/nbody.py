@@ -1,4 +1,17 @@
 #!/usr/bin/env python3
+# Copyright 2013-2015 David Mohr
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # The Computer Language Benchmarks Game
 # http://benchmarksgame.alioth.debian.org/
 #
@@ -7,13 +20,54 @@
 # modified by Maciej Fijalkowski
 # 2to3
 # modified by David Mohr
+#
+##
+# This is a specific instance of the Open Source Initiative (OSI) BSD license
+# template: http://www.opensource.org/licenses/bsd-license.php
+##
+# Revised BSD license
+#
+# Copyright © 2004-2008 Brent Fulgham, 2005-2015 Isaac Gouy, 2015 David Mohr
+#
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# - Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+# - Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+# - Neither the name of "The Computer Language Benchmarks Game" nor the name of
+#   "The Computer Language Shootout Benchmarks" nor the names of its contributors
+#   may be used to endorse or promote products derived from this software without
+#   specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
 
 
 import sys
 import copy
 import math
-import stella
-from test import mark, unimplemented
+try:
+    from . import mark, unimplemented
+    parametrize = mark.parametrize
+except SystemError:
+    def unimplemented(f):
+        return f
+    def parametrize(*args):
+        return unimplemented
 
 
 PI = 3.14159265358979323
@@ -191,12 +245,12 @@ def offset_momentum(ref, bodies, px=0.0, py=0.0, pz=0.0):
     ref.vz = pz / ref.mass
 
 
-@mark.parametrize('opt', [3, 2, 1])
+@parametrize('opt', [3, 2, 1])
 def test1a(opt):
     return _test1(opt)
 
 
-@mark.parametrize('opt', [0])
+@parametrize('opt', [0])
 @unimplemented
 def test1b(opt):
     """At -O0 the alloca of the nested for loops will cause a stack overflow."""
@@ -204,6 +258,7 @@ def test1b(opt):
 
 
 def _test1(opt):
+    import stella
     n = 5990
     offset_momentum(BODIES.sun, SYSTEM)
     s1 = copy.deepcopy(SYSTEM)

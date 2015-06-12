@@ -17,3 +17,5 @@ faulthandler.err
 fib
 .ropeproject/
 /tmp/
+/build/
+/dist/
