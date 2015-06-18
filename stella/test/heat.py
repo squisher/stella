@@ -346,14 +346,7 @@ timestep=%f (s)
         for x in range(self.xSize):
             for y in range(self.ySize):
 
-                #if n == 0 and x == 10 and y == 40:
-                    #import pdb; pdb.set_trace()  # XXX BREAKPOINT
-                #Uorig = self.U[y,x]
-
                 du = Diffusion2D(self.U, self.K, x,y, self.bPeriodic, self.gridSize)
-#                if n == 1000 and x == 10 and y == 40: # and y <= 10: #self.U[y,x] > 0:
-#                    print ("x={:2d} y={:2d}". format(x, y), endl='')
-#                    print ("{:f} += {:f}". format(self.uTotal, self.U[y, x]))
                 self.uTotal += self.U[y,x]
 
                 #-- timestep
@@ -369,19 +362,10 @@ timestep=%f (s)
                 if (self.U[y,x] < self.uMin):
                     self.uMin = self.U[y,x]
 
-#                Unow = self.U[y, x]
-#                if n <= 1000 and Unow != 0:
-#                    #if n==1000 and x == 8 and y == 41:
-#                    #    import pdb; pdb.set_trace()  # XXX BREAKPOINT
-#                    print ("n={:4d} x={:2d} y={:2d} ". format(n, x, y), end='')
-#                    print ("du={:2.15f} uTotal={:2.8f} Uorig={:2.8f} Unow={:2.15f}". format(du, self.uTotal, Uorig, Unow))
-
-
         self.time = self.dt * float(n)
         #sz = "%08d %12.11f %12.11f %4.1f %4.1f\n" % (n, self.time, self.uTotal, self.uMax, self.uMin)
         #print (sz)
         #AppendLog(sz)
-        #AppendLog(n, self.time, self.uTotal, self.uMax, self.uMin)
 
 
     #--------------------------
