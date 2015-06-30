@@ -60,11 +60,15 @@ class SimObj(object):
 class Point(object):
     def __init__(self, pos = None):
         if pos == None:
-            self.pos = zeros(shape=Point.dim)
+            self.pos = zeros(shape=Point.dim, dtype=int)
         elif type(pos) == Point:
             self.pos = copy(pos.pos)
         else:
             self.pos = pos
+
+    def setTo(self, p):
+        for i in range(Point.dim):
+            self.pos[i] = p.pos[i]
 
     def getPos(self):
         return self.pos
@@ -105,6 +109,10 @@ class Leg(SimObj):
         self.pos = params['pos']
         self.r = params['r']
         self.no = params['no']
+        # pre-allocate space for moves
+        self.moves = []
+        for i in range(2*self.dim):
+            self.moves.append(Point())
 
         params['surface'].putDown(self.pos)
 
@@ -113,26 +121,28 @@ class Leg(SimObj):
 
     def move(self, spider, surface):
         # TODO gait check, extend possible moves?
-        moves = []
+        i = 0
         for d1 in range(surface.dim):
-            pos = Point(self.pos)
+            pos = self.moves[i]
+            pos.setTo(self.pos)
             pos.addToDim(d1, -1)
             if not surface.isOccupied(pos) and spider.gaitOk(pos, self):
-                moves.append(pos)
+                i += 1
 
-            pos = Point(self.pos)
+            pos = self.moves[i]
+            pos.setTo(self.pos)
             pos.addToDim(d1, 1)
             if not surface.isOccupied(pos) and spider.gaitOk(pos, self):
-                moves.append(pos)
-        if len(moves) == 0:
+                i += 1
+        if i == 0:
             raise Exception ("No moves -- this shouldn't happen")
-        move = moves[int(Rnd.uniform() * len(moves))]
+        move = self.moves[int(Rnd.uniform() * i)]
 
         surface.pickUp(self.pos)
         self.r = surface.putDown(move)
         #print ("# Moving to {0}".format(move))
 
-        self.pos = move
+        self.pos.setTo(move)
 
     def getRate(self):
         return self.r
