@@ -43,6 +43,12 @@ def pytest_configure(config):
         raise Exception("Invalid --bench option: " + bench)
 
 
+def save_results():
+    import pickle
+    with open('timings.pickle', 'wb') as f:
+        pickle.dump(results, f)
+
+
 def pytest_terminal_summary(terminalreporter):
     tr = terminalreporter
     if not tr.config.getoption("--bench"):
@@ -50,22 +56,28 @@ def pytest_terminal_summary(terminalreporter):
     lines = []
     if results:
         name_width = max(map(len, results.keys())) + 2
+        save_results()
     else:
         # TODO we were aborted, display a notice?
         name_width = 2
-    for benchmark, times in results.items():
-        r = []
-        s = []
-        for impl, t in times.items():
-            r.append('{}={:0.3f}s'.format(impl, t))
-            if not impl.startswith('stella'):
-                s.append('{}={:0.2f}x '.format('f'.rjust(len(impl)),
-                                               t / times['stella']))
-            else:
-                s.append(' ' * len(r[-1]))
+    for benchmark, type_times in sorted(results.items()):
+        type_width = max(map(len, type_times.keys())) + 2
+        for b_type, times in sorted(type_times.items()):
+            r = []
+            s = []
+            for impl, t in times.items():
+                r.append('{}={:0.3f}s'.format(impl, t))
+                if not impl.startswith('stella'):
+                    s.append('{}={:0.2f}x '.format('f'.rjust(len(impl)), t /
+                                                   times['stella']))
+                else:
+                    s.append(' ' * len(r[-1]))
 
-        lines.append("{}  {}".format(benchmark.ljust(name_width), ',  '.join(r)))
-        lines.append("{}  {}".format(' '.ljust(name_width), '   '.join(s)))
+            lines.append("{} {}  {}".format(benchmark.ljust(name_width),
+                                            b_type.ljust(type_width), ' '.join(r)))
+            lines.append("{} {}  {}".format(' '.ljust(name_width),
+                                            ' '.ljust(type_width), ' '.join(s)))
+
     if len(lines) > 0:
         tr.write_line('-'*len(lines[0]), yellow=True)
     for line in lines:

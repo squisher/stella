@@ -30,6 +30,8 @@ ddd = np.array([[1.5,  2.5,  5.5], [-3.3, -5.7,  1.1]])
 ddb = np.zeros(ddd.shape)
 e = stella.test.objects.E()
 e2 = stella.test.objects.E()
+settings1d = stella.test.si1l1s_obj.Settings(['seed=42'])
+sim1d = stella.test.si1l1s_obj.Simulation(settings1d)
 settings = stella.test.virtnet_purepython.Settings(['seed=42'])
 sim = stella.test.virtnet_purepython.Simulation(settings)
 l1 = [stella.test.objects.E(2), stella.test.objects.E(4)]

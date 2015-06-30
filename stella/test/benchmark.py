@@ -15,7 +15,7 @@
 
 import os
 import os.path
-from subprocess import check_call
+from subprocess import check_call, Popen, PIPE
 import time
 
 import pystache
@@ -27,13 +27,18 @@ opt = 3
 min_speedup = 0.75
 
 
-def ccompile(fn, src, cc=None, flags=[]):
+def ccompile(fn, src, cc=None, flags={}):
     """
     Write the string src into the file fn, then compile it with -O{opt} and
     return the executable name.
     """
     with open(fn, 'w') as f:
         f.write(src)
+
+    if 'c' not in flags:
+        flags['c'] = []
+    if 'ld' not in flags:
+        flags['ld'] = []
 
     if cc is None:
         if 'CC' in os.environ:
@@ -49,13 +54,38 @@ def ccompile(fn, src, cc=None, flags=[]):
     obj = root + ".o"
     if os.path.exists(obj):
         os.unlink(obj)
-    cmd = [CC, '-Wall', '-O' + str(opt)] + flags + ['-o', root, fn]
+    with open(fn, 'rb') as f:
+        sourcecode = f.read()
+
+    cmd = [CC] + flags['c'] + ['-Wall', '-E', '-o', '-', '-']
+    print("Preprocessing: {0}".format(" ".join(cmd)))
+    p = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    preprocessed, serr = p.communicate(timeout=30, input=sourcecode)
+    assert (not serr or not serr.decode())
+
+    #cmd = [CC, '-Wall', '-O' + str(opt)] + flags + ['-o', root, fn]
+    # start with C input, generate assembly
+    cmd = [CC, '-Wall'] + flags['c'] + ['-x', 'cpp-output', '-S', '-O' + str(opt)] + ['-o', '-', '-']
     print("Compiling: {0}".format(" ".join(cmd)))
-    check_call(cmd)
-    return root
+
+    p = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+
+    time_start = time.time()
+    sout, serr = p.communicate(timeout=30, input=preprocessed)
+    elapsed = time.time() - time_start
+
+    assert not serr.decode()
+
+    cmd = [CC] + flags['ld'] + ['-o', root, '-x', 'assembler', '-']
+    print("Moah Compiling: {0}".format(" ".join(cmd)))
+    p = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    sout, serr = p.communicate(timeout=30, input=sout)
+    assert (not serr or not serr.decode()) and (not sout or not sout.decode())
+
+    return root, elapsed
 
 
-def bench_it(name, c_src, args, extended=0, stella_f=None, full_f=None, flags=[]):
+def bench_it(name, c_src, args, extended=0, stella_f=None, full_f=None, flags={}):
     """args = {k=v, ...}
     Args gets expanded to `k`_init: `k`=`v` for the C template
     """
@@ -63,7 +93,8 @@ def bench_it(name, c_src, args, extended=0, stella_f=None, full_f=None, flags=[]
         raise Exception(
             "Either need to specify stella_f(*arg_value) or full_f(args, stats)")
 
-    r = {}
+    t_run = {}
+    t_compile = {}
 
     c_args = {k+'_init': k+'='+str(v) for k, v in args.items()}
     print("Doing {0}({1})".format(name, args))
@@ -75,14 +106,16 @@ def bench_it(name, c_src, args, extended=0, stella_f=None, full_f=None, flags=[]
         CCs = ['gcc']
 
     for cc in CCs:
-        exe = ccompile(__file__ + "." + name + ".c", src, cc, flags)
+        exe, elapsed_compile = ccompile(__file__ + "." + name + ".c", src, cc, flags)
+        t_compile[cc] = elapsed_compile
 
         cmd = [exe]
+
         print("Running C/{}: {}".format(cc, " ".join(cmd)))
         time_start = time.time()
         check_call(cmd)
         elapsed_c = time.time() - time_start
-        r[cc] = elapsed_c
+        t_run[cc] = elapsed_c
 
     print("Running Stella:")
     stats = {}
@@ -95,8 +128,10 @@ def bench_it(name, c_src, args, extended=0, stella_f=None, full_f=None, flags=[]
     else:
         elapsed_stella = full_f(args, stella.wrap, wrapper_opts)
 
-    r['stella'] = stats['elapsed']
-    r['stella+compile'] = elapsed_stella
+    t_run['stella'] = stats['elapsed']
+    # TODO no need to keep track of the combined time, is there?
+    # t_run['stella+compile'] = elapsed_stella
+    t_compile['stella'] = elapsed_stella - stats['elapsed']
 
     if extended > 1:
         print("Running Python:")
@@ -106,9 +141,9 @@ def bench_it(name, c_src, args, extended=0, stella_f=None, full_f=None, flags=[]
             elapsed_py = time.time() - time_start
         else:
             elapsed_py = full_f(args, time_stats, wrapper_opts)
-        r['python'] = elapsed_py
+        t_run['python'] = elapsed_py
 
-    return r
+    return {'run': t_run, 'compile': t_compile}
 
 
 def bench_fib(duration, extended):
@@ -206,7 +241,7 @@ def bench_si1l1s(module, extended, suffix, duration):
     args = {'seed': '42',
             'rununtiltime': duration
             }
-    return bench_vs_template(module, extended, 'si1l1s_' + suffix, args, ['-lm'])
+    return bench_vs_template(module, extended, 'si1l1s_' + suffix, args, {'ld': ['-lm']})
 
 
 def bench_si1l1s_globals(duration, extended):
@@ -230,17 +265,17 @@ def bench_nbody(n, extended):
     args = {'n': n,
             'dt': 0.01,
             }
-    return bench_vs_template(nbody, extended, 'nbody', args, flags=['-lm'])
+    return bench_vs_template(nbody, extended, 'nbody', args, flags={'ld': ['-lm']})
 
 
 def bench_heat(n, extended):
     from . import heat
     args = {'nsteps': n}
-    return bench_vs_template(heat, extended, 'heat', args, flags=['-lm', '-std=c99'])
+    return bench_vs_template(heat, extended, 'heat', args, flags={'ld': ['-lm'], 'c':['-std=c99']})
 
 
 def speedup(bench):
-    return bench['gcc'] / bench['stella']
+    return bench['run']['gcc'] / bench['run']['stella']
 
 
 @bench

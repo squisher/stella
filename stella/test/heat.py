@@ -465,11 +465,13 @@ def format_result(sim):
         #sz = "%08d %12.11f %12.11f %4.1f %4.1f\n" % (n, self.time, self.uTotal, self.uMax, self.uMin)
         print ("%08d %12.11f %12.11f %4.1f %4.1f" % (n, time_, uTotal, uMax, uMin))
 
+
 def prepare(args):
     sim = Sim()
     process_config(sim)
     sim.set_nsteps(args['nsteps'])
     return (sim.run, (), lambda: format_result(sim))
+
 
 ########################################################################
 if __name__ == '__main__':
@@ -483,7 +485,11 @@ if __name__ == '__main__':
         frm.show()
         frm.raise_()
 
-    process_config(sim, p=False)
+    if len(sys.argv) > 1:
+        settings = sys.argv[1]
+    else:
+        settings = 'test1_settings.txt'
+    process_config(sim, settings, p=False)
 
     if gui:
         frm.SetSizes(sim.xSize, sim.ySize)

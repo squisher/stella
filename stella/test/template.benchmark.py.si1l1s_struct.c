@@ -16,7 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #define lint // get rid of unused variable warning in mtwist.c
-#include "../../mtpy/mtwist-1.1/mtwist.c"
+#include "../mtpy/mtwist-1.1/mtwist.c"
 #include <math.h>
 
 typedef struct {

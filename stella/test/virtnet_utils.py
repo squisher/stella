@@ -60,5 +60,3 @@ class Settings(object):
             r += str(k) + ':' + str(v) + ', '
         return r[:-2] + '}'
 
-def dsl(f):
-    return f

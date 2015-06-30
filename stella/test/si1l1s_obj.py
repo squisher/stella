@@ -21,9 +21,18 @@ import time
 from numpy import zeros
 from random import randint
 
-from . import *  # noqa
-import stella
-from . import virtnet_utils
+try:
+    #from . import *  # noqa
+    from . import mark, unimplemented
+    parametrize = mark.parametrize
+    from . import virtnet_utils
+    import stella
+except SystemError:
+    def unimplemented(f):
+        return f
+    def parametrize(*args):
+        return unimplemented
+    import virtnet_utils
 
 
 class Settings(virtnet_utils.Settings):
@@ -107,7 +116,7 @@ class Simulation(object):
 
         # TODO: Declaring R here is not necessary in Python! But llvm needs a
         # it because otherwise the definition of R does not dominate the use below.
-        R = 0.0
+        #R = 0.0
 
         while self.obs_i < self.K and self.t < self.rununtiltime:
             if self.leg < self.substrate:
@@ -141,15 +150,21 @@ def prepare(args):
     return (sim.run, (), lambda: sim.observations)
 
 
-@mark.parametrize('args', [['seed=42'], ['seed=63'], ['seed=123456'],
+@parametrize('args', [['seed=42'], ['seed=63'], ['seed=123456'],
                            ['rununtiltime=1e4', 'seed=494727'],
                            ['seed={}'.format(randint(1, 100000))]])
 def test1(args):
     prototype(args)
 
 
-timed = timeit(prototype)
+def main(args, wrapper=lambda x: x):
+    settings = Settings(args)
+    sim = Simulation(settings)
+    r = wrapper(sim.run)()
+    print (sim.observations)
+    return r
 
 
-def bench1():
-    timed(['seed=42', 'rununtiltime=1e8'])
+if __name__ == '__main__':
+    import sys
+    main(sys.argv)
