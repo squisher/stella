@@ -210,7 +210,7 @@ Float = ScalarType(
 Bool = ScalarType(
     "Bool",
     bool, tp_bool, ctypes.c_bool,
-    {},
+    {float: 'fptosi', int: 'trunc'},
 )
 
 

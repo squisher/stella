@@ -73,6 +73,10 @@ def simple_ifeq_const(x):
         return 42
 
 
+def op_not(x):
+    return not x
+
+
 def for1(x):
     r = 0
     for i in range(x):
@@ -477,7 +481,7 @@ def test2(f, args):
 
 
 @mark.parametrize('arg', single_args([True, False]))
-@mark.parametrize('f', [simple_if, simple_ifeq_const])
+@mark.parametrize('f', [simple_if, simple_ifeq_const, op_not])
 def test3(f, arg):
     make_eq_test(f, arg)
 
@@ -504,7 +508,7 @@ def test5b(f):
 
 @mark.parametrize('arg', single_args([0, 1, 2, 42, -1, -42]))
 @mark.parametrize('f', [for1, for2, for_loop_var, while1, recursive, ext_call, kwargs_call1,
-                        kwargs_call2, kwargs_call3, kwargs_call4])
+                        kwargs_call2, kwargs_call3, kwargs_call4, op_not])
 def test6(f, arg):
     make_eq_test(f, arg)
 

@@ -1611,6 +1611,30 @@ class RAISE_VARARGS(Bytecode):
         cge.builder.call(llvm_f, [])
 
 
+class UNARY_NOT(Bytecode):
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+        self.result = Register(func)
+
+    @pop_stack(1)
+    def stack_eval(self, func, stack):
+        stack.push(self)
+
+    def type_eval(self, func):
+        self.grab_stack()
+        arg = self.args[0]
+        if arg.type in (tp.Int, tp.Float):
+            self.args[0] = Cast(arg, tp.Bool)
+
+        self.result.unify_type(tp.Bool, self.debuginfo)
+
+    def translate(self, cge):
+        self.cast(cge)
+        self.result.llvm = cge.builder.xor(
+            tp.Bool.constant(1),
+            self.args[0].translate(cge))
+
+
 opconst = {}
 # Get all contrete subclasses of Bytecode and register them
 for name in dir(sys.modules[__name__]):
