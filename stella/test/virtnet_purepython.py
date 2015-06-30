@@ -20,8 +20,8 @@ from copy import deepcopy
 from numpy import zeros, copy
 try:
     from .virtnet_utils import Settings
-except ValueError:
-    from test.virtnet_utils import Settings
+except SystemError:
+    from virtnet_utils import Settings
 
 
 #### HELPERS ####
