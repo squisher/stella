@@ -1641,6 +1641,18 @@ class UNARY_NOT(Bytecode):
             self.args[0].translate(cge))
 
 
+class BINARY_AND(BinaryOp):
+    b_func = {tp.Bool: 'and_', tp.Int: 'and_'}
+
+
+class BINARY_OR(BinaryOp):
+    b_func = {tp.Bool: 'or_', tp.Int: 'or_'}
+
+
+class BINARY_XOR(BinaryOp):
+    b_func = {tp.Bool: 'xor', tp.Int: 'xor'}
+
+
 opconst = {}
 # Get all contrete subclasses of Bytecode and register them
 for name in dir(sys.modules[__name__]):

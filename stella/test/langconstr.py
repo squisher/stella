@@ -465,6 +465,18 @@ def addTuple(t):
     return t[0] + t[1]
 
 
+def bitwise_and(a, b):
+    return a & b
+
+
+def bitwise_or(a, b):
+    return a | b
+
+
+def bitwise_xor(a, b):
+    return a ^ b
+
+
 ###
 
 @mark.parametrize('args', [(40, 2), (43, -1), (41, 1)])
@@ -506,7 +518,7 @@ def test5b(f):
     make_eq_test(f, ())
 
 
-@mark.parametrize('arg', single_args([0, 1, 2, 42, -1, -42]))
+@mark.parametrize('arg', single_args([0, 1, 2, 3, 42, -1, -42]))
 @mark.parametrize('f', [for1, for2, for_loop_var, while1, recursive, ext_call, kwargs_call1,
                         kwargs_call2, kwargs_call3, kwargs_call4, op_not])
 def test6(f, arg):
@@ -679,3 +691,10 @@ def test17u(f, arg):
 def test18(f, arg):
     arg2 = np.zeros(arg[0].shape)
     make_numpy_eq_test(f, (arg[0], arg2))
+
+
+@mark.parametrize('args', [(40, 2), (43, 1), (42, 3), (0, 0), (2, 2), (3, 3), (3, 4), (4, 7),
+                           (True, True), (True, False), (False, False), (False, True)])
+@mark.parametrize('f', [bitwise_and, bitwise_or, bitwise_xor])
+def test19(f, args):
+    make_eq_test(f, args)
