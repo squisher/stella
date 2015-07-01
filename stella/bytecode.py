@@ -475,9 +475,11 @@ class COMPARE_OP(Bytecode):
 
         f = getattr(cge.builder, self.b_func[type_])
 
-        self.result.llvm = f(self.op,
-                             self.args[0].translate(cge),
-                             self.args[1].translate(cge))
+        llvm = f(self.op,
+                 self.args[0].translate(cge),
+                 self.args[1].translate(cge))
+        # the comparison returns i1 but we need to return an i8
+        self.result.llvm = cge.builder.zext(llvm, tp.Bool.llvmType(cge))
 
 
 class RETURN_VALUE(utils.BlockTerminal, Bytecode):
@@ -580,7 +582,8 @@ class JUMP_IF_FALSE_OR_POP(Jump_if_X_or_pop, Bytecode):
         super().__init__(func, debuginfo)
 
     def translate(self, cge):
-        cge.builder.cbranch(self.args[0].translate(cge),
+        cond = tp.Cast.translate_i1(self.args[0], cge)
+        cge.builder.cbranch(cond,
                             self.next.block,
                             self.target_bc.block)
 
@@ -591,7 +594,8 @@ class JUMP_IF_TRUE_OR_POP(Jump_if_X_or_pop, Bytecode):
         super().__init__(func, debuginfo)
 
     def translate(self, cge):
-        cge.builder.cbranch(self.args[0].translate(cge),
+        cond = tp.Cast.translate_i1(self.args[0], cge)
+        cge.builder.cbranch(cond,
                             self.target_bc.block,
                             self.next.block)
 
@@ -641,7 +645,8 @@ class POP_JUMP_IF_FALSE(Pop_jump_if_X, Bytecode):
         super().__init__(func, debuginfo)
 
     def translate(self, cge):
-        cge.builder.cbranch(self.args[0].translate(cge),
+        cond = tp.Cast.translate_i1(self.args[0], cge)
+        cge.builder.cbranch(cond,
                             self.next.block,
                             self.target_bc.block)
 
@@ -652,7 +657,8 @@ class POP_JUMP_IF_TRUE(Pop_jump_if_X, Bytecode):
         super().__init__(func, debuginfo)
 
     def translate(self, cge):
-        cge.builder.cbranch(self.args[0].translate(cge),
+        cond = tp.Cast.translate_i1(self.args[0], cge)
+        cge.builder.cbranch(cond,
                             self.target_bc.block,
                             self.next.block)
 
