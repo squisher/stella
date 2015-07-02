@@ -477,6 +477,10 @@ def bitwise_xor(a, b):
     return a ^ b
 
 
+def tuple_me(a):
+    return tuple(a)
+
+
 ###
 
 @mark.parametrize('args', [(40, 2), (43, -1), (41, 1)])
@@ -564,7 +568,7 @@ def test12(f, arg):
 @mark.parametrize('arg', single_args([np.zeros(5, dtype=int)]))
 @mark.parametrize('f', [])
 @unimplemented
-def test12b(f, arg):
+def test12u(f, arg):
     make_eq_test(f, arg)
 
 
@@ -674,7 +678,8 @@ array2d_args = single_args([np.zeros((2, 2), dtype=int),
 
 
 @mark.parametrize('arg', array2d_args)
-@mark.parametrize('f', [numpy_array2d1, numpy_array2d2, numpy_array2d_for1, numpy_array2d_for2, numpy_array2d_for4])
+@mark.parametrize('f', [numpy_array2d1, numpy_array2d2, numpy_array2d_for1, numpy_array2d_for2,
+                        numpy_array2d_for4])
 def test17(f, arg):
     make_numpy_eq_test(f, arg)
 
@@ -698,3 +703,13 @@ def test18(f, arg):
 @mark.parametrize('f', [bitwise_and, bitwise_or, bitwise_xor])
 def test19(f, args):
     make_eq_test(f, args)
+
+
+# TODO Who needs arrays longer than 2?
+#@mark.parametrize('arg', single_args([np.zeros(5, dtype=int), np.zeros(3), np.array([1, 2, 42]),
+#                                     np.array([0.0, 3.0])]))
+@mark.parametrize('arg', single_args([np.zeros(2, dtype=int), np.zeros(2), np.array([1, 42]),
+                                     np.array([0.0, 3.0])]))
+@mark.parametrize('f', [tuple_me])
+def test20(f, arg):
+    make_numpy_eq_test(f, arg)

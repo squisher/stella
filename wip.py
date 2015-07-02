@@ -53,4 +53,4 @@ def current_work(run=False, **kwargs):
         ir = not run
     else:
         ir = run
-    print(stella.wrap(stella.test.typing.cast_bool, ir=ir, **kwargs)(5))
+    print(stella.wrap(stella.test.langconstr.tuple_me, ir=ir, **kwargs)(a))
