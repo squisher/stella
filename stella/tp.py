@@ -128,6 +128,12 @@ class Reference(Type):
     def on_heap(self):
         return self.type_.on_heap
 
+    def __eq__(self, o):
+        return self.ptr == o.ptr and self.type_ == o.type_
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
 
 class Subscriptable(metaclass=ABCMeta):
     """Mixin"""
