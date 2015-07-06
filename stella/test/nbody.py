@@ -67,14 +67,8 @@ DELTA = 0.0000001
 
 class Body(object):
     def __init__(self, p, v, mass):
-        (x, y, z) = p
-        (vx, vy, vz) = v
-        self.x = x
-        self.y = y
-        self.z = z
-        self.vx = vx
-        self.vy = vy
-        self.vz = vz
+        self.x, self.y, self.z = p
+        self.vx, self.vy, self.vz = v
         self.mass = mass
 
     def __repr__(self):
