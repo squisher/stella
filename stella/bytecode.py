@@ -460,6 +460,13 @@ class COMPARE_OP(Bytecode):
     def type_eval(self, func):
         self.grab_stack()
         self.result.type = tp.Bool
+
+        # upcast integers to float if required
+        if (self.args[0].type == tp.Int and self.args[1].type == tp.Float):
+            self.args[0] = Cast(self.args[0], tp.Float)
+        if (self.args[0].type == tp.Float and self.args[1].type == tp.Int):
+            self.args[1] = Cast(self.args[1], tp.Float)
+
         if (self.args[0].type != self.args[1].type and
                 self.args[0].type != tp.NoType and self.args[1].type != tp.NoType):
             raise exc.TypeError(

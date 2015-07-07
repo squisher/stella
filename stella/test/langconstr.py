@@ -481,6 +481,30 @@ def tuple_me(a):
     return tuple(a)
 
 
+def lt(x, y):
+    return x < y
+
+
+def gt(x, y):
+    return x > y
+
+
+def le(x, y):
+    return x <= y
+
+
+def ge(x, y):
+    return x >= y
+
+
+def ne(x, y):
+    return x != y
+
+
+def eq(x, y):
+    return x == y
+
+
 ###
 
 @mark.parametrize('args', [(40, 2), (43, -1), (41, 1)])
@@ -713,3 +737,10 @@ def test19(f, args):
 @mark.parametrize('f', [tuple_me])
 def test20(f, arg):
     make_numpy_eq_test(f, arg)
+
+
+@mark.parametrize('args', [(40, 2), (43, 1), (42, 3), (0, 0), (2, 2), (3, 3), (3, 4), (4, 7),
+                           (1.0, 0), (1.2, 2.0), (1, 2.3)])
+@mark.parametrize('f', [lt, gt, eq, le, ge, ne])
+def test19(f, args):
+    make_eq_test(f, args)
