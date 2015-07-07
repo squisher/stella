@@ -53,4 +53,4 @@ def current_work(run=False, **kwargs):
         ir = not run
     else:
         ir = run
-    print(stella.wrap(stella.test.langconstr.lt, ir=ir, **kwargs)(2, 2))
+    print(stella.wrap(stella.test.objects.selfRef, ir=ir, **kwargs)(g))

@@ -164,6 +164,23 @@ class PyWrapper(Type):
         raise exc.TypeError("Cannot create an LLVM type for Python type {}".format(self.py))
 
 
+class PyClass(Type):
+    """Wrap Python classes so that they can be used to look up functions. They
+    are not translated themselves.
+    """
+    def __init__(self, py):
+        self.py = py
+
+    def __str__(self):
+        return str(self.py)
+
+    def _llvmType(self, module):
+        raise exc.TypeError("Cannot create an LLVM type for Python type {}".format(self.py))
+
+    def attr(self, name):
+        return getattr(self.py, name)
+
+
 class ScalarType(Type):
     def __init__(self, name, type_, llvm, ctype, cast_map):
         """

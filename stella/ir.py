@@ -296,6 +296,8 @@ class Module(object):
         elif isinstance(item, types.ModuleType):
             # no need to wrap it, it will be used with self.loadExt()
             wrapped = item
+        elif isinstance(item, type(object)):
+            wrapped = tp.PyClass(item)
         else:
             # Assume it is a global variable
             # TODO: is this safe? How do I catch types that aren't supported

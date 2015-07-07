@@ -734,7 +734,10 @@ class LOAD_GLOBAL(Bytecode):
                 self.result = self.var
             elif isinstance(self.var, types.ModuleType):
                 self.result = self.var
+            elif isinstance(self.var, tp.PyClass):
+                self.result = self.var
             elif isinstance(self.var, type):
+                # TODO still required with PyClass above?
                 self.result = tp.PyWrapper(self.var)
             elif isinstance(self.var, Intrinsic):
                 self.result = self.var
@@ -778,6 +781,10 @@ class LOAD_ATTR(Bytecode):
             self.result = func.module.loadExt(arg, self.name)
             self.discard = True
             return
+        elif isinstance(arg, tp.PyClass):
+            # WIP
+            arg = tp.wrapValue(arg.attr(self.name))
+            #self.discard = True
 
         type_ = arg.type.dereference()
         if isinstance(type_, tp.StructType):
@@ -804,7 +811,7 @@ class LOAD_ATTR(Bytecode):
 
     def translate(self, cge):
         arg = self.args[0]
-        if isinstance(arg, types.ModuleType):
+        if isinstance(arg, (types.ModuleType, tp.PyClass)):
             return
 
         type_ = arg.type.dereference()
