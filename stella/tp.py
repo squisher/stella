@@ -128,6 +128,12 @@ class Reference(Type):
     def on_heap(self):
         return self.type_.on_heap
 
+    def __eq__(self, o):
+        return self.ptr == o.ptr and self.type_ == o.type_
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
 
 class Subscriptable(metaclass=ABCMeta):
     """Mixin"""
@@ -179,6 +185,15 @@ class ScalarType(Type):
     def constant(self, value, cge=None):
         return ll.Constant(self._llvm, value)
 
+    def cast(self, obj, cge, name=None):
+        pytype = obj.type.type_
+        try:
+            cast_name = self.cast_map[pytype]
+        except KeyError:
+            raise exc.TypeError("Cannot cast from {} to {}".format(obj.type, self))
+        cast_f = getattr(cge.builder, cast_name)
+        return cast_f(obj.llvm, self.llvmType(cge.module), name)
+
     def __str__(self):
         return self.name
 
@@ -186,16 +201,38 @@ class ScalarType(Type):
         return "<{0}:{1}>".format(str(type(self))[8:-2], self.name)
 
 
+class BoolType(ScalarType):
+    cmp_map = {int: 'icmp_signed', float: 'fcmp_ordered'}
+
+    def __init__(self, name, type_, llvm, ctype):
+        super().__init__(name, type_, llvm, ctype, None)
+
+    def cast(self, obj, cge, name=None):
+        pytype = obj.type.type_
+        try:
+            cmp_name = self.cmp_map[pytype]
+        except KeyError:
+            raise exc.TypeError("Cannot cast from {} to {}".format(obj.type, self))
+        cmp_f = getattr(cge.builder, cmp_name)
+        cmp_llvm = cmp_f('!=', obj.llvm, obj.type.constant(0))
+        return cge.builder.zext(cmp_llvm, tp_bool)
+
+
 tp_int = ll.IntType(64)
 tp_int32 = ll.IntType(32)  # needed for llvm operators
 tp_double = ll.DoubleType()
-tp_bool = ll.IntType(1)
+# Note on booleans:
+# llvm uses i1 for its conditionals, but i1 does not store well in memory.
+# Therefore use i8 by default, and translate to i1 when before conditional
+# instructions
+tp_bool = ll.IntType(8)
+tp_bool1 = ll.IntType(1)
 tp_void = ll.VoidType()
 
 Int = ScalarType(
     "Int",
     int, tp_int, ctypes.c_int64,
-    {float: 'fptosi'},
+    {float: 'fptosi', bool: 'zext'},
 )
 uInt = ScalarType(  # TODO: unclear whether this is correct or not
     "uInt",
@@ -205,12 +242,11 @@ uInt = ScalarType(  # TODO: unclear whether this is correct or not
 Float = ScalarType(
     "Float",
     float, tp_double, ctypes.c_double,
-    {int: 'sitofp'},
+    {int: 'sitofp', bool: 'sitofp'},
 )
-Bool = ScalarType(
+Bool = BoolType(
     "Bool",
     bool, tp_bool, ctypes.c_bool,
-    {float: 'fptosi', int: 'trunc'},
 )
 
 
@@ -1142,6 +1178,9 @@ class Const(Typable):
     def translate(self, cge):
         if self.type.on_heap:
             (self.llvm, self.transfer_value) = self.type.constant(self.value, cge)
+        elif self.type is Bool:
+            # llvmlite would output 'true' (which is i1) for True even when the type is i8
+            self.llvm = self.type.constant(int(self.value), cge)
         else:
             self.llvm = self.type.constant(self.value, cge)
         return self.llvm
@@ -1408,14 +1447,17 @@ class Cast(Typable):
             value = self.type.type_(self.obj.value)
             self.llvm = self.type.constant(value)
         else:
-            pytype = self.obj.type.type_
-            try:
-                cast_name = self.type.cast_map[pytype]
-            except KeyError:
-                raise exc.TypeError("Cannot cast from {} to {}".format(self.obj.type, self.type))
-            cast_f = getattr(cge.builder, cast_name)
-            self.llvm = cast_f(self.obj.llvm, self.type.llvmType(cge.module), self.name)
+            self.llvm = self.type.cast(self.obj, cge, self.name)
         return self.llvm
+
+    @staticmethod
+    def translate_i1(obj, cge):
+        assert obj.type is Bool
+        if obj.name:
+            name = '(i1)' + obj.name
+        else:
+            name = None
+        return cge.builder.trunc(obj.translate(cge), tp_bool1, name)
 
     def __str__(self):
         return self.name

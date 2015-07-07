@@ -76,8 +76,12 @@ class Point(object):
     def reldist(self, pos2):
         p1 = self.pos
         p2 = pos2.getPos()
-        rel = [x-y for x,y in zip(p1, p2)]
-        return pow(sum([pow(x,Point.dim) for x in rel]), 1.0/Point.dim)
+        d = len(p1)
+        s = 0
+        for i in range(d):
+            rel = p1[i] - p2[i]
+            s += rel**d
+        return pow(s, 1.0/Point.dim)
 
     def add(self, p2):
         self.pos += p2
@@ -199,9 +203,9 @@ class Spider(SimObj):
         return pos.reldist(Point.center)
 
     def gaitOk(self, pos, leg):
-        otherlegs = [l for l in self.legs if l != leg]
-        #assert len(otherlegs) == self.params['nlegs'] - 1
-        for oleg in otherlegs:
+        for oleg in self.legs:
+            if oleg == leg:
+                continue
             if oleg.getDistance(pos) > self.gait:
                 return False
         return True
@@ -238,23 +242,23 @@ class Surface(object):
 
     def isOccupied(self, idx):
         idx = tuple(idx.getPos())
-        return self[idx] & self.occupied
+        return self.s[idx] & self.occupied
 
     def pickUp(self,idx):
         idx = tuple(idx.getPos())
-        if not (self[idx] & self.product):
-            self[idx] += self.product
-        self[idx] -= self.occupied
+        if not (self.s[idx] & self.product):
+            self.s[idx] += self.product
+        self.s[idx] -= self.occupied
 
     def putDown(self,idx):
         idx = tuple(idx.getPos())
-        try:
-            self[idx] += self.occupied
-        except IndexError:
-            # this shouldn't happen
-            print ("Error: {0} is out of range".format(idx))
-            raise
-        if self[idx] & self.product:
+        #try:
+        self.s[idx] += self.occupied
+        #except IndexError:
+        #    # this shouldn't happen
+        #    print ("Error: {0} is out of range".format(idx))
+        #    raise
+        if self.s[idx] & self.product:
             return self.koff
         else:
             return self.r

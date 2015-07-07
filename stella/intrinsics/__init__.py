@@ -19,6 +19,7 @@ import sys
 import math
 from abc import abstractmethod
 import builtins
+import llvmlite.ir as ll
 
 from . import python
 from .. import tp, exc
@@ -181,7 +182,38 @@ class Bool(Cast):
     py_func = stella_type.type_
 
 
-casts = (int, float, bool)
+class Tuple(Intrinsic):
+    py_func = tuple
+    arg_names = ['iterable']
+
+    def __init__(self):
+        super().__init__()
+
+    def getReturnType(self, args, kw_args):
+        type_ = args[0].type.dereference()
+        assert isinstance(type_, tp.Subscriptable)
+        # there are no Nd tuples, accept only 1d
+        assert not isinstance(type_.shape, list)
+
+        ttype = tp.TupleType([type_.type_] * type_.shape)
+        return ttype
+
+    def call(self, cge, args, kw_args):
+        in_type = args[0].type.dereference()
+        out_type = self.getReturnType(args, kw_args).llvmType(cge.module)
+
+        init = [ll.Constant(in_type.type_.llvmType(cge.module), None)] * in_type.shape
+
+        llvm = ll.Constant.literal_struct(init)
+
+        for i in range(in_type.shape):
+            val = in_type.loadSubscript(cge, args[0], tp.Const(i))
+            llvm = cge.builder.insert_value(llvm, val, i)
+
+        return llvm
+
+
+casts = (int, float, bool, tuple)
 
 
 def is_extra(item):
