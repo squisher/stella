@@ -382,8 +382,8 @@ class StructType(Type):
 
         attrib_type = {}
         attrib_idx = {}
-        attrib_names = sorted(list(filter(lambda s: not s.startswith('_'),
-                                          dir(obj))))  # TODO: only exclude __?
+        attrib_names = sorted(list(filter(lambda s: not s.startswith('__'),
+                                          dir(obj))))
         for name in attrib_names:
             attrib = getattr(obj, name)
             try:
