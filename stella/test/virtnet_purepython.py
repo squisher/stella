@@ -100,8 +100,8 @@ class Point(object):
     #    self.pos -= p2
 
     def div(self, p2):
-        #self.pos /= p2
-        self.pos = [x/p2 for x in self.pos]
+        for i in range(Point.dim):
+            self.pos[i] /= p2
 
     #def mul(self, p2):
     #    self.pos *= p2
