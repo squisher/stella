@@ -42,8 +42,16 @@ def modulo(a, b):
     return a % b
 
 
-def power(a, b):
+def power1(a, b):
     return a ** b
+
+
+def power2(a, b):
+    return pow(a, b)
+
+
+def power3(a, b):
+    return math.pow(a, b)
 
 
 def chained(a, b):
@@ -115,18 +123,19 @@ arglist3 = [(0, 42), (42, 0), (2, 5.0), (2.0, 5), (1.2, 2), (4, 7.5), (-4, 2)]
 
 
 @mark.parametrize('args', arglist3)
-@mark.parametrize('f', [power])
+@mark.parametrize('f', [power1, power2, power3])
 def test3(f, args):
     make_delta_test(f, args)
 
 
 @mark.parametrize('args', [(4, -2)])
+@mark.parametrize('f', [power1, power2, power3])
 @mark.xfail(raises=AssertionError)
-def test_semantics_power(args):
+def test_semantics_power(f, args):
     """Semantic difference:
     4**2 returns an integer, but 4**-2 returns a float.
     """
-    make_delta_test(power, args)
+    make_delta_test(f, args)
 
 
 @mark.parametrize('args', single_args([1, 2, 42, 1.5, 7.9]))
