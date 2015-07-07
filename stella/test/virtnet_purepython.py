@@ -66,6 +66,10 @@ class Point(object):
         else:
             self.pos = pos
 
+    def reset(self):
+        for i in range(Point.dim):
+            self.pos[i] = 0
+
     def setTo(self, p):
         for i in range(Point.dim):
             self.pos[i] = p.pos[i]
@@ -185,6 +189,12 @@ class Spider(SimObj):
         self.legs = Leg.make(params['nlegs'], legInit())
         self.nlegs = params['nlegs']
         self.gait = params['gait']
+        self._refPoint = Point()
+
+    def refPoint(self):
+        """This is `single threaded', can only be used by one consumer at a time!"""
+        self._refPoint.reset()
+        return self._refPoint
 
     def getLegs(self):
         return self.legs
@@ -196,7 +206,7 @@ class Spider(SimObj):
         return r
 
     def getDistance(self):
-        pos = Point()
+        pos = self.refPoint()
         for leg in self.legs:
             pos.addPos(leg.getPosition())
         pos.div(self.nlegs)
