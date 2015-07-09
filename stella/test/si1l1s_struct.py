@@ -158,7 +158,7 @@ def result(sp):
 def test1(args):
     prototype(args)
 
-timed = timeit(prototype)
+timed = timeit(prototype, verbose=True)
 
 
 def bench1():

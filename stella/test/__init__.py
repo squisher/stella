@@ -108,14 +108,17 @@ def bench_ext(request):
     return opt
 
 
-def timeit(f):
+def timeit(f, verbose=False):
     @wraps(f)
     def wrapper(*args, **kw_args):
         start = time.time()
         r = f(*args, **kw_args)
         end = time.time()
-        print("{0}({1}, {2}) took {3:0.2f}s".format(
-            f.__name__, args, kw_args, end - start))
+        if verbose:
+            print("{0}({1}, {2}) took {3:0.2f}s".format(
+                  f.__name__, args, kw_args, end - start))
+        else:
+            print("{:0.2f}s".format(end - start))
         return r
     return wrapper
 

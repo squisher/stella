@@ -195,7 +195,7 @@ def prototype(params):
 def test1(args):
     prototype(args)
 
-timed = timeit(prototype)
+timed = timeit(prototype, verbose=True)
 
 
 def bench1():
