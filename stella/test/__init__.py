@@ -37,6 +37,7 @@ def make_eq_test(f, args):
             args2.append(a)
     x = f(*args1)
     y = wrap(f)(*args2)
+    # TODO: also check the types inside the array
     assert x == y and type(x) == type(y)
 
 
