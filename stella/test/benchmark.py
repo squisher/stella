@@ -292,7 +292,7 @@ def test_fib_nonrecursive(bench_result, bench_opt, bench_ext):
     assert speedup(bench_result['fib_nonrec']) >= min_speedup
 
 
-si1l1s_durations = ['1e5', '1e6', '1e8']
+si1l1s_durations = ['1e5', '1e8', '1.2e9']
 
 
 @bench
@@ -325,6 +325,6 @@ def test_nbody(bench_result, bench_opt, bench_ext):
 
 @bench
 def test_heat(bench_result, bench_opt, bench_ext):
-    duration = [13, 1000, 25000][bench_opt]
+    duration = [13, 3000, 50000][bench_opt]
     bench_result['heat'] = bench_heat(duration, bench_ext)
     assert speedup(bench_result['heat']) >= min_speedup
