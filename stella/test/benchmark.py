@@ -57,16 +57,19 @@ def ccompile(fn, src, cc=None, flags={}):
     with open(fn, 'rb') as f:
         sourcecode = f.read()
 
+    # the following three cmds are equivalent to
+    # [CC, '-Wall', '-O' + str(opt)] + flags + ['-o', root, fn]
+
     cmd = [CC] + flags['c'] + ['-Wall', '-E', '-o', '-', '-']
     print("Preprocessing: {0}".format(" ".join(cmd)))
     p = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
     preprocessed, serr = p.communicate(timeout=30, input=sourcecode)
     assert (not serr or not serr.decode())
 
-    #cmd = [CC, '-Wall', '-O' + str(opt)] + flags + ['-o', root, fn]
     # start with C input, generate assembly
-    cmd = [CC, '-Wall'] + flags['c'] + ['-x', 'cpp-output', '-S', '-O' + str(opt)] + ['-o', '-', '-']
-    print("Compiling: {0}".format(" ".join(cmd)))
+    cmd = [CC, '-Wall'] + flags['c'] + ['-x', 'cpp-output', '-S',
+                                        '-O' + str(opt), '-o', '-', '-']
+    print("Compiling to assembly: {0}".format(" ".join(cmd)))
 
     p = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
 
@@ -77,7 +80,7 @@ def ccompile(fn, src, cc=None, flags={}):
     assert not serr.decode()
 
     cmd = [CC] + flags['ld'] + ['-o', root, '-x', 'assembler', '-']
-    print("Moah Compiling: {0}".format(" ".join(cmd)))
+    print("Compiling to machine code & linking: {0}".format(" ".join(cmd)))
     p = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
     sout, serr = p.communicate(timeout=30, input=sout)
     assert (not serr or not serr.decode()) and (not sout or not sout.decode())
@@ -238,7 +241,7 @@ def bench_vs_template(module, extended, name, args, flags):
 
 
 def bench_si1l1s(module, extended, suffix, duration):
-    args = {'seed': '42',
+    args = {'seed': int(time.time() * 100) % (2**32),
             'rununtiltime': duration
             }
     return bench_vs_template(module, extended, 'si1l1s_' + suffix, args, {'ld': ['-lm']})
@@ -271,7 +274,7 @@ def bench_nbody(n, extended):
 def bench_heat(n, extended):
     from . import heat
     args = {'nsteps': n}
-    return bench_vs_template(heat, extended, 'heat', args, flags={'ld': ['-lm'], 'c':['-std=c99']})
+    return bench_vs_template(heat, extended, 'heat', args, flags={'ld': ['-lm'], 'c': ['-std=c99']})
 
 
 def speedup(bench):
