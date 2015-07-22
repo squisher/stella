@@ -153,72 +153,23 @@ def bench_fib(duration, extended):
     from .langconstr import fib
 
     args = {'x': duration}
-    fib_c = """
-#include <stdio.h>
-#include <stdlib.h>
+    def prepare(args):
+        return (fib, (args['x'], ), lambda x: x)
 
-long long fib(long long x) {
-    if (x <= 2) {
-        return 1;
-    } else {
-        return fib(x-1) + fib(x-2);
-    }
-}
-
-int main(int argc, char ** argv) {
-    long long r = 0;
-    const int {{x_init}};
-
-    r += fib(x);
-
-    printf ("%lld\\n", r);
-    exit (0);
-}
-"""
-
-    return bench_it('fib', fib_c, args, extended, stella_f=fib)
+    return bench_vs_template(prepare, extended, 'fib', args)
 
 
 def bench_fib_nonrecursive(duration, extended):
     from .langconstr import fib_nonrecursive
 
+    def prepare(args):
+        return (fib_nonrecursive, (args['x'], ), lambda x: x)
     args = {'x': duration}
-    fib_c = """
-#include <stdio.h>
-#include <stdlib.h>
 
-long long fib(long long x) {
-    if (x == 0)
-        return 1;
-    if (x == 1)
-        return 1;
-    long long grandparent = 1;
-    long long parent = 1;
-    long long me = 0;
-    int i;
-    for (i=2; i<x; i++) {
-        me = parent + grandparent;
-        grandparent = parent;
-        parent = me;
-    }
-    return me;
-}
-
-int main(int argc, char ** argv) {
-    long long r = 0;
-    const int {{x_init}};
-
-    r += fib(x);
-
-    printf ("%lld\\n", r);
-    exit (0);
-}
-"""
-
-    return bench_it('fib_nonrecursive', fib_c, args, extended, stella_f=fib_nonrecursive)
+    return bench_vs_template(prepare, extended, 'fib_nonrecursive', args)
 
 
-def bench_vs_template(module, extended, name, args, flags):
+def bench_vs_template(prepare, extended, name, args, flags={}):
     fn = "{}/template.{}.{}.c".format(os.path.dirname(__file__),
                                       os.path.basename(__file__),
                                       name)
@@ -226,7 +177,7 @@ def bench_vs_template(module, extended, name, args, flags):
         src = f.read()
 
     def run_it(args, wrapper, wrapper_opts):
-        run_f, transfer, result_f = module.prepare(args)
+        run_f, transfer, result_f = prepare(args)
         if transfer is None:
             transfer = []
 
@@ -244,7 +195,7 @@ def bench_si1l1s(module, extended, suffix, duration):
     args = {'seed': int(time.time() * 100) % (2**32),
             'rununtiltime': duration
             }
-    return bench_vs_template(module, extended, 'si1l1s_' + suffix, args, {'ld': ['-lm']})
+    return bench_vs_template(module.prepare, extended, 'si1l1s_' + suffix, args, {'ld': ['-lm']})
 
 
 def bench_si1l1s_globals(duration, extended):
@@ -268,13 +219,13 @@ def bench_nbody(n, extended):
     args = {'n': n,
             'dt': 0.01,
             }
-    return bench_vs_template(nbody, extended, 'nbody', args, flags={'ld': ['-lm']})
+    return bench_vs_template(nbody.prepare, extended, 'nbody', args, flags={'ld': ['-lm']})
 
 
 def bench_heat(n, extended):
     from . import heat
     args = {'nsteps': n}
-    return bench_vs_template(heat, extended, 'heat', args, flags={'ld': ['-lm'], 'c': ['-std=c99']})
+    return bench_vs_template(heat.prepare, extended, 'heat', args, flags={'ld': ['-lm'], 'c': ['-std=c99']})
 
 
 def speedup(bench):
