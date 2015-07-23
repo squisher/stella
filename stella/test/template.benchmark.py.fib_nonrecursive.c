@@ -24,6 +24,6 @@ int main(int argc, char ** argv) {
 
     r += fib(x);
 
-    printf ("%lld\\n", r);
+    printf ("%lld\n", r);
     exit (0);
 }

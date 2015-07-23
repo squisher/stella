@@ -457,20 +457,31 @@ def test1():
     sim1.run()
     stella.wrap(sim2.run)()
 
+    print ("Python:")
+    format_result(sim1)
+    print ("Stella:")
+    format_result(sim2)
+
     assert((sim1.observations == sim2.observations).all())
 
 
 def format_result(sim):
     for n, time_, uTotal, uMax, uMin in sim.observations:
         #sz = "%08d %12.11f %12.11f %4.1f %4.1f\n" % (n, self.time, self.uTotal, self.uMax, self.uMin)
-        print ("%08d %12.11f %12.11f %4.1f %4.1f" % (n, time_, uTotal, uMax, uMin))
+        #print ("%08d %12.11f %12.11f %4.1f %4.1f" % (n, time_, uTotal, uMax, uMin))
+        print ("%016.8f %12.11f %12.11f %12.8f %12.8f" % (n, time_, uTotal, uMax, uMin))
 
 
 def prepare(args):
     sim = Sim()
     process_config(sim)
     sim.set_nsteps(args['nsteps'])
-    return (sim.run, (), lambda: format_result(sim))
+
+    def get_result(r):
+        format_result(sim)
+        return sim.observations
+
+    return (sim.run, (), get_result)
 
 
 ########################################################################

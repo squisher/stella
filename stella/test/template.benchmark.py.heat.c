@@ -317,7 +317,8 @@ int main(int argc, char **argv)
         double uTotal = get(sim.observations, i, 2, self->nsteps, 5);
         double uMax = get(sim.observations, i, 3, self->nsteps, 5);
         double uMin = get(sim.observations, i, 4, self->nsteps, 5);
-        printf("%08.0f %12.11f %12.11f %4.1f %4.1f\n", n, time, uTotal, uMax, uMin);
+        //printf("%08.0f %12.11f %12.11f %4.1f %4.1f\n", n, time, uTotal, uMax, uMin);
+        printf("%016.8f %12.11f %12.11f %12.8f %12.8f\n", n, time, uTotal, uMax, uMin);
     }
 
     return 0;

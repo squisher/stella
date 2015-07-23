@@ -21,6 +21,9 @@ from pytest import mark
 from pytest import raises
 
 
+delta = 1e-7
+
+
 def single_args(l):
     return list(map(lambda x: (x,), l))
 
@@ -71,7 +74,7 @@ def make_eq_kw_test(f, args):
     assert x == y and type(x) == type(y)
 
 
-def make_delta_test(f, args, delta=1e-7):
+def make_delta_test(f, args, delta=delta):
     x = f(*args)
     y = wrap(f)(*args)
     assert x - y < delta and type(x) == type(y)

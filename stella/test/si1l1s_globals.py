@@ -41,11 +41,11 @@ def prepare(args):
     obs_i = 0
     observations = np.zeros(shape=K, dtype=int)
 
-    return (run, (), result)
+    def get_results(r):
+        print (observations)
+        return observations
 
-
-def result():
-    return observations
+    return (run, (), get_results)
 
 
 def uniform():

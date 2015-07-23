@@ -15,8 +15,10 @@
 
 import os
 import os.path
-from subprocess import check_call, Popen, PIPE
+from subprocess import check_output, Popen, PIPE
 import time
+import functools
+import numpy
 
 import pystache
 
@@ -88,7 +90,9 @@ def ccompile(fn, src, cc=None, flags={}):
     return root, elapsed
 
 
-def bench_it(name, c_src, args, extended=0, stella_f=None, full_f=None, flags={}):
+def bench_it(name, c_src, args, extended, parse_f, verify_f,
+             stella_f=None, full_f=None,
+             flags={}):
     """args = {k=v, ...}
     Args gets expanded to `k`_init: `k`=`v` for the C template
     """
@@ -108,6 +112,8 @@ def bench_it(name, c_src, args, extended=0, stella_f=None, full_f=None, flags={}
     else:
         CCs = ['gcc']
 
+    results = {}
+
     for cc in CCs:
         exe, elapsed_compile = ccompile(__file__ + "." + name + ".c", src, cc, flags)
         t_compile[cc] = elapsed_compile
@@ -116,7 +122,9 @@ def bench_it(name, c_src, args, extended=0, stella_f=None, full_f=None, flags={}
 
         print("Running C/{}: {}".format(cc, " ".join(cmd)))
         time_start = time.time()
-        check_call(cmd)
+        out = check_output(cmd, universal_newlines=True)
+        print(out)
+        results[cc] = parse_f(out)
         elapsed_c = time.time() - time_start
         t_run[cc] = elapsed_c
 
@@ -124,12 +132,14 @@ def bench_it(name, c_src, args, extended=0, stella_f=None, full_f=None, flags={}
     stats = {}
     wrapper_opts = {'debug': False, 'opt': opt, 'stats': stats}
     if stella_f:
+        arg_values = args.values()
         time_start = time.time()
-        print(stella.wrap(stella_f, **wrapper_opts)
-              (*[v for k, v in args.items()]))
+        res = stella.wrap(stella_f, **wrapper_opts)(*arg_values)
         elapsed_stella = time.time() - time_start
     else:
-        elapsed_stella = full_f(args, stella.wrap, wrapper_opts)
+        elapsed_stella, res = full_f(args, stella.wrap, wrapper_opts)
+
+    results['stella'] = res
 
     t_run['stella'] = stats['elapsed']
     # TODO no need to keep track of the combined time, is there?
@@ -137,39 +147,64 @@ def bench_it(name, c_src, args, extended=0, stella_f=None, full_f=None, flags={}
     t_compile['stella'] = elapsed_stella - stats['elapsed']
 
     if extended > 1:
-        print("Running Python:")
+        print("\nRunning Python:")
         if stella_f:
             time_start = time.time()
-            print(stella_f(*[v for k, v in args.items()]))
+            res = stella_f(*[v for k, v in args.items()])
             elapsed_py = time.time() - time_start
         else:
-            elapsed_py = full_f(args, time_stats, wrapper_opts)
+            elapsed_py, res = full_f(args, time_stats, wrapper_opts)
         t_run['python'] = elapsed_py
+        results['python'] = res
+
+
+    # verify results are identical
+    it = iter(results.keys())
+    k1 = next(it)
+    for k2 in it:
+        print('Verify:', k1, '==', k2)
+        verify_f(results[k1], results[k2])
+        k1 = k2
+
 
     return {'run': t_run, 'compile': t_compile}
+
+
+def fib_prepare(f):
+    @functools.wraps(f)
+    def prepare(args):
+        return (f, (args['x'], ), lambda r, x: r)
+    return prepare
+
+
+def fib_parse(out):
+    print (out)
+    return int(out.strip())
+
+
+def fib_verify(a, b):
+    assert a == b
 
 
 def bench_fib(duration, extended):
     from .langconstr import fib
 
     args = {'x': duration}
-    def prepare(args):
-        return (fib, (args['x'], ), lambda x: x)
 
-    return bench_vs_template(prepare, extended, 'fib', args)
+    return bench_vs_template(fib_prepare(fib), extended, 'fib', args,
+                             parse_f=fib_parse, verify_f=fib_verify)
 
 
 def bench_fib_nonrecursive(duration, extended):
     from .langconstr import fib_nonrecursive
 
-    def prepare(args):
-        return (fib_nonrecursive, (args['x'], ), lambda x: x)
     args = {'x': duration}
 
-    return bench_vs_template(prepare, extended, 'fib_nonrecursive', args)
+    return bench_vs_template(fib_prepare(fib_nonrecursive), extended, 'fib_nonrecursive', args,
+                             parse_f=fib_parse, verify_f=fib_verify)
 
 
-def bench_vs_template(prepare, extended, name, args, flags={}):
+def bench_vs_template(prepare, extended, name, args, parse_f, verify_f, flags={}):
     fn = "{}/template.{}.{}.c".format(os.path.dirname(__file__),
                                       os.path.basename(__file__),
                                       name)
@@ -182,20 +217,28 @@ def bench_vs_template(prepare, extended, name, args, flags={}):
             transfer = []
 
         time_start = time.time()
-        wrapper(run_f, **wrapper_opts)(*transfer)
+        r = wrapper(run_f, **wrapper_opts)(*transfer)
         elapsed_stella = time.time() - time_start
-        print(result_f(*transfer))
 
-        return elapsed_stella
+        return elapsed_stella, result_f(r, *transfer)
 
-    return bench_it(name, src, args, extended, flags=flags, full_f=run_it)
+    return bench_it(name, src, args, extended, flags=flags, full_f=run_it,
+                    parse_f=parse_f, verify_f=verify_f)
 
 
 def bench_si1l1s(module, extended, suffix, duration):
+    def parse(out):
+        return numpy.array(list(map(float, out.strip()[1:-1].split(' '))))
+
+    def verify(a, b):
+        assert (a == b).all()
+
     args = {'seed': int(time.time() * 100) % (2**32),
             'rununtiltime': duration
             }
-    return bench_vs_template(module.prepare, extended, 'si1l1s_' + suffix, args, {'ld': ['-lm']})
+    return bench_vs_template(module.prepare, extended, 'si1l1s_' + suffix, args,
+                             flags={'ld': ['-lm']},
+                             parse_f=parse, verify_f=verify)
 
 
 def bench_si1l1s_globals(duration, extended):
@@ -216,16 +259,43 @@ def bench_si1l1s_obj(duration, extended):
 
 def bench_nbody(n, extended):
     from . import nbody
+
+    def parse(out):
+        return list(map(float, out.strip().split('\n')))
+
+    def verify(a, b):
+        fmt = "{:8f}"
+        for x, y in zip(a, b):
+            assert fmt.format(x) == fmt.format(y)
+
     args = {'n': n,
             'dt': 0.01,
             }
-    return bench_vs_template(nbody.prepare, extended, 'nbody', args, flags={'ld': ['-lm']})
+    return bench_vs_template(nbody.prepare, extended, 'nbody', args, flags={'ld': ['-lm']},
+                             parse_f=parse, verify_f=verify)
 
 
 def bench_heat(n, extended):
     from . import heat
+
+    def parse(out):
+        rows = out.strip().split('\n')
+        r = numpy.zeros(shape=(len(rows), 5))
+
+        for i, row in enumerate(rows):
+            for j, v in enumerate(row.split()):
+                r[i, j] = v
+
+        return r
+
+    def verify(a, b):
+        for i, row in enumerate(abs(a - b)):
+            assert (row < delta).all()
+
     args = {'nsteps': n}
-    return bench_vs_template(heat.prepare, extended, 'heat', args, flags={'ld': ['-lm'], 'c': ['-std=c99']})
+    return bench_vs_template(heat.prepare, extended, 'heat', args,
+                             flags={'ld': ['-lm'], 'c': ['-std=c99']},
+                             parse_f=parse, verify_f=verify)
 
 
 def speedup(bench):
