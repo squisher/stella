@@ -96,3 +96,7 @@ def run_tests(args=None):
 # namespace TODO maybe this isn't the best idea? It may be confusing. On the
 # other hand, I don't plan to add more directly to the stella module.
 # from .intrinsics.python import *
+
+from ._version import get_versions
+__version__ = get_versions()['version']
+del get_versions

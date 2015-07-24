@@ -32,12 +32,16 @@ classifiers = ['Development Status :: 3 - Alpha',
                   '3.2 3.4'.split()]
 
 
+import versioneer
+
 setup(
+    version=versioneer.get_version(),
+    cmdclass=versioneer.get_cmdclass(),
     name="stella",
-    version="0.2",
     packages=['stella'],
     author='David Mohr',
     author_email='dmohr@cs.unm.edu',
+    url='https://github.com/squisher/stella',
     long_description=README(),
     classifiers=classifiers,
     install_requires=['llvmlite', 'numpy'],
