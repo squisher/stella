@@ -469,11 +469,11 @@ def main(f, args, kwargs):
         # TODO add kwargs support!
         (call_impl, call_args, call_kwargs) = module.todoNext()
         call_f = Function.get(call_impl, module)
-        if call_f.analysis_count > 10:
+        if call_f.analysis_count > 30:
             # TODO: abitrary limit, it would be better to check if the return
             # type changed or not
-            raise Exception("Stopping after {0} call analysis iterations (failsafe)".format(
-                call_f.analysis_count))
+            raise Exception("Stopping {} after {} call analysis iterations (failsafe)".format(
+                call_f, call_f.analysis_count))
         call_f.analyzeCall(call_args, call_kwargs)
         call_f.analysis_count += 1
     module.addDestruct(cleanup)

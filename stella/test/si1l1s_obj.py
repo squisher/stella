@@ -147,7 +147,12 @@ def prototype(params):
 def prepare(args):
     params = Settings([k+'='+str(v) for k, v in args.items()])
     sim = Simulation(params)
-    return (sim.run, (), lambda: sim.observations)
+
+    def get_results(r):
+        print (sim.observations)
+        return sim.observations
+
+    return (sim.run, (), get_results)
 
 
 @parametrize('args', [['seed=42'], ['seed=63'], ['seed=123456'],

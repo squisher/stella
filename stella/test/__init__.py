@@ -21,6 +21,9 @@ from pytest import mark
 from pytest import raises
 
 
+delta = 1e-7
+
+
 def single_args(l):
     return list(map(lambda x: (x,), l))
 
@@ -72,7 +75,7 @@ def make_eq_kw_test(f, args):
     assert x == y and type(x) == type(y)
 
 
-def make_delta_test(f, args, delta=1e-7):
+def make_delta_test(f, args, delta=delta):
     x = f(*args)
     y = wrap(f)(*args)
     assert x - y < delta and type(x) == type(y)
@@ -109,14 +112,17 @@ def bench_ext(request):
     return opt
 
 
-def timeit(f):
+def timeit(f, verbose=False):
     @wraps(f)
     def wrapper(*args, **kw_args):
         start = time.time()
         r = f(*args, **kw_args)
         end = time.time()
-        print("{0}({1}, {2}) took {3:0.2f}s".format(
-            f.__name__, args, kw_args, end - start))
+        if verbose:
+            print("{0}({1}, {2}) took {3:0.2f}s".format(
+                  f.__name__, args, kw_args, end - start))
+        else:
+            print("{:0.2f}s".format(end - start))
         return r
     return wrapper
 

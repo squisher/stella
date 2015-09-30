@@ -19,6 +19,7 @@ import sys
 import math
 from abc import abstractmethod
 import builtins
+import llvmlite.ir as ll
 
 from . import python
 from .. import tp, exc
@@ -121,6 +122,66 @@ class Exp(Log):
     arg_names = ['x']
 
 
+class Pow(Intrinsic):
+    py_func = pow
+    arg_names = ['x', 'y']
+
+    def getReturnType(self, args, kw_args):
+        if args[0].type == tp.Int and args[1].type == tp.Int:
+            return tp.Int
+        else:
+            return tp.Float
+
+    def castResultInt(self, args):
+        return (isinstance(args[0], tp.Cast)
+                and args[0].obj.type == tp.Int
+                and args[1].type == tp.Int)
+
+    def call(self, cge, args, kw_args):
+        # TODO unify with bytecode.BINARY_POWER
+
+        # llvm.pow[i]'s first argument always has to be float
+        arg = args[0]
+        if arg.type == tp.Int:
+            args[0] = tp.Cast(arg, tp.Float)
+
+        if args[1].type == tp.Int:
+            # powi takes a i32 argument
+            power = cge.builder.trunc(
+                args[1].translate(cge),
+                tp.tp_int32,
+                '(i32)' +
+                args[1].name)
+        else:
+            power = args[1].translate(cge)
+
+        if args[1].type == tp.Int:
+            intr = 'llvm.powi'
+        else:
+            intr = 'llvm.pow'
+
+        llvm_f = cge.module.llvm.declare_intrinsic(intr, [args[0].llvmType(cge.module)])
+        pow_result = cge.builder.call(llvm_f, [args[0].translate(cge), power])
+
+        if self.castResultInt(args):
+            # cast back to an integer
+            result = cge.builder.fptosi(pow_result, tp.Int.llvmType(cge.module))
+        else:
+            result = pow_result
+
+        return result
+
+
+class MathPow(Pow):
+    py_func = math.pow
+
+    def castResultInt(self, args):
+        return False
+
+    def getReturnType(self, args, kw_args):
+        return tp.Float
+
+
 class Sqrt(Log):
     py_func = math.sqrt
     intr = 'llvm.sqrt'
@@ -181,7 +242,37 @@ class Bool(Cast):
     py_func = stella_type.type_
 
 
-casts = (int, float, bool)
+class Tuple(Intrinsic):
+    py_func = tuple
+    arg_names = ['iterable']
+
+    def __init__(self):
+        super().__init__()
+
+    def getReturnType(self, args, kw_args):
+        type_ = args[0].type.dereference()
+        assert isinstance(type_, tp.Subscriptable)
+        # there are no Nd tuples, accept only 1d
+        assert not isinstance(type_.shape, list)
+
+        ttype = tp.TupleType([type_.type_] * type_.shape)
+        return ttype
+
+    def call(self, cge, args, kw_args):
+        in_type = args[0].type.dereference()
+
+        init = [ll.Constant(in_type.type_.llvmType(cge.module), None)] * in_type.shape
+
+        llvm = ll.Constant.literal_struct(init)
+
+        for i in range(in_type.shape):
+            val = in_type.loadSubscript(cge, args[0], tp.Const(i))
+            llvm = cge.builder.insert_value(llvm, val, i)
+
+        return llvm
+
+
+casts = (int, float, bool, tuple)
 
 
 def is_extra(item):

@@ -24,11 +24,35 @@ faulthandler.enable(_f)
 logging.addLevelName(utils.VERBOSE, 'VERBOSE')
 
 
-def wrap(f, debug=True, p=False, ir=False, lazy=False, opt=None, stats=None):
-    if debug:
-        logging.getLogger().setLevel(logging.DEBUG)
-    else:
+def logLevel(name='VERBOSE'):
+    if name == 'VERBOSE':
+        # custom log level
         logging.getLogger().setLevel(utils.VERBOSE)
+    else:
+        try:
+            logging.getLogger().setLevel(getattr(logging, name))
+        except AttributeError:
+            raise AttributeError("Invalid log level {}".format(name))
+
+
+def wrap(f, debug=False, p=False, ir=False, lazy=False, opt=None, stats=None):
+    """
+    Parameters:
+        bool debug: increase the log level to DEBUG
+        bool p:     print the LLVM IR instead of executing the program
+        mixed ir:   return the LLVM IR if True, or save to file if a str.
+        bool lazy:  construct the Stella representation and return the object without
+                    any action.
+        int opt:    specify an optimization level for LLVM (usually 1-4)
+        dict stats: if a dict is passed in, then a detailed split of execution
+                    time will be stored in this parameter
+
+    Unless lazy is specified, a callable will be returned which can be executed
+    in place of `f'. Lazy returns the generated .codegen.Program object .
+    """
+
+    if debug:
+        logLevel('DEBUG')
 
     def run(*args, **kwargs):
         if stats is None:
@@ -72,3 +96,7 @@ def run_tests(args=None):
 # namespace TODO maybe this isn't the best idea? It may be confusing. On the
 # other hand, I don't plan to add more directly to the stella module.
 # from .intrinsics.python import *
+
+from ._version import get_versions
+__version__ = get_versions()['version']
+del get_versions

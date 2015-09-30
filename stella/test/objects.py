@@ -149,7 +149,17 @@ class J(object):
     def __repr__(self):
         return "J{{t: {}}}".format(self.t)
 
+
 G.origin = G(0, 0)
+
+
+class K(object):
+    def notstatic():
+        return 1
+
+    @staticmethod
+    def static():
+        return 2
 
 
 def justPassing(a):
@@ -660,6 +670,7 @@ def test_no_mutation13(f, arg):
 
     assert b1 == b2 and py == st
 
+
 @mark.parametrize('f', [objTuple1])
 @mark.parametrize('arg', [(42, -1)])
 @unimplemented
@@ -670,5 +681,14 @@ def test_no_mutation14(f, arg):
     assert b1 == b2
     py = f(b1, arg)
     st = stella.wrap(f)(b2, arg)
+
+    assert b1 == b2 and py == st
+
+
+@mark.parametrize('f', [K.static])
+@unimplemented
+def test_no_mutation15(f):
+    py = f()
+    st = stella.wrap(f)()
 
     assert b1 == b2 and py == st

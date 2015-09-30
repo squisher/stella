@@ -73,6 +73,10 @@ def simple_ifeq_const(x):
         return 42
 
 
+def op_not(x):
+    return not x
+
+
 def for1(x):
     r = 0
     for i in range(x):
@@ -461,6 +465,46 @@ def addTuple(t):
     return t[0] + t[1]
 
 
+def bitwise_and(a, b):
+    return a & b
+
+
+def bitwise_or(a, b):
+    return a | b
+
+
+def bitwise_xor(a, b):
+    return a ^ b
+
+
+def tuple_me(a):
+    return tuple(a)
+
+
+def lt(x, y):
+    return x < y
+
+
+def gt(x, y):
+    return x > y
+
+
+def le(x, y):
+    return x <= y
+
+
+def ge(x, y):
+    return x >= y
+
+
+def ne(x, y):
+    return x != y
+
+
+def eq(x, y):
+    return x == y
+
+
 ###
 
 @mark.parametrize('args', [(40, 2), (43, -1), (41, 1)])
@@ -477,7 +521,7 @@ def test2(f, args):
 
 
 @mark.parametrize('arg', single_args([True, False]))
-@mark.parametrize('f', [simple_if, simple_ifeq_const])
+@mark.parametrize('f', [simple_if, simple_ifeq_const, op_not])
 def test3(f, arg):
     make_eq_test(f, arg)
 
@@ -502,9 +546,9 @@ def test5b(f):
     make_eq_test(f, ())
 
 
-@mark.parametrize('arg', single_args([0, 1, 2, 42, -1, -42]))
+@mark.parametrize('arg', single_args([0, 1, 2, 3, 42, -1, -42]))
 @mark.parametrize('f', [for1, for2, for_loop_var, while1, recursive, ext_call, kwargs_call1,
-                        kwargs_call2, kwargs_call3, kwargs_call4])
+                        kwargs_call2, kwargs_call3, kwargs_call4, op_not])
 def test6(f, arg):
     make_eq_test(f, arg)
 
@@ -548,7 +592,7 @@ def test12(f, arg):
 @mark.parametrize('arg', single_args([np.zeros(5, dtype=int)]))
 @mark.parametrize('f', [])
 @unimplemented
-def test12b(f, arg):
+def test12u(f, arg):
     make_eq_test(f, arg)
 
 
@@ -658,7 +702,8 @@ array2d_args = single_args([np.zeros((2, 2), dtype=int),
 
 
 @mark.parametrize('arg', array2d_args)
-@mark.parametrize('f', [numpy_array2d1, numpy_array2d2, numpy_array2d_for1, numpy_array2d_for2, numpy_array2d_for4])
+@mark.parametrize('f', [numpy_array2d1, numpy_array2d2, numpy_array2d_for1, numpy_array2d_for2,
+                        numpy_array2d_for4])
 def test17(f, arg):
     make_numpy_eq_test(f, arg)
 
@@ -675,3 +720,27 @@ def test17u(f, arg):
 def test18(f, arg):
     arg2 = np.zeros(arg[0].shape)
     make_numpy_eq_test(f, (arg[0], arg2))
+
+
+@mark.parametrize('args', [(40, 2), (43, 1), (42, 3), (0, 0), (2, 2), (3, 3), (3, 4), (4, 7),
+                           (True, True), (True, False), (False, False), (False, True)])
+@mark.parametrize('f', [bitwise_and, bitwise_or, bitwise_xor])
+def test19(f, args):
+    make_eq_test(f, args)
+
+
+# TODO Who needs arrays longer than 2?
+#@mark.parametrize('arg', single_args([np.zeros(5, dtype=int), np.zeros(3), np.array([1, 2, 42]),
+#                                     np.array([0.0, 3.0])]))
+@mark.parametrize('arg', single_args([np.zeros(2, dtype=int), np.zeros(2), np.array([1, 42]),
+                                     np.array([0.0, 3.0])]))
+@mark.parametrize('f', [tuple_me])
+def test20(f, arg):
+    make_numpy_eq_test(f, arg)
+
+
+@mark.parametrize('args', [(40, 2), (43, 1), (42, 3), (0, 0), (2, 2), (3, 3), (3, 4), (4, 7),
+                           (1.0, 0), (1.2, 2.0), (1, 2.3)])
+@mark.parametrize('f', [lt, gt, eq, le, ge, ne])
+def test19(f, args):
+    make_eq_test(f, args)

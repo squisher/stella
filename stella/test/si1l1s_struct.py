@@ -146,11 +146,12 @@ def prototype(params):
 def prepare(args):
     params = Settings([k+'='+str(v) for k, v in args.items()])
     sp_py = Spider(params, np.zeros(shape=params['K'], dtype=int))
-    return (run, (sp_py, ), result)
 
-def result(sp):
-    return sp.observations
+    def get_results(r, sp):
+        print (sp.observations)
+        return sp.observations
 
+    return (run, (sp_py, ), get_results)
 
 @mark.parametrize('args', [['seed=42'], ['seed=63'], ['seed=123456'],
                            ['rununtiltime=1e4', 'seed=494727'],
@@ -158,7 +159,7 @@ def result(sp):
 def test1(args):
     prototype(args)
 
-timed = timeit(prototype)
+timed = timeit(prototype, verbose=True)
 
 
 def bench1():

@@ -20,8 +20,8 @@ from copy import deepcopy
 from numpy import zeros, copy
 try:
     from .virtnet_utils import Settings
-except ValueError:
-    from test.virtnet_utils import Settings
+except SystemError:
+    from virtnet_utils import Settings
 
 
 #### HELPERS ####
@@ -60,11 +60,19 @@ class SimObj(object):
 class Point(object):
     def __init__(self, pos = None):
         if pos == None:
-            self.pos = zeros(shape=Point.dim)
+            self.pos = zeros(shape=Point.dim, dtype=int)
         elif type(pos) == Point:
             self.pos = copy(pos.pos)
         else:
             self.pos = pos
+
+    def reset(self):
+        for i in range(Point.dim):
+            self.pos[i] = 0
+
+    def setTo(self, p):
+        for i in range(Point.dim):
+            self.pos[i] = p.pos[i]
 
     def getPos(self):
         return self.pos
@@ -72,8 +80,12 @@ class Point(object):
     def reldist(self, pos2):
         p1 = self.pos
         p2 = pos2.getPos()
-        rel = [x-y for x,y in zip(p1, p2)]
-        return pow(sum([pow(x,Point.dim) for x in rel]), 1.0/Point.dim)
+        d = len(p1)
+        s = 0
+        for i in range(d):
+            rel = p1[i] - p2[i]
+            s += rel**d
+        return pow(s, 1.0/Point.dim)
 
     def add(self, p2):
         self.pos += p2
@@ -88,8 +100,8 @@ class Point(object):
     #    self.pos -= p2
 
     def div(self, p2):
-        #self.pos /= p2
-        self.pos = [x/p2 for x in self.pos]
+        for i in range(Point.dim):
+            self.pos[i] /= p2
 
     #def mul(self, p2):
     #    self.pos *= p2
@@ -105,6 +117,10 @@ class Leg(SimObj):
         self.pos = params['pos']
         self.r = params['r']
         self.no = params['no']
+        # pre-allocate space for moves
+        self.moves = []
+        for i in range(2*self.dim):
+            self.moves.append(Point())
 
         params['surface'].putDown(self.pos)
 
@@ -113,26 +129,28 @@ class Leg(SimObj):
 
     def move(self, spider, surface):
         # TODO gait check, extend possible moves?
-        moves = []
+        i = 0
         for d1 in range(surface.dim):
-            pos = Point(self.pos)
+            pos = self.moves[i]
+            pos.setTo(self.pos)
             pos.addToDim(d1, -1)
             if not surface.isOccupied(pos) and spider.gaitOk(pos, self):
-                moves.append(pos)
+                i += 1
 
-            pos = Point(self.pos)
+            pos = self.moves[i]
+            pos.setTo(self.pos)
             pos.addToDim(d1, 1)
             if not surface.isOccupied(pos) and spider.gaitOk(pos, self):
-                moves.append(pos)
-        if len(moves) == 0:
+                i += 1
+        if i == 0:
             raise Exception ("No moves -- this shouldn't happen")
-        move = moves[int(Rnd.uniform() * len(moves))]
+        move = self.moves[int(Rnd.uniform() * i)]
 
         surface.pickUp(self.pos)
         self.r = surface.putDown(move)
         #print ("# Moving to {0}".format(move))
 
-        self.pos = move
+        self.pos.setTo(move)
 
     def getRate(self):
         return self.r
@@ -171,6 +189,12 @@ class Spider(SimObj):
         self.legs = Leg.make(params['nlegs'], legInit())
         self.nlegs = params['nlegs']
         self.gait = params['gait']
+        self._refPoint = Point()
+
+    def refPoint(self):
+        """This is `single threaded', can only be used by one consumer at a time!"""
+        self._refPoint.reset()
+        return self._refPoint
 
     def getLegs(self):
         return self.legs
@@ -182,16 +206,16 @@ class Spider(SimObj):
         return r
 
     def getDistance(self):
-        pos = Point()
+        pos = self.refPoint()
         for leg in self.legs:
             pos.addPos(leg.getPosition())
         pos.div(self.nlegs)
         return pos.reldist(Point.center)
 
     def gaitOk(self, pos, leg):
-        otherlegs = [l for l in self.legs if l != leg]
-        #assert len(otherlegs) == self.params['nlegs'] - 1
-        for oleg in otherlegs:
+        for oleg in self.legs:
+            if oleg == leg:
+                continue
             if oleg.getDistance(pos) > self.gait:
                 return False
         return True
@@ -228,23 +252,23 @@ class Surface(object):
 
     def isOccupied(self, idx):
         idx = tuple(idx.getPos())
-        return self[idx] & self.occupied
+        return self.s[idx] & self.occupied
 
     def pickUp(self,idx):
         idx = tuple(idx.getPos())
-        if not (self[idx] & self.product):
-            self[idx] += self.product
-        self[idx] -= self.occupied
+        if not (self.s[idx] & self.product):
+            self.s[idx] += self.product
+        self.s[idx] -= self.occupied
 
     def putDown(self,idx):
         idx = tuple(idx.getPos())
-        try:
-            self[idx] += self.occupied
-        except IndexError:
-            # this shouldn't happen
-            print ("Error: {0} is out of range".format(idx))
-            raise
-        if self[idx] & self.product:
+        #try:
+        self.s[idx] += self.occupied
+        #except IndexError:
+        #    # this shouldn't happen
+        #    print ("Error: {0} is out of range".format(idx))
+        #    raise
+        if self.s[idx] & self.product:
             return self.koff
         else:
             return self.r

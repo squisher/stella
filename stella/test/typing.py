@@ -76,13 +76,14 @@ def test4fail(f, args):
     make_eq_test(f, args)
 
 
-@mark.parametrize('f', [cast_float, cast_int])
-@mark.parametrize('args', single_args([1, 42, -3, -5.5, 0, 3.14, randint(0, 10000000)]))
+@mark.parametrize('f', [cast_float, cast_int, cast_bool])
+@mark.parametrize('args', single_args([True, False, 1, 42, -3, -5.5, 0, 2, 3,
+                                       4, 5, 3.14, randint(0, 10000000)]))
 def test5(f, args):
     make_eq_test(f, args)
 
 
-@mark.parametrize('f', [cast_bool])
+@mark.parametrize('f', [])
 @mark.parametrize('args', single_args([1, 42, -3, -5.5, 0, 3.14, randint(0, 10000000)]))
 @unimplemented
 def test5u(f, args):

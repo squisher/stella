@@ -460,6 +460,13 @@ class COMPARE_OP(Bytecode):
     def type_eval(self, func):
         self.grab_stack()
         self.result.type = tp.Bool
+
+        # upcast integers to float if required
+        if (self.args[0].type == tp.Int and self.args[1].type == tp.Float):
+            self.args[0] = Cast(self.args[0], tp.Float)
+        if (self.args[0].type == tp.Float and self.args[1].type == tp.Int):
+            self.args[1] = Cast(self.args[1], tp.Float)
+
         if (self.args[0].type != self.args[1].type and
                 self.args[0].type != tp.NoType and self.args[1].type != tp.NoType):
             raise exc.TypeError(
@@ -475,9 +482,11 @@ class COMPARE_OP(Bytecode):
 
         f = getattr(cge.builder, self.b_func[type_])
 
-        self.result.llvm = f(self.op,
-                             self.args[0].translate(cge),
-                             self.args[1].translate(cge))
+        llvm = f(self.op,
+                 self.args[0].translate(cge),
+                 self.args[1].translate(cge))
+        # the comparison returns i1 but we need to return an i8
+        self.result.llvm = cge.builder.zext(llvm, tp.Bool.llvmType(cge))
 
 
 class RETURN_VALUE(utils.BlockTerminal, Bytecode):
@@ -580,7 +589,8 @@ class JUMP_IF_FALSE_OR_POP(Jump_if_X_or_pop, Bytecode):
         super().__init__(func, debuginfo)
 
     def translate(self, cge):
-        cge.builder.cbranch(self.args[0].translate(cge),
+        cond = tp.Cast.translate_i1(self.args[0], cge)
+        cge.builder.cbranch(cond,
                             self.next.block,
                             self.target_bc.block)
 
@@ -591,7 +601,8 @@ class JUMP_IF_TRUE_OR_POP(Jump_if_X_or_pop, Bytecode):
         super().__init__(func, debuginfo)
 
     def translate(self, cge):
-        cge.builder.cbranch(self.args[0].translate(cge),
+        cond = tp.Cast.translate_i1(self.args[0], cge)
+        cge.builder.cbranch(cond,
                             self.target_bc.block,
                             self.next.block)
 
@@ -641,7 +652,8 @@ class POP_JUMP_IF_FALSE(Pop_jump_if_X, Bytecode):
         super().__init__(func, debuginfo)
 
     def translate(self, cge):
-        cge.builder.cbranch(self.args[0].translate(cge),
+        cond = tp.Cast.translate_i1(self.args[0], cge)
+        cge.builder.cbranch(cond,
                             self.next.block,
                             self.target_bc.block)
 
@@ -652,7 +664,8 @@ class POP_JUMP_IF_TRUE(Pop_jump_if_X, Bytecode):
         super().__init__(func, debuginfo)
 
     def translate(self, cge):
-        cge.builder.cbranch(self.args[0].translate(cge),
+        cond = tp.Cast.translate_i1(self.args[0], cge)
+        cge.builder.cbranch(cond,
                             self.target_bc.block,
                             self.next.block)
 
@@ -1609,6 +1622,42 @@ class RAISE_VARARGS(Bytecode):
     def translate(self, cge):
         llvm_f = cge.module.llvm.declare_intrinsic('llvm.trap', [])
         cge.builder.call(llvm_f, [])
+
+
+class UNARY_NOT(Bytecode):
+    def __init__(self, func, debuginfo):
+        super().__init__(func, debuginfo)
+        self.result = Register(func)
+
+    @pop_stack(1)
+    def stack_eval(self, func, stack):
+        stack.push(self)
+
+    def type_eval(self, func):
+        self.grab_stack()
+        arg = self.args[0]
+        if arg.type in (tp.Int, tp.Float):
+            self.args[0] = Cast(arg, tp.Bool)
+
+        self.result.unify_type(tp.Bool, self.debuginfo)
+
+    def translate(self, cge):
+        self.cast(cge)
+        self.result.llvm = cge.builder.xor(
+            tp.Bool.constant(1),
+            self.args[0].translate(cge))
+
+
+class BINARY_AND(BinaryOp):
+    b_func = {tp.Bool: 'and_', tp.Int: 'and_'}
+
+
+class BINARY_OR(BinaryOp):
+    b_func = {tp.Bool: 'or_', tp.Int: 'or_'}
+
+
+class BINARY_XOR(BinaryOp):
+    b_func = {tp.Bool: 'xor', tp.Int: 'xor'}
 
 
 opconst = {}
