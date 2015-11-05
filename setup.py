@@ -38,7 +38,7 @@ setup(
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
     name="stella",
-    packages=['stella'],
+    packages=['stella','stella.intrinsics'],
     author='David Mohr',
     author_email='dmohr@cs.unm.edu',
     url='https://github.com/squisher/stella',
