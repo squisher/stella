@@ -15,6 +15,7 @@ import dis
 import sys
 import types
 from abc import abstractproperty
+import logging
 
 from . import tp
 from . import exc
@@ -544,6 +545,7 @@ class Jump(utils.BlockTerminal, HasTarget, ir.IR):
         return False
 
     def stack_eval(self, func, stack):
+        assert self.target_bc is not None
         return [(self.target_bc, stack)]
 
     def type_eval(self, func):
@@ -553,6 +555,10 @@ class Jump(utils.BlockTerminal, HasTarget, ir.IR):
     def translate(self, cge):
         cge.builder.branch(self.target_bc.block)
 
+    def equivalent(self, other):
+        """Equality but location independent.
+        """
+        return type(self) == type(other) and self.target_bc == other.target_bc
 
 class Jump_if_X_or_pop(Jump):
 
@@ -1273,9 +1279,15 @@ class ForLoop(HasTarget, ir.IR):
         func.addLabel(b.linearNext())
 
         jump_updates = []
+        jump_sources = {}
         while b.next is not None:
-            if isinstance(b, Jump) and b.target_label == self.iter_loc:
-                jump_updates.append(b)
+            if isinstance(b, Jump):
+                try:
+                    jump_sources[b.target_label].append(b)
+                except KeyError:
+                    jump_sources[b.target_label] = [b]
+                if b.target_label == self.iter_loc:
+                    jump_updates.append(b)
             b = b.next
         assert isinstance(b, utils.BlockEnd)
         jump_loc = b.loc
@@ -1292,8 +1304,13 @@ class ForLoop(HasTarget, ir.IR):
 
         if last.linearPrev().equivalent(last) and isinstance(last, JUMP_ABSOLUTE):
             # Python seems to sometimes add a duplicate JUMP_ABSOLUTE at the
-            # end of the loop. Remove it.
-            last.linearPrev().remove()
+            # end of the loop. Remove it and update other jumps that refer to it.
+            lp = last.linearPrev()
+            if lp.loc in jump_sources:
+                for bc_ in jump_sources[lp.loc]:
+                    bc_.target_label = last.loc
+
+            lp.remove()
 
         # loop test
         # pdb.set_trace()
