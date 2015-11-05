@@ -122,6 +122,18 @@ class Exp(Log):
     arg_names = ['x']
 
 
+class Cos(Log):
+    py_func = math.cos
+    intr = 'llvm.cos'
+    arg_names = ['x']
+
+
+class Sin(Log):
+    py_func = math.sin
+    intr = 'llvm.sin'
+    arg_names = ['x']
+
+
 class Pow(Intrinsic):
     py_func = pow
     arg_names = ['x', 'y']
