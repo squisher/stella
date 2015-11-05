@@ -102,7 +102,6 @@ class Function(object):
         self.labels[bc.loc] = bc
 
     def rewrite(self):
-        self.bytecodes.printAll(self.log)
         self.log.debug("Rewriting (peephole optimizations) " + '-'*40)
         for bc in self.bytecodes:
             try:
@@ -114,8 +113,6 @@ class Function(object):
             except exc.StellaException as e:
                 e.addDebug(bc.debuginfo)
                 raise
-
-        self.bytecodes.printAll(self.log)
 
     def intraflow(self):
         self.log.debug("Building Intra-Flowgraph " + '-'*40)
@@ -289,11 +286,12 @@ class Function(object):
             self.log.debug("Analysis of " + self.impl.nameAndType())
 
             self.disassemble()
+            self.bytecodes.printAll(self.log)
 
             self.rewrite()
+            self.bytecodes.printAll(self.log)
 
             self.intraflow()
-
             self.bytecodes.printAll(self.log)
 
             self.stack_to_register()
